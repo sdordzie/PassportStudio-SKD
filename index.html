@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>PassportStudio Pro — Offline Photo Tool</title>
 
 <!-- ══ PWA: Web App Manifest (inline) ══════════════════════════════════════ -->
@@ -22,6 +22,9 @@
 <!-- ══ PWA: SEO / Social ════════════════════════════════════════════════════ -->
 <meta name="description" content="Professional offline passport & ID photo editor — crop, adjust, layout and export to any country's specification.">
 <meta name="keywords" content="passport photo, id photo, offline, photo editor, pwa">
+<meta name="author" content="Samuel Kwame Dordzie">
+<meta name="generator" content="PassportStudio Pro by Samuel Kwame Dordzie">
+<meta name="contact" content="0246652528, bigsammy86g@gmail.com">
 <style>
   @import url('https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Syne:wght@400;500;600;700;800&family=DM+Sans:wght@300;400;500&display=swap');
 
@@ -65,6 +68,11 @@
   }
 
   * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
+
+  img, canvas, svg { max-width: 100%; }
+
 
   /* ── PWA: Install banner ──────────────────────────────────────────────── */
   #pwa-install-banner {
@@ -1003,6 +1011,16 @@
   .crop-info-item span { color: var(--accent2); margin-left: 4px; }
 
 
+  /* Improve touch interactions on phones/tablets */
+  #edit-canvas,
+  .canvas-wrap,
+  .crop-wrap,
+  #crop-container,
+  #crop-selection {
+    touch-action: none;
+  }
+
+
   /* Better scroll containment for nested flex layouts */
   .edit-canvas-area,
   .crop-canvas-area,
@@ -1659,6 +1677,9 @@
       display: none;
       position: fixed;
       top: 0; left: 0; bottom: 0;
+      width: min(86vw, 320px);
+      min-width: min(86vw, 320px);
+      max-width: 320px;
       z-index: 300;
       box-shadow: 4px 0 32px rgba(0,0,0,0.5);
     }
@@ -1724,6 +1745,42 @@
     .home-upload-zone { padding: 28px 16px; }
 
     .crop-wrap, .canvas-wrap, .layout-preview-wrap { padding: 12px; }
+
+    .edit-toolbar,
+    .crop-toolbar,
+    .layout-toolbar,
+    .crop-info-bar {
+      gap: 8px;
+      padding-inline: 10px;
+    }
+
+    .edit-toolbar .btn,
+    .crop-toolbar .btn,
+    .layout-toolbar .btn {
+      min-height: 40px;
+    }
+
+    .row {
+      flex-direction: column;
+    }
+  }
+
+  @media (max-width: 520px) {
+    .export-grid { grid-template-columns: 1fr; }
+    .panel-body { padding: 12px; }
+    #topbar { padding-inline: 12px; }
+    .topbar-status { display: none; }
+    #pwa-install-banner {
+      left: 12px;
+      right: 12px;
+      transform: translateY(120px);
+      min-width: 0;
+      max-width: none;
+      width: auto;
+    }
+    #pwa-install-banner.pwa-banner-visible {
+      transform: translateY(0);
+    }
   }
 
   /* ── Scrollbars ── */
@@ -1815,8 +1872,10 @@
         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg>
         Reset App
       </button>
-      <div style="font-size:10px;color:var(--text3);font-family:var(--mono);padding:4px 10px">
-        🔒 All processing local · v2.0
+      <div style="font-size:10px;color:var(--text3);font-family:var(--mono);padding:4px 10px;line-height:1.6">
+        🔒 All processing local · v2.1<br>
+        Built by Samuel Kwame Dordzie<br>
+        0246652528 · bigsammy86g@gmail.com
       </div>
     </div>
   </nav>
@@ -2844,12 +2903,13 @@ function goScreen(name) {
 function toggleSidebar() {
   const sb = document.getElementById('sidebar');
   const bd = document.getElementById('sidebar-backdrop');
+  if (!sb) return;
   const isOpen = sb.classList.contains('mobile-open');
   if (isOpen) {
     sb.classList.remove('mobile-open');
     if (bd) bd.classList.remove('active');
   } else {
-    sb.style.display = ''; // let CSS handle it
+    sb.style.display = '';
     sb.classList.add('mobile-open');
     if (bd) bd.classList.add('active');
   }
@@ -2858,7 +2918,7 @@ function toggleSidebar() {
 function closeSidebar() {
   const sb = document.getElementById('sidebar');
   const bd = document.getElementById('sidebar-backdrop');
-  sb.classList.remove('mobile-open');
+  if (sb) sb.classList.remove('mobile-open');
   if (bd) bd.classList.remove('active');
 }
 
@@ -3715,8 +3775,8 @@ function renderEditCanvas() {
   const canvas = document.getElementById('edit-canvas');
   const wrap = document.getElementById('canvas-wrap');
   if (!canvas || !wrap) return;
-  const maxW = (wrap.clientWidth || 400) - 48;
-  const maxH = (wrap.clientHeight || 400) - 48;
+  const maxW = Math.max(120, (wrap.clientWidth || 400) - 48);
+  const maxH = Math.max(120, (wrap.clientHeight || 400) - 48);
   const scaleX = maxW / STATE.editedCanvas.width;
   const scaleY = maxH / STATE.editedCanvas.height;
   const scale = Math.min(scaleX, scaleY, 1) * STATE.zoomFactor;
@@ -4089,13 +4149,16 @@ function updateCropSelection() {
 let _cropEventsController = null;
 
 function setupCropEvents() {
-  // Remove any previously attached document-level crop listeners
   if (_cropEventsController) _cropEventsController.abort();
   _cropEventsController = new AbortController();
   const signal = _cropEventsController.signal;
 
   const sel = document.getElementById('crop-selection');
-  const container = document.getElementById('crop-container');
+  const img = document.getElementById('crop-img');
+  if (!sel || !img) return;
+
+  img.style.touchAction = 'none';
+  sel.style.touchAction = 'none';
 
   function getRelPos(e, el) {
     const rect = el.getBoundingClientRect();
@@ -4103,40 +4166,43 @@ function setupCropEvents() {
     return { x: touch.clientX - rect.left, y: touch.clientY - rect.top };
   }
 
-  // Drag to move
-  sel.addEventListener('mousedown', startDrag);
-  sel.addEventListener('touchstart', startDrag, { passive: false });
+  function stopCropInteraction() {
+    cropState.dragging = false;
+    cropState.resizing = false;
+  }
 
   function startDrag(e) {
     if (e.target.classList.contains('crop-handle')) return;
     e.preventDefault();
     cropState.dragging = true;
-    const pos = getRelPos(e, document.getElementById('crop-img'));
+    const pos = getRelPos(e, img);
     cropState.startX = pos.x - cropState.crop.x;
     cropState.startY = pos.y - cropState.crop.y;
   }
 
-  // Handles
+  sel.addEventListener('mousedown', startDrag, { signal });
+  sel.addEventListener('touchstart', startDrag, { passive: false, signal });
+
   sel.querySelectorAll('.crop-handle').forEach(h => {
-    h.addEventListener('mousedown', e => startResize(e, h.dataset.dir));
-    h.addEventListener('touchstart', e => startResize(e, h.dataset.dir), { passive: false });
+    h.addEventListener('mousedown', e => startResize(e, h.dataset.dir), { signal });
+    h.addEventListener('touchstart', e => startResize(e, h.dataset.dir), { passive: false, signal });
   });
 
   function startResize(e, dir) {
-    e.stopPropagation(); e.preventDefault();
-    cropState.resizing = true; cropState.resizeDir = dir;
-    const pos = getRelPos(e, document.getElementById('crop-img'));
-    cropState.startX = pos.x; cropState.startY = pos.y;
+    e.stopPropagation();
+    e.preventDefault();
+    cropState.dragging = false;
+    cropState.resizing = true;
+    cropState.resizeDir = dir;
+    const pos = getRelPos(e, img);
+    cropState.startX = pos.x;
+    cropState.startY = pos.y;
     cropState.startCrop = { ...cropState.crop };
   }
-
-  document.addEventListener('mousemove', onMove, { signal });
-  document.addEventListener('touchmove', onMove, { passive: false, signal });
 
   function onMove(e) {
     if (!cropState.dragging && !cropState.resizing) return;
     e.preventDefault();
-    const img = document.getElementById('crop-img');
     const pos = getRelPos(e, img);
     const maxW = img.clientWidth, maxH = img.clientHeight;
 
@@ -4145,7 +4211,8 @@ function setupCropEvents() {
       let ny = pos.y - cropState.startY;
       nx = Math.max(0, Math.min(maxW - cropState.crop.w, nx));
       ny = Math.max(0, Math.min(maxH - cropState.crop.h, ny));
-      cropState.crop.x = nx; cropState.crop.y = ny;
+      cropState.crop.x = nx;
+      cropState.crop.y = ny;
     }
 
     if (cropState.resizing) {
@@ -4157,21 +4224,22 @@ function setupCropEvents() {
       let { x, y, w, h } = sc;
 
       const dir = cropState.resizeDir;
-      if (dir.includes('e')) { w = Math.max(20, sc.w + dx); }
-      if (dir.includes('s')) { h = Math.max(20, sc.h + dy); }
+      if (dir.includes('e')) w = Math.max(20, sc.w + dx);
+      if (dir.includes('s')) h = Math.max(20, sc.h + dy);
       if (dir.includes('w')) { const nw = Math.max(20, sc.w - dx); x = sc.x + sc.w - nw; w = nw; }
       if (dir.includes('n')) { const nh = Math.max(20, sc.h - dy); y = sc.y + sc.h - nh; h = nh; }
 
       if (lockRatio && ratio) {
-        if (dir === 'se' || dir === 'e' || dir === 's') h = w/ratio;
-        else if (dir === 'nw' || dir === 'n' || dir === 'w') { w = h*ratio; x = sc.x + sc.w - w; }
-        else if (dir === 'ne') { h = w/ratio; y = sc.y + sc.h - h; }
-        else if (dir === 'sw') { h = w/ratio; }
+        if (dir === 'se' || dir === 'e' || dir === 's') h = w / ratio;
+        else if (dir === 'nw' || dir === 'n' || dir === 'w') { w = h * ratio; x = sc.x + sc.w - w; }
+        else if (dir === 'ne') { h = w / ratio; y = sc.y + sc.h - h; }
+        else if (dir === 'sw') { h = w / ratio; }
       }
 
-      // Clamp
-      x = Math.max(0, x); y = Math.max(0, y);
-      w = Math.min(w, maxW - x); h = Math.min(h, maxH - y);
+      x = Math.max(0, x);
+      y = Math.max(0, y);
+      w = Math.min(w, maxW - x);
+      h = Math.min(h, maxH - y);
       cropState.crop = { x, y, w, h };
     }
 
@@ -4180,8 +4248,11 @@ function setupCropEvents() {
     updateCropPreview();
   }
 
-  document.addEventListener('mouseup', () => { cropState.dragging = false; cropState.resizing = false; }, { signal });
-  document.addEventListener('touchend', () => { cropState.dragging = false; cropState.resizing = false; }, { signal });
+  document.addEventListener('mousemove', onMove, { signal });
+  document.addEventListener('touchmove', onMove, { passive: false, signal });
+  document.addEventListener('mouseup', stopCropInteraction, { signal });
+  document.addEventListener('touchend', stopCropInteraction, { signal });
+  document.addEventListener('touchcancel', stopCropInteraction, { signal });
 }
 
 function updateCropInfoBar() {
@@ -5124,7 +5195,7 @@ function exportWord() {
   body { margin: 0; padding: 0; font-family: Arial, sans-serif; }
   .sheet { position: relative; width: ${plan.pw}mm; height: ${plan.ph}mm; background: white; margin: 0 auto; }
 </style></head>
-<body><div class="sheet">${cellsHTML}</div><p style="text-align:center;font-size:9px;color:#999;margin-top:4mm">Generated by PassportStudio Pro · ${new Date().toLocaleDateString()}</p></body></html>`;
+<body><div class="sheet">${cellsHTML}</div><p style="text-align:center;font-size:9px;color:#999;margin-top:4mm">Generated by PassportStudio Pro · ${new Date().toLocaleDateString()} · Samuel Kwame Dordzie · 0246652528 · bigsammy86g@gmail.com</p></body></html>`;
 
     const blob = new Blob([html], { type: 'text/html;charset=utf-8' });
     const url = URL.createObjectURL(blob);
@@ -6045,6 +6116,7 @@ async function runAutomaticBatchProcess() {
   const template = getBatchTemplateSnapshot();
   const backup = captureProcessingStateSnapshot();
   let directoryHandle = null;
+  STATE.batch.zipBuffers = [];
 
   try {
     if (config.saveMode === 'folder') {
@@ -6070,6 +6142,8 @@ async function runAutomaticBatchProcess() {
 
   try {
     for (let i = 0; i < STATE.batch.queue.length; i++) {
+      if (STATE.batch.autoCancel) break;
+
       const item = STATE.batch.queue[i];
       item.status = 'active';
       renderBatchQueue();
@@ -6080,7 +6154,14 @@ async function runAutomaticBatchProcess() {
         await applyCurrentTemplateToBatchItem(item.file, template);
         const blob = await createCurrentBatchExportBlob(config.output, template);
         const filename = getAutomaticBatchFilename(item, config.output, config, i);
-        await saveBatchBlob(blob, filename, directoryHandle, config.saveMode);
+
+        if (config.saveMode === 'zip') {
+          const buffer = await blob.arrayBuffer();
+          STATE.batch.zipBuffers.push({ name: filename, data: new Uint8Array(buffer) });
+        } else {
+          await saveBatchBlob(blob, filename, directoryHandle, config.saveMode);
+        }
+
         item.exports = (item.exports || 0) + 1;
         if (config.doneAction === 'mark') item.status = 'done';
         successCount++;
@@ -6095,17 +6176,37 @@ async function runAutomaticBatchProcess() {
       updateBatchProgressUI();
       await new Promise(resolve => setTimeout(resolve, 60));
     }
+
+    if (config.saveMode === 'zip' && STATE.batch.zipBuffers.length) {
+      const zipBlob = buildZipBlob(STATE.batch.zipBuffers);
+      const zipStamp = (document.getElementById('export-datestamp')?.value || 'no') === 'yes'
+        ? '_' + new Date().toISOString().slice(0, 10)
+        : '';
+      const zipName = `${sanitizeBatchFilenamePart(config.prefix || 'passport-batch')}${zipStamp}.zip`;
+      blobToDownload(zipBlob, zipName);
+    }
   } finally {
     hideLoading();
     STATE.batch.autoRunning = false;
     await restoreProcessingStateSnapshot(backup);
     renderBatchQueue();
     updateBatchProgressUI();
+    STATE.batch.zipBuffers = [];
   }
 
-  if (successCount && !failCount) toast(`${successCount} batch file${successCount === 1 ? '' : 's'} processed successfully.`, 'success', 3500);
-  else if (successCount && failCount) toast(`Processed ${successCount} files. ${failCount} had issues.`, 'warning', 4500);
-  else toast('Automatic batch processing could not complete.', 'error', 4000);
+  if (STATE.batch.autoCancel) {
+    toast(`Batch processing stopped. ${successCount} completed, ${failCount} failed.`, successCount ? 'warning' : 'error', 4500);
+    return;
+  }
+
+  if (successCount && !failCount) {
+    const modeLabel = config.saveMode === 'zip' ? ' and packed into ZIP' : '';
+    toast(`${successCount} batch file${successCount === 1 ? '' : 's'} processed successfully${modeLabel}.`, 'success', 3500);
+  } else if (successCount && failCount) {
+    toast(`Processed ${successCount} files. ${failCount} had issues.`, 'warning', 4500);
+  } else {
+    toast('Automatic batch processing could not complete.', 'error', 4000);
+  }
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -6509,6 +6610,7 @@ document.addEventListener('keydown', e => {
 
   function registerServiceWorker() {
     if (!('serviceWorker' in navigator)) return;
+    if (!/^https?:$/i.test(location.protocol) && location.hostname !== 'localhost' && location.hostname !== '127.0.0.1') return;
 
     navigator.serviceWorker.register('./sw.js', { scope: './' })
       .then(reg => {
@@ -6649,6 +6751,26 @@ document.addEventListener('keydown', e => {
 
 })();
 
+function refreshActiveScreenLayout() {
+  if (STATE.currentScreen === 'edit') {
+    renderEditCanvas();
+  } else if (STATE.currentScreen === 'crop') {
+    setupCropScreen();
+    updateCropInfoBar();
+    updateCropPreview();
+  } else if (STATE.currentScreen === 'layout') {
+    generateLayout();
+  } else if (STATE.currentScreen === 'export') {
+    updateSinglePhotoPreview();
+  }
+}
+
+let _layoutRefreshTimer = null;
+function scheduleResponsiveRefresh() {
+  clearTimeout(_layoutRefreshTimer);
+  _layoutRefreshTimer = setTimeout(refreshActiveScreenLayout, 120);
+}
+
 // ═══════════════════════════════════════════════════════════
 //  INIT
 // ═══════════════════════════════════════════════════════════
@@ -6667,6 +6789,17 @@ document.addEventListener('DOMContentLoaded', () => {
     const el = document.getElementById('status-text');
     if (el) el.textContent = 'Offline · ' + new Date().toLocaleTimeString([], { hour:'2-digit', minute:'2-digit' });
   }, 1000);
+
+  window.addEventListener('resize', scheduleResponsiveRefresh, { passive: true });
+  window.addEventListener('orientationchange', scheduleResponsiveRefresh, { passive: true });
+  if (window.visualViewport) {
+    window.visualViewport.addEventListener('resize', scheduleResponsiveRefresh, { passive: true });
+  }
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') closeSidebar();
+  });
+
+  scheduleResponsiveRefresh();
 
   // Welcome toast
   setTimeout(() => toast('Welcome! Upload an image to get started.', 'info', 4000), 800);

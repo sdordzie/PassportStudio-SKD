@@ -157,7 +157,7 @@
     position: fixed;
     top: 12px;
     left: 50%;
-    transform: translateX(-50%) translateY(-80px);
+    transform: translateX(-50%) translateY(calc(-100% - 24px));
     z-index: 9998;
     background: var(--surface3);
     border: 1px solid var(--accent);
@@ -170,12 +170,16 @@
     color: var(--text);
     font-family: var(--mono);
     box-shadow: 0 4px 24px rgba(0,0,0,0.4);
-    transition: transform 0.3s ease;
+    transition: transform 0.3s ease, opacity 0.3s ease, visibility 0.3s ease;
     pointer-events: none;
+    opacity: 0;
+    visibility: hidden;
   }
   #pwa-update-bar.pwa-update-visible {
     transform: translateX(-50%) translateY(0);
     pointer-events: all;
+    opacity: 1;
+    visibility: visible;
   }
   #pwa-update-bar span { color: var(--accent2); }
   .pwa-btn-update {
@@ -1813,6 +1817,9 @@
     }
     #pwa-install-banner.pwa-banner-visible {
       transform: translateY(0);
+    }
+    #pwa-update-bar {
+      display: none !important;
     }
   }
 
@@ -6677,6 +6684,7 @@ document.addEventListener('keydown', e => {
 
   // ── Update bar logic ─────────────────────────────────────
   function showUpdateBar(newWorker) {
+    if (window.matchMedia && window.matchMedia('(max-width: 768px)').matches) return;
     const bar = document.getElementById('pwa-update-bar');
     if (!bar) return;
     bar.classList.add('pwa-update-visible');

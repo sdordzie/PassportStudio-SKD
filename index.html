@@ -22,6 +22,9 @@
 <!-- ══ PWA: SEO / Social ════════════════════════════════════════════════════ -->
 <meta name="description" content="Professional offline passport & ID photo editor — crop, adjust, layout and export to any country's specification.">
 <meta name="keywords" content="passport photo, id photo, offline, photo editor, pwa">
+<meta name="author" content="Samuel Kwame Dordzie">
+<meta name="generator" content="PassportStudio Pro by Samuel Kwame Dordzie">
+<meta name="contact" content="0246652528, bigsammy86g@gmail.com">
 <style>
   @import url('https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Syne:wght@400;500;600;700;800&family=DM+Sans:wght@300;400;500&display=swap');
 
@@ -154,7 +157,7 @@
     position: fixed;
     top: 12px;
     left: 50%;
-    transform: translateX(-50%) translateY(-80px);
+    transform: translate(-50%, calc(-100% - 24px));
     z-index: 9998;
     background: var(--surface3);
     border: 1px solid var(--accent);
@@ -167,12 +170,16 @@
     color: var(--text);
     font-family: var(--mono);
     box-shadow: 0 4px 24px rgba(0,0,0,0.4);
-    transition: transform 0.3s ease;
+    transition: transform 0.3s ease, opacity 0.3s ease, visibility 0.3s ease;
     pointer-events: none;
+    opacity: 0;
+    visibility: hidden;
   }
   #pwa-update-bar.pwa-update-visible {
-    transform: translateX(-50%) translateY(0);
+    transform: translate(-50%, 0);
     pointer-events: all;
+    opacity: 1;
+    visibility: visible;
   }
   #pwa-update-bar span { color: var(--accent2); }
   .pwa-btn-update {
@@ -369,12 +376,27 @@
   .topbar-title {
     display: flex;
     align-items: center;
+    gap: 0;
     flex: 1;
     font-family: var(--display);
     white-space: nowrap;
     overflow: hidden;
     min-width: 0;
   }
+
+  .topbar-app-name,
+  .topbar-separator,
+  .topbar-current {
+    display: inline-block;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    min-width: 0;
+  }
+
+  .topbar-app-name { flex: 0 1 auto; }
+  .topbar-separator { flex: 0 0 auto; }
+  .topbar-current { flex: 1 1 auto; }
 
   .topbar-status {
     display: flex;
@@ -1657,6 +1679,21 @@
   /* ═══════════════════════════════════════
      RESPONSIVE
   ═══════════════════════════════════════ */
+  @media (max-width: 420px) {
+    .topbar-app-name {
+      max-width: 76px;
+    }
+
+    .topbar-current {
+      font-size: 12px !important;
+    }
+
+    #topbar {
+      padding-left: 10px;
+      padding-right: 10px;
+    }
+  }
+
   @media (max-width: 768px) {
     html, body {
       overflow-x: hidden;
@@ -1696,7 +1733,31 @@
       position: sticky;
       top: 0;
       z-index: 150;
-      padding-top: max(0px, env(safe-area-inset-top));
+      height: auto;
+      min-height: 52px;
+      padding: calc(8px + env(safe-area-inset-top)) 12px 8px;
+      gap: 8px;
+    }
+
+    .topbar-title {
+      font-size: 14px;
+    }
+
+    .topbar-app-name {
+      max-width: 92px;
+      font-size: 11px !important;
+    }
+
+    .topbar-separator {
+      margin: 0 5px !important;
+    }
+
+    .topbar-current {
+      font-size: 13px !important;
+    }
+
+    .topbar-status {
+      display: none;
     }
 
     #main {
@@ -1869,8 +1930,10 @@
         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg>
         Reset App
       </button>
-      <div style="font-size:10px;color:var(--text3);font-family:var(--mono);padding:4px 10px">
-        🔒 All processing local · v2.0
+      <div style="font-size:10px;color:var(--text3);font-family:var(--mono);padding:4px 10px;line-height:1.6">
+        🔒 All processing local · v2.1<br>
+        Built by Samuel Kwame Dordzie<br>
+        0246652528 · bigsammy86g@gmail.com
       </div>
     </div>
   </nav>
@@ -1885,9 +1948,9 @@
         </svg>
       </button>
       <div class="topbar-title" id="topbar-title-wrap">
-        <span style="color:var(--text3);font-weight:400;font-size:13px">PassportStudio</span>
-        <span style="color:var(--border2);margin:0 8px;font-weight:300">/</span>
-        <span id="topbar-title" style="color:var(--text);font-weight:600">Welcome</span>
+        <span class="topbar-app-name" style="color:var(--text3);font-weight:400;font-size:13px">PassportStudio</span>
+        <span class="topbar-separator" style="color:var(--border2);margin:0 8px;font-weight:300">/</span>
+        <span id="topbar-title" class="topbar-current" style="color:var(--text);font-weight:600">Welcome</span>
       </div>
       <div class="topbar-status">
         <div class="status-dot"></div>
@@ -5190,7 +5253,7 @@ function exportWord() {
   body { margin: 0; padding: 0; font-family: Arial, sans-serif; }
   .sheet { position: relative; width: ${plan.pw}mm; height: ${plan.ph}mm; background: white; margin: 0 auto; }
 </style></head>
-<body><div class="sheet">${cellsHTML}</div><p style="text-align:center;font-size:9px;color:#999;margin-top:4mm">Generated by PassportStudio Pro · ${new Date().toLocaleDateString()}</p></body></html>`;
+<body><div class="sheet">${cellsHTML}</div><p style="text-align:center;font-size:9px;color:#999;margin-top:4mm">Generated by PassportStudio Pro · ${new Date().toLocaleDateString()} · Samuel Kwame Dordzie · 0246652528 · bigsammy86g@gmail.com</p></body></html>`;
 
     const blob = new Blob([html], { type: 'text/html;charset=utf-8' });
     const url = URL.createObjectURL(blob);
@@ -6111,6 +6174,7 @@ async function runAutomaticBatchProcess() {
   const template = getBatchTemplateSnapshot();
   const backup = captureProcessingStateSnapshot();
   let directoryHandle = null;
+  STATE.batch.zipBuffers = [];
 
   try {
     if (config.saveMode === 'folder') {
@@ -6136,6 +6200,8 @@ async function runAutomaticBatchProcess() {
 
   try {
     for (let i = 0; i < STATE.batch.queue.length; i++) {
+      if (STATE.batch.autoCancel) break;
+
       const item = STATE.batch.queue[i];
       item.status = 'active';
       renderBatchQueue();
@@ -6146,7 +6212,14 @@ async function runAutomaticBatchProcess() {
         await applyCurrentTemplateToBatchItem(item.file, template);
         const blob = await createCurrentBatchExportBlob(config.output, template);
         const filename = getAutomaticBatchFilename(item, config.output, config, i);
-        await saveBatchBlob(blob, filename, directoryHandle, config.saveMode);
+
+        if (config.saveMode === 'zip') {
+          const buffer = await blob.arrayBuffer();
+          STATE.batch.zipBuffers.push({ name: filename, data: new Uint8Array(buffer) });
+        } else {
+          await saveBatchBlob(blob, filename, directoryHandle, config.saveMode);
+        }
+
         item.exports = (item.exports || 0) + 1;
         if (config.doneAction === 'mark') item.status = 'done';
         successCount++;
@@ -6161,17 +6234,37 @@ async function runAutomaticBatchProcess() {
       updateBatchProgressUI();
       await new Promise(resolve => setTimeout(resolve, 60));
     }
+
+    if (config.saveMode === 'zip' && STATE.batch.zipBuffers.length) {
+      const zipBlob = buildZipBlob(STATE.batch.zipBuffers);
+      const zipStamp = (document.getElementById('export-datestamp')?.value || 'no') === 'yes'
+        ? '_' + new Date().toISOString().slice(0, 10)
+        : '';
+      const zipName = `${sanitizeBatchFilenamePart(config.prefix || 'passport-batch')}${zipStamp}.zip`;
+      blobToDownload(zipBlob, zipName);
+    }
   } finally {
     hideLoading();
     STATE.batch.autoRunning = false;
     await restoreProcessingStateSnapshot(backup);
     renderBatchQueue();
     updateBatchProgressUI();
+    STATE.batch.zipBuffers = [];
   }
 
-  if (successCount && !failCount) toast(`${successCount} batch file${successCount === 1 ? '' : 's'} processed successfully.`, 'success', 3500);
-  else if (successCount && failCount) toast(`Processed ${successCount} files. ${failCount} had issues.`, 'warning', 4500);
-  else toast('Automatic batch processing could not complete.', 'error', 4000);
+  if (STATE.batch.autoCancel) {
+    toast(`Batch processing stopped. ${successCount} completed, ${failCount} failed.`, successCount ? 'warning' : 'error', 4500);
+    return;
+  }
+
+  if (successCount && !failCount) {
+    const modeLabel = config.saveMode === 'zip' ? ' and packed into ZIP' : '';
+    toast(`${successCount} batch file${successCount === 1 ? '' : 's'} processed successfully${modeLabel}.`, 'success', 3500);
+  } else if (successCount && failCount) {
+    toast(`Processed ${successCount} files. ${failCount} had issues.`, 'warning', 4500);
+  } else {
+    toast('Automatic batch processing could not complete.', 'error', 4000);
+  }
 }
 
 // ═══════════════════════════════════════════════════════════

@@ -1780,6 +1780,32 @@
     }
   }
 
+  @media (max-width: 680px) {
+    #single-photo-panel > div:last-child {
+      flex-direction: column;
+      align-items: stretch;
+    }
+
+    #single-photo-preview-col {
+      width: 100%;
+      min-width: 0 !important;
+      border-right: none !important;
+      border-bottom: 1px solid var(--border);
+      padding: 18px 16px !important;
+    }
+
+    #single-photo-preview-frame {
+      width: min(100%, 260px);
+      margin-inline: auto;
+      min-height: 200px !important;
+      padding: 16px !important;
+    }
+
+    #single-photo-preview {
+      margin-inline: auto;
+    }
+  }
+
   @media (max-width: 520px) {
     .export-grid { grid-template-columns: 1fr; }
     .panel-body { padding: 12px; }
@@ -2468,17 +2494,33 @@
         </div>
         <div style="display:flex;gap:0;align-items:stretch;flex-wrap:wrap;">
           <!-- Preview column -->
-          <div style="
+          <div id="single-photo-preview-col" style="
             padding:20px;display:flex;flex-direction:column;align-items:center;justify-content:center;
             gap:10px;border-right:1px solid var(--border);min-width:140px;flex-shrink:0;
             background:var(--surface2);
           ">
-            <canvas id="single-photo-preview" style="
-              border-radius:6px;
-              box-shadow:0 4px 16px rgba(0,0,0,0.4);
-              max-width:100px;max-height:130px;
-              display:block;
-            "></canvas>
+            <div id="single-photo-preview-frame" style="
+              width:100%;
+              display:flex;
+              align-items:center;
+              justify-content:center;
+              padding:12px;
+              border:1px solid rgba(79,142,247,0.12);
+              border-radius:14px;
+              background:
+                linear-gradient(180deg, rgba(255,255,255,0.03), rgba(255,255,255,0.01)),
+                repeating-conic-gradient(from 45deg, rgba(255,255,255,0.035) 0% 25%, transparent 0% 50%) 50% / 18px 18px,
+                var(--surface);
+              min-height:160px;
+            ">
+              <canvas id="single-photo-preview" style="
+                border-radius:8px;
+                box-shadow:0 8px 22px rgba(0,0,0,0.28);
+                max-width:100px;max-height:130px;
+                display:block;
+                margin-inline:auto;
+              "></canvas>
+            </div>
             <div style="font-size:10px;font-family:var(--mono);color:var(--text3);text-align:center" id="single-photo-px-info">—</div>
           </div>
           <!-- Controls column -->

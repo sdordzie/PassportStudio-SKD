@@ -4,19 +4,19 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>PassportStudio Pro — Offline Photo Tool</title>
-<!-- For full installability, deploy this folder over HTTPS (for example GitHub Pages). -->
 
 <!-- ══ PWA: Web App Manifest (inline) ══════════════════════════════════════ -->
 <link rel="manifest" href="./manifest.webmanifest">
 <link rel="icon" type="image/png" sizes="192x192" href="./icons/icon-192.png">
 <link rel="apple-touch-icon" href="./icons/icon-192.png">
+<link rel="icon" type="image/png" sizes="512x512" href="./icons/icon-512.png">
 
 <!-- ══ PWA: Theme & display meta ════════════════════════════════════════════ -->
 <meta name="theme-color" content="#4f8ef7" id="theme-color-meta">
 <meta name="color-scheme" content="dark light">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
 <meta name="apple-mobile-web-app-title" content="PassportStudio">
 <meta name="application-name" content="PassportStudio Pro">
 <meta name="msapplication-TileColor" content="#4f8ef7">
@@ -1829,17 +1829,35 @@
     }
     .topbar-status { display: none; }
     .topbar-title {
-      justify-content: center;
-      text-align: center;
-      font-size: 15px;
+      justify-content: flex-start;
+      text-align: left;
+      font-size: 14px;
+      min-width: 0;
+      gap: 0;
+      overflow: hidden;
     }
     .topbar-app-name,
+    .topbar-separator,
+    .topbar-screen-name {
+      display: inline-block;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .topbar-app-name {
+      max-width: 40%;
+      flex: 0 1 auto;
+      font-size: 12px;
+    }
     .topbar-separator {
-      display: none;
+      margin: 0 6px !important;
+      flex: 0 0 auto;
     }
     .topbar-screen-name {
-      width: 100%;
-      text-align: center;
+      min-width: 0;
+      flex: 1 1 auto;
+      text-align: left;
+      font-size: 13px;
     }
     #mobile-menu-btn,
     #topbar .btn-icon {
@@ -1860,6 +1878,23 @@
     }
     #pwa-update-bar {
       display: none !important;
+    }
+  }
+
+  @media (max-width: 380px) {
+    #topbar {
+      padding-inline: 8px;
+      gap: 6px;
+    }
+    .topbar-app-name {
+      max-width: 34%;
+      font-size: 11px !important;
+    }
+    .topbar-separator {
+      margin: 0 4px !important;
+    }
+    .topbar-screen-name {
+      font-size: 12px !important;
     }
   }
 
@@ -6855,10 +6890,6 @@ document.addEventListener('keydown', e => {
     const isStandalone = window.matchMedia('(display-mode: standalone)').matches
       || window.navigator.standalone === true;
     if (isStandalone) return;
-
-    if (!window.isSecureContext && location.hostname !== 'localhost' && location.hostname !== '127.0.0.1') {
-      return;
-    }
 
     // Don't show if user dismissed < 7 days ago
     try {

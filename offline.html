@@ -1,0 +1,330 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="theme-color" content="#0a0f1e" />
+  <title>You're Offline — PassportStudio</title>
+  <link rel="manifest" href="./manifest.webmanifest" />
+  <link rel="icon" href="./icons/icon-192.png" />
+  <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet" />
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --navy:     #0a0f1e;
+      --navy-mid: #111827;
+      --ink:      #1e293b;
+      --gold:     #c9a84c;
+      --gold-lt:  #e8c97a;
+      --silver:   #94a3b8;
+      --white:    #f8fafc;
+      --muted:    #64748b;
+    }
+
+    html, body {
+      height: 100%;
+      background: var(--navy);
+      color: var(--white);
+      font-family: 'DM Sans', sans-serif;
+      font-weight: 300;
+      overflow: hidden;
+    }
+
+    /* ── Background ── */
+    .bg {
+      position: fixed; inset: 0; z-index: 0;
+      background:
+        radial-gradient(ellipse 80% 60% at 50% -10%, rgba(201,168,76,.18) 0%, transparent 70%),
+        radial-gradient(ellipse 50% 40% at 90% 110%, rgba(201,168,76,.08) 0%, transparent 60%),
+        var(--navy);
+    }
+
+    /* Passport stamp grid watermark */
+    .bg::before {
+      content: '';
+      position: absolute; inset: 0;
+      background-image:
+        repeating-linear-gradient(0deg,   transparent, transparent 59px, rgba(255,255,255,.025) 59px, rgba(255,255,255,.025) 60px),
+        repeating-linear-gradient(90deg,  transparent, transparent 59px, rgba(255,255,255,.025) 59px, rgba(255,255,255,.025) 60px);
+    }
+
+    /* Grain overlay */
+    .bg::after {
+      content: '';
+      position: absolute; inset: 0;
+      background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='1'/%3E%3C/svg%3E");
+      opacity: .04;
+      pointer-events: none;
+    }
+
+    /* ── Layout ── */
+    main {
+      position: relative; z-index: 1;
+      height: 100vh;
+      display: flex; flex-direction: column;
+      align-items: center; justify-content: center;
+      padding: 2rem;
+      text-align: center;
+    }
+
+    /* ── Passport book icon ── */
+    .passport-wrap {
+      position: relative;
+      width: 100px; height: 100px;
+      margin-bottom: 2.5rem;
+    }
+
+    .passport-wrap svg {
+      width: 100%; height: 100%;
+      filter: drop-shadow(0 0 24px rgba(201,168,76,.35));
+      animation: float 4s ease-in-out infinite;
+    }
+
+    @keyframes float {
+      0%, 100% { transform: translateY(0);    }
+      50%       { transform: translateY(-8px); }
+    }
+
+    /* Signal waves (offline indicator) */
+    .signal {
+      position: absolute;
+      top: -8px; right: -8px;
+      width: 22px; height: 22px;
+    }
+
+    .signal span {
+      position: absolute;
+      border-radius: 50%;
+      border: 2px solid var(--gold);
+      animation: pulse 2s ease-out infinite;
+      opacity: 0;
+    }
+
+    .signal span:nth-child(1) { inset: 0;    animation-delay: 0s;    }
+    .signal span:nth-child(2) { inset: -6px; animation-delay: .5s;   }
+    .signal span:nth-child(3) { inset: -12px;animation-delay: 1s;    }
+
+    @keyframes pulse {
+      0%   { transform: scale(.5); opacity: .8; }
+      100% { transform: scale(1.6); opacity: 0; }
+    }
+
+    /* ── Typography ── */
+    .eyebrow {
+      font-family: 'DM Sans', sans-serif;
+      font-size: .65rem;
+      font-weight: 500;
+      letter-spacing: .22em;
+      text-transform: uppercase;
+      color: var(--gold);
+      margin-bottom: 1rem;
+    }
+
+    h1 {
+      font-family: 'DM Serif Display', serif;
+      font-size: clamp(2.2rem, 8vw, 3.6rem);
+      line-height: 1.08;
+      letter-spacing: -.01em;
+      color: var(--white);
+      margin-bottom: 1.25rem;
+    }
+
+    h1 em {
+      font-style: italic;
+      color: var(--gold-lt);
+    }
+
+    .body-text {
+      font-size: 1rem;
+      line-height: 1.7;
+      color: var(--silver);
+      max-width: 30ch;
+      margin: 0 auto 2.5rem;
+    }
+
+    /* ── Divider ── */
+    .divider {
+      display: flex; align-items: center; gap: .75rem;
+      width: 100%; max-width: 220px;
+      margin: 0 auto 2.5rem;
+      color: var(--muted);
+      font-size: .7rem;
+      letter-spacing: .1em;
+    }
+
+    .divider::before, .divider::after {
+      content: '';
+      flex: 1;
+      height: 1px;
+      background: linear-gradient(90deg, transparent, var(--ink), transparent);
+    }
+
+    /* ── Retry button ── */
+    .btn {
+      display: inline-flex; align-items: center; gap: .6rem;
+      background: linear-gradient(135deg, var(--gold) 0%, var(--gold-lt) 100%);
+      color: var(--navy);
+      font-family: 'DM Sans', sans-serif;
+      font-size: .85rem;
+      font-weight: 500;
+      letter-spacing: .06em;
+      text-transform: uppercase;
+      border: none;
+      border-radius: 3px;
+      padding: .85rem 2rem;
+      cursor: pointer;
+      transition: transform .15s ease, box-shadow .15s ease, opacity .15s ease;
+      box-shadow: 0 4px 24px rgba(201,168,76,.25);
+      text-decoration: none;
+    }
+
+    .btn:hover  { transform: translateY(-2px); box-shadow: 0 8px 32px rgba(201,168,76,.35); }
+    .btn:active { transform: translateY(0);     opacity: .85; }
+
+    .btn svg { width: 16px; height: 16px; }
+
+    /* ── Status dot ── */
+    .status {
+      display: flex; align-items: center; gap: .5rem;
+      margin-top: 2rem;
+      font-size: .75rem;
+      color: var(--muted);
+      letter-spacing: .04em;
+    }
+
+    .dot {
+      width: 7px; height: 7px;
+      border-radius: 50%;
+      background: #ef4444;
+      box-shadow: 0 0 6px #ef4444;
+      animation: blink 2.5s ease-in-out infinite;
+    }
+
+    .dot.online { background: #22c55e; box-shadow: 0 0 6px #22c55e; }
+
+    @keyframes blink {
+      0%, 100% { opacity: 1; }
+      50%       { opacity: .3; }
+    }
+
+    /* ── Corner stamp decorations ── */
+    .corner {
+      position: fixed;
+      width: 80px; height: 80px;
+      opacity: .12;
+    }
+    .corner.tl { top: 20px;  left: 20px;  border-top: 2px solid var(--gold); border-left:  2px solid var(--gold); }
+    .corner.br { bottom: 20px; right: 20px; border-bottom: 2px solid var(--gold); border-right: 2px solid var(--gold); }
+
+    /* ── Animate in ── */
+    .passport-wrap { animation: float 4s ease-in-out infinite, fadein .6s ease both; }
+    .eyebrow   { animation: fadein .5s .1s ease both; }
+    h1         { animation: fadein .5s .2s ease both; }
+    .body-text { animation: fadein .5s .3s ease both; }
+    .divider   { animation: fadein .5s .35s ease both; }
+    .btn       { animation: fadein .5s .4s ease both; }
+    .status    { animation: fadein .5s .5s ease both; }
+
+    @keyframes fadein {
+      from { opacity: 0; transform: translateY(12px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+  </style>
+</head>
+<body>
+
+  <div class="bg"></div>
+  <div class="corner tl"></div>
+  <div class="corner br"></div>
+
+  <main>
+
+    <!-- Passport icon -->
+    <div class="passport-wrap">
+      <div class="signal">
+        <span></span><span></span><span></span>
+      </div>
+      <svg viewBox="0 0 80 80" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <!-- Book body -->
+        <rect x="14" y="8" width="46" height="60" rx="4" fill="#1e293b" stroke="#c9a84c" stroke-width="1.5"/>
+        <!-- Spine -->
+        <rect x="14" y="8" width="8" height="60" rx="2" fill="#c9a84c" opacity=".25"/>
+        <!-- Emblem ring -->
+        <circle cx="40" cy="34" r="11" stroke="#c9a84c" stroke-width="1.5" stroke-dasharray="3 2"/>
+        <!-- Star -->
+        <path d="M40 26l1.9 5.8H48l-4.9 3.6 1.9 5.8L40 38l-5 3.2 1.9-5.8L32 32h6.1z" fill="#c9a84c" opacity=".9"/>
+        <!-- Lines (MRZ) -->
+        <rect x="22" y="52" width="30" height="2" rx="1" fill="#c9a84c" opacity=".3"/>
+        <rect x="22" y="57" width="24" height="2" rx="1" fill="#c9a84c" opacity=".2"/>
+        <!-- No-wifi badge -->
+        <circle cx="57" cy="57" r="11" fill="#0a0f1e" stroke="#c9a84c" stroke-width="1.2"/>
+        <path d="M51 57a8.5 8.5 0 0 1 6-3.5M62 57a8.5 8.5 0 0 0-6-3.5M54 60a5 5 0 0 1 3-1.5M60 60a5 5 0 0 0-3-1.5M57 63v.5" stroke="#c9a84c" stroke-width="1.4" stroke-linecap="round" opacity=".6"/>
+        <line x1="51" y1="51" x2="63" y2="63" stroke="#ef4444" stroke-width="1.4" stroke-linecap="round"/>
+      </svg>
+    </div>
+
+    <p class="eyebrow">Passport Studio</p>
+
+    <h1>No signal<br /><em>detected</em></h1>
+
+    <p class="body-text">
+      You appear to be offline. Check your connection and try again — your work is saved.
+    </p>
+
+    <div class="divider">✦ &nbsp; retry &nbsp; ✦</div>
+
+    <button class="btn" onclick="handleRetry()">
+      <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M1 4v5h5M15 12V7h-5"/>
+        <path d="M13.5 6A6 6 0 0 0 2.5 10"/>
+      </svg>
+      Try Again
+    </button>
+
+    <div class="status">
+      <div class="dot" id="statusDot"></div>
+      <span id="statusText">No internet connection</span>
+    </div>
+
+  </main>
+
+  <script>
+    // ── Live connectivity indicator ──────────────────────────────────────────
+    const dot  = document.getElementById('statusDot');
+    const text = document.getElementById('statusText');
+
+    function updateStatus() {
+      if (navigator.onLine) {
+        dot.classList.add('online');
+        text.textContent = 'Connection restored — ready to reload';
+      } else {
+        dot.classList.remove('online');
+        text.textContent = 'No internet connection';
+      }
+    }
+
+    window.addEventListener('online',  updateStatus);
+    window.addEventListener('offline', updateStatus);
+    updateStatus();
+
+    // Auto-navigate back when connectivity restores
+    window.addEventListener('online', () => {
+      setTimeout(() => window.location.reload(), 1200);
+    });
+
+    // ── Retry button ─────────────────────────────────────────────────────────
+    function handleRetry() {
+      const btn = document.querySelector('.btn');
+      btn.textContent = 'Checking…';
+      btn.style.opacity = '.6';
+      btn.style.pointerEvents = 'none';
+
+      setTimeout(() => {
+        window.location.reload();
+      }, 600);
+    }
+  </script>
+
+</body>
+</html>

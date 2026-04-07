@@ -1165,6 +1165,129 @@
 
   #loading-overlay.active { display: flex; }
 
+  /* ── Batch Progress Overlay ── */
+  #batch-progress-overlay {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(9,9,15,0.88);
+    z-index: 2100;
+    align-items: center;
+    justify-content: center;
+    padding: 24px;
+    backdrop-filter: blur(6px);
+  }
+  #batch-progress-overlay.active { display: flex; }
+
+  .batch-progress-modal {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 20px;
+    padding: 28px 28px 24px;
+    width: 100%;
+    max-width: 480px;
+    box-shadow: 0 24px 80px rgba(0,0,0,0.7);
+    display: flex;
+    flex-direction: column;
+    gap: 18px;
+  }
+
+  .batch-progress-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+  }
+
+  .batch-progress-title {
+    font-family: var(--display);
+    font-size: 17px;
+    font-weight: 700;
+  }
+
+  .batch-progress-track {
+    height: 10px;
+    background: var(--surface3);
+    border-radius: 999px;
+    overflow: hidden;
+    position: relative;
+  }
+
+  .batch-progress-fill {
+    height: 100%;
+    border-radius: 999px;
+    background: linear-gradient(90deg, var(--accent), var(--accent2));
+    transition: width 0.3s ease;
+    position: relative;
+    min-width: 0;
+  }
+
+  .batch-progress-fill::after {
+    content: '';
+    position: absolute;
+    top: 0; right: 0; bottom: 0;
+    width: 40px;
+    background: linear-gradient(90deg, transparent, rgba(255,255,255,0.3));
+    animation: shimmer 1.2s infinite;
+  }
+
+  @keyframes shimmer {
+    0%   { opacity: 0; transform: translateX(-20px); }
+    50%  { opacity: 1; }
+    100% { opacity: 0; transform: translateX(20px); }
+  }
+
+  .batch-progress-stats {
+    display: flex;
+    gap: 16px;
+    flex-wrap: wrap;
+  }
+
+  .batch-stat-chip {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 12px;
+    font-family: var(--mono);
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    padding: 4px 10px;
+  }
+
+  .batch-stat-chip.success { color: var(--success); border-color: rgba(62,207,142,.3); background: rgba(62,207,142,.08); }
+  .batch-stat-chip.error   { color: var(--danger);  border-color: rgba(240,83,83,.3);  background: rgba(240,83,83,.08);  }
+  .batch-stat-chip.pending { color: var(--accent2); border-color: rgba(79,142,247,.3); background: rgba(79,142,247,.08); }
+
+  .batch-progress-file {
+    font-size: 12px;
+    color: var(--text2);
+    font-family: var(--mono);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    min-height: 18px;
+  }
+
+  .batch-error-log {
+    max-height: 120px;
+    overflow-y: auto;
+    background: var(--surface2);
+    border: 1px solid rgba(240,83,83,.25);
+    border-radius: 10px;
+    padding: 8px 10px;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+
+  .batch-error-entry {
+    font-size: 11px;
+    font-family: var(--mono);
+    color: var(--danger);
+    line-height: 1.4;
+  }
+
   .spinner {
     width: 40px; height: 40px;
     border: 3px solid var(--border);
@@ -2297,6 +2420,45 @@
   <div class="loading-text" id="loading-text">Processing...</div>
 </div>
 
+<!-- Batch Progress Overlay -->
+<div id="batch-progress-overlay">
+  <div class="batch-progress-modal">
+    <div class="batch-progress-header">
+      <div>
+        <div class="batch-progress-title">Processing Batch</div>
+        <div style="font-size:12px;color:var(--text2);margin-top:2px" id="batch-prog-mode-label">Running…</div>
+      </div>
+      <div style="font-family:var(--display);font-size:28px;font-weight:800;color:var(--accent2)" id="batch-prog-pct">0%</div>
+    </div>
+
+    <div>
+      <div class="batch-progress-track">
+        <div class="batch-progress-fill" id="batch-prog-fill" style="width:0%"></div>
+      </div>
+      <div style="display:flex;justify-content:space-between;font-size:11px;font-family:var(--mono);color:var(--text3);margin-top:5px">
+        <span id="batch-prog-count">0 / 0</span>
+        <span id="batch-prog-eta">Calculating…</span>
+      </div>
+    </div>
+
+    <div class="batch-progress-stats">
+      <div class="batch-stat-chip success" id="batch-prog-success-chip">✓ 0 done</div>
+      <div class="batch-stat-chip error"   id="batch-prog-error-chip"  style="display:none">✕ 0 failed</div>
+      <div class="batch-stat-chip pending" id="batch-prog-pending-chip">◷ 0 remaining</div>
+    </div>
+
+    <div class="batch-progress-file" id="batch-prog-file">Starting…</div>
+
+    <div id="batch-error-log" class="batch-error-log" style="display:none"></div>
+
+    <div style="display:flex;gap:8px;flex-wrap:wrap">
+      <button class="btn btn-danger btn-sm" onclick="cancelBatchProcess()" id="batch-prog-cancel-btn">✕ Cancel</button>
+      <button class="btn btn-secondary btn-sm" id="batch-prog-retry-btn" style="display:none" onclick="retryFailedBatchItems()">↺ Retry Failed</button>
+      <button class="btn btn-primary btn-sm"   id="batch-prog-done-btn"  style="display:none" onclick="closeBatchProgressOverlay()">✓ Done</button>
+    </div>
+  </div>
+</div>
+
 <!-- Settings Modal -->
 <div class="modal-overlay" id="settings-modal" onclick="if(event.target===this)closeSettings()">
   <div class="modal">
@@ -2419,6 +2581,11 @@ const STATE = {
     autoRunning: false,
     autoProcessed: 0,
     autoTotal: 0,
+    autoCancel: false,
+    autoErrors: [],       // { index, name, message }
+    autoSuccesses: 0,
+    autoFails: 0,
+    zipBuffers: [],       // { filename, buffer } collected during zip mode
   },
 };
 
@@ -5156,7 +5323,7 @@ function injectBatchUI() {
         <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap">
           <div>
             <div class="batch-panel-title" style="font-size:12px">Automatic Batch Processor</div>
-            <div class="batch-panel-sub">Optional: apply the current workflow to all queued images in one run.</div>
+            <div class="batch-panel-sub">Apply the current workflow to all queued images in one run.</div>
           </div>
           <label style="display:flex;align-items:center;gap:8px;font-size:12px;color:var(--text2);cursor:pointer">
             <input type="checkbox" id="batch-auto-enable"> Enable auto batch
@@ -5164,17 +5331,25 @@ function injectBatchUI() {
         </div>
         <div class="batch-auto-grid">
           <div class="form-group">
-            <label>Output</label>
-            <select id="batch-auto-output">
-              <option value="pdf">PDF sheet</option>
-              <option value="png" selected>PNG sheet</option>
-              <option value="jpg">JPG sheet</option>
-              <option value="crop">Cropped PNG only</option>
+            <label>Output format</label>
+            <select id="batch-auto-output" onchange="toggleBatchSingleControls()">
+              <optgroup label="── Single Photo ──">
+                <option value="single-png">Single photo PNG</option>
+                <option value="single-jpg">Single photo JPG</option>
+                <option value="single-pdf">Single photo PDF</option>
+              </optgroup>
+              <optgroup label="── Sheet Layout ──">
+                <option value="pdf">PDF sheet</option>
+                <option value="png" selected>PNG sheet</option>
+                <option value="jpg">JPG sheet</option>
+                <option value="crop">Cropped PNG only</option>
+              </optgroup>
             </select>
           </div>
           <div class="form-group">
             <label>Save mode</label>
             <select id="batch-auto-save-mode">
+              <option value="zip" selected>ZIP archive (all-in-one)</option>
               <option value="folder">Choose output folder</option>
               <option value="downloads">Browser downloads</option>
             </select>
@@ -5191,11 +5366,76 @@ function injectBatchUI() {
             </select>
           </div>
         </div>
-        <label style="display:flex;align-items:center;gap:8px;font-size:12px;color:var(--text2);cursor:pointer">
-          <input type="checkbox" id="batch-auto-use-current-template" checked> Apply the current edit, crop, background, and layout settings to every queued image
+
+        <!-- Single photo size controls — shown only when a single-* output is selected -->
+        <div id="batch-single-controls" style="display:none;background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:12px;margin-top:4px;">
+          <div style="font-size:11px;font-family:var(--mono);color:var(--text3);text-transform:uppercase;letter-spacing:.7px;margin-bottom:10px;display:flex;align-items:center;gap:8px;">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="12" cy="10" r="3"/><path d="M7 19c0-2.8 2.2-5 5-5s5 2.2 5 5"/></svg>
+            Single photo output settings
+          </div>
+          <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:8px;">
+            <div class="form-group">
+              <label>Width (mm)</label>
+              <input type="number" id="batch-single-w" value="35" min="5" max="300" step="0.5">
+            </div>
+            <div class="form-group">
+              <label>Height (mm)</label>
+              <input type="number" id="batch-single-h" value="45" min="5" max="300" step="0.5">
+            </div>
+            <div class="form-group">
+              <label>Resolution</label>
+              <select id="batch-single-dpi">
+                <option value="150">150 DPI</option>
+                <option value="300" selected>300 DPI</option>
+                <option value="600">600 DPI</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label>Background</label>
+              <select id="batch-single-bg">
+                <option value="white" selected>White</option>
+                <option value="transparent">Transparent</option>
+                <option value="photo">Keep photo bg</option>
+              </select>
+            </div>
+          </div>
+          <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:8px;">
+            <button class="btn btn-secondary btn-sm" onclick="batchSinglePresetMM(35,45)">Passport 35×45</button>
+            <button class="btn btn-secondary btn-sm" onclick="batchSinglePresetInch(2,2)">Visa 2×2″</button>
+            <button class="btn btn-secondary btn-sm" onclick="batchSinglePresetInch(1,1)">ID 1×1″</button>
+            <button class="btn btn-secondary btn-sm" onclick="batchSingleSyncFromCrop()">↻ From Crop Preset</button>
+          </div>
+          <div style="font-size:11px;color:var(--text2);margin-top:8px;line-height:1.5;">
+            Each image in the batch will be exported as one standalone photo at this exact print size — no sheet, no duplication.
+          </div>
+        </div>
+
+        <label style="display:flex;align-items:center;gap:8px;font-size:12px;color:var(--text2);cursor:pointer;margin-top:4px;">
+          <input type="checkbox" id="batch-auto-use-current-template" checked> Apply the current edit, crop, and background settings to every queued image
         </label>
-        <div class="batch-auto-note">Use this when all photos were taken under similar conditions. The processor runs one image at a time to keep the app smooth and reduce lag. Folder save works best in modern Chromium-based browsers.</div>
-        <div style="display:flex;gap:8px;flex-wrap:wrap">
+
+        <!-- Advanced options row -->
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:8px;padding:10px 0 2px;">
+          <div class="form-group">
+            <label>On error</label>
+            <select id="batch-auto-on-error">
+              <option value="skip" selected>Skip &amp; continue</option>
+              <option value="stop">Stop on first error</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>Processing mode</label>
+            <select id="batch-auto-parallel">
+              <option value="1" selected>Sequential (safe)</option>
+              <option value="2">Parallel ×2 (faster)</option>
+              <option value="3">Parallel ×3 (fast)</option>
+              <option value="4">Parallel ×4 (max speed)</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="batch-auto-note" style="margin:0">Sequential mode is most stable. Parallel mode is faster but uses more memory — best for single-photo exports. ZIP download collects all files into one archive.</div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;padding-top:2px;">
           <button class="btn btn-primary btn-sm" onclick="runAutomaticBatchProcess()">⚙️ Process All Batch</button>
           <button class="btn btn-secondary btn-sm" onclick="goScreen('export')">Open Export Screen</button>
         </div>
@@ -5270,14 +5510,56 @@ function afterSuccessfulExport(kind) {
 
 
 function getBatchAutomationConfig() {
+  const output   = document.getElementById('batch-auto-output')?.value || 'png';
+  const isSingle = output.startsWith('single-');
+  const workers  = parseInt(document.getElementById('batch-auto-parallel')?.value || 1, 10);
   return {
-    enabled: !!document.getElementById('batch-auto-enable')?.checked,
-    output: document.getElementById('batch-auto-output')?.value || 'png',
-    saveMode: document.getElementById('batch-auto-save-mode')?.value || 'folder',
-    prefix: (document.getElementById('batch-auto-prefix')?.value || 'passport-batch').trim(),
-    doneAction: document.getElementById('batch-auto-done-action')?.value || 'mark',
+    enabled:            !!document.getElementById('batch-auto-enable')?.checked,
+    output,
+    isSingle,
+    singleW:            parseFloat(document.getElementById('batch-single-w')?.value || 35),
+    singleH:            parseFloat(document.getElementById('batch-single-h')?.value || 45),
+    singleDpi:          parseInt(document.getElementById('batch-single-dpi')?.value || 300, 10),
+    singleBg:           document.getElementById('batch-single-bg')?.value || 'white',
+    saveMode:           document.getElementById('batch-auto-save-mode')?.value || 'zip',
+    prefix:             (document.getElementById('batch-auto-prefix')?.value || 'passport-batch').trim(),
+    doneAction:         document.getElementById('batch-auto-done-action')?.value || 'mark',
     useCurrentTemplate: document.getElementById('batch-auto-use-current-template')?.checked !== false,
+    onError:            document.getElementById('batch-auto-on-error')?.value || 'skip',
+    workers:            Math.max(1, Math.min(4, workers)),
   };
+}
+
+// ── Batch single photo UI helpers ──────────────────────────
+function toggleBatchSingleControls() {
+  const sel     = document.getElementById('batch-auto-output');
+  const box     = document.getElementById('batch-single-controls');
+  if (!sel || !box) return;
+  const isSingle = sel.value.startsWith('single-');
+  box.style.display = isSingle ? 'block' : 'none';
+}
+
+function batchSinglePresetMM(w, h) {
+  const wEl = document.getElementById('batch-single-w');
+  const hEl = document.getElementById('batch-single-h');
+  if (wEl) wEl.value = w;
+  if (hEl) hEl.value = h;
+}
+
+function batchSinglePresetInch(w, h) {
+  batchSinglePresetMM(
+    Math.round(w * 25.4 * 10) / 10,
+    Math.round(h * 25.4 * 10) / 10
+  );
+}
+
+function batchSingleSyncFromCrop() {
+  const photo = getPhotoSizeMM();
+  const wEl = document.getElementById('batch-single-w');
+  const hEl = document.getElementById('batch-single-h');
+  if (wEl) wEl.value = Math.round(photo.w * 10) / 10;
+  if (hEl) hEl.value = Math.round(photo.h * 10) / 10;
+  toast('Synced from crop preset: ' + STATE.photoPreset.name, 'info', 1800);
 }
 
 function getBatchTemplateSnapshot() {
@@ -5307,6 +5589,10 @@ function getBatchTemplateSnapshot() {
     exportQuality: parseFloat(document.getElementById('export-quality')?.value || '0.85'),
     exportDpi: parseInt(document.getElementById('export-dpi')?.value || '300', 10),
     exportDatestamp: document.getElementById('export-datestamp')?.value || 'no',
+    singleW:   parseFloat(document.getElementById('single-w')?.value || document.getElementById('batch-single-w')?.value || 35),
+    singleH:   parseFloat(document.getElementById('single-h')?.value || document.getElementById('batch-single-h')?.value || 45),
+    singleDpi: parseInt(document.getElementById('single-dpi')?.value || document.getElementById('batch-single-dpi')?.value || 300, 10),
+    singleBg:  document.getElementById('single-bg')?.value || document.getElementById('batch-single-bg')?.value || 'white',
   };
 }
 
@@ -5495,6 +5781,55 @@ async function createCurrentBatchExportBlob(outputType, template) {
   if (outputType === 'crop') {
     return dataURLToBlob(STATE.croppedDataURL);
   }
+
+  // ── Single photo outputs ──────────────────────────────────
+  if (outputType === 'single-png' || outputType === 'single-jpg' || outputType === 'single-pdf') {
+    const config  = getBatchAutomationConfig();
+    const wMM     = config.singleW  || template.singleW  || 35;
+    const hMM     = config.singleH  || template.singleH  || 45;
+    const dpi     = config.singleDpi || template.singleDpi || 300;
+    const bg      = config.singleBg  || template.singleBg  || 'white';
+    const quality = template.exportQuality || parseFloat(document.getElementById('export-quality')?.value || '0.85');
+    const PX_MM   = dpi / 25.4;
+    const wPx     = Math.round(wMM * PX_MM);
+    const hPx     = Math.round(hMM * PX_MM);
+
+    const canvas = document.createElement('canvas');
+    canvas.width  = wPx;
+    canvas.height = hPx;
+    const ctx = canvas.getContext('2d');
+
+    if (bg === 'white') {
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(0, 0, wPx, hPx);
+    }
+
+    await new Promise((resolve, reject) => {
+      const img = new Image();
+      img.onload = () => { ctx.drawImage(img, 0, 0, wPx, hPx); resolve(); };
+      img.onerror = reject;
+      img.src = STATE.croppedDataURL;
+    });
+
+    if (outputType === 'single-png') {
+      return await canvasToBlob(canvas, 'image/png');
+    }
+    if (outputType === 'single-jpg') {
+      // Flatten to white for JPEG (no alpha)
+      const flat = document.createElement('canvas');
+      flat.width = wPx; flat.height = hPx;
+      const fctx = flat.getContext('2d');
+      fctx.fillStyle = '#ffffff';
+      fctx.fillRect(0, 0, wPx, hPx);
+      fctx.drawImage(canvas, 0, 0);
+      return await canvasToBlob(flat, 'image/jpeg', quality);
+    }
+    if (outputType === 'single-pdf') {
+      return await createPdfBlobFromCanvas(canvas, wMM, hMM, quality);
+    }
+  }
+
+  // ── Sheet layout outputs ──────────────────────────────────
   const dpi = template.exportDpi || parseInt(document.getElementById('export-dpi')?.value || '300', 10);
   const quality = template.exportQuality || parseFloat(document.getElementById('export-quality')?.value || '0.85');
   const canvas = await getLayoutCanvas(dpi);
@@ -5515,10 +5850,14 @@ function sanitizeBatchFilenamePart(value) {
 
 function getAutomaticBatchFilename(item, outputType, config, index) {
   const prefix = sanitizeBatchFilenamePart(config.prefix || 'passport-batch');
-  const stem = sanitizeBatchFilenamePart(item?.name || ('image-' + (index + 1)));
-  const extMap = { pdf: 'pdf', png: 'png', jpg: 'jpg', jpeg: 'jpg', crop: 'png' };
-  const ext = extMap[outputType] || 'png';
-  const stamp = (document.getElementById('export-datestamp')?.value || 'no') === 'yes' ? '_' + new Date().toISOString().slice(0, 10) : '';
+  const stem   = sanitizeBatchFilenamePart(item?.name || ('image-' + (index + 1)));
+  const extMap = {
+    pdf: 'pdf', png: 'png', jpg: 'jpg', jpeg: 'jpg', crop: 'png',
+    'single-png': 'png', 'single-jpg': 'jpg', 'single-pdf': 'pdf',
+  };
+  const ext   = extMap[outputType] || 'png';
+  const stamp = (document.getElementById('export-datestamp')?.value || 'no') === 'yes'
+    ? '_' + new Date().toISOString().slice(0, 10) : '';
   return `${prefix}_${String(index + 1).padStart(3, '0')}_${stem}${stamp}.${ext}`;
 }
 
@@ -5633,6 +5972,208 @@ async function runAutomaticBatchProcess() {
   else if (successCount && failCount) toast(`Processed ${successCount} files. ${failCount} had issues.`, 'warning', 4500);
   else toast('Automatic batch processing could not complete.', 'error', 4000);
 }
+
+// ═══════════════════════════════════════════════════════════
+//  MINIMAL INLINE ZIP BUILDER (no CDN, no dependency)
+// ═══════════════════════════════════════════════════════════
+function buildZipBlob(files) {
+  const enc = new TextEncoder();
+  const localHeaders = [];
+  const centralDir   = [];
+  let offset = 0;
+  for (const file of files) {
+    const nameBytes = enc.encode(file.name);
+    const data      = file.data instanceof Uint8Array ? file.data : new Uint8Array(file.data);
+    const crc       = crc32(data);
+    const now       = new Date();
+    const dosDate   = ((now.getFullYear() - 1980) << 9) | ((now.getMonth() + 1) << 5) | now.getDate();
+    const dosTime   = (now.getHours() << 11) | (now.getMinutes() << 5) | (now.getSeconds() >> 1);
+    const lhBuf = new ArrayBuffer(30 + nameBytes.length);
+    const lh    = new DataView(lhBuf);
+    lh.setUint32(0,  0x04034b50, true);
+    lh.setUint16(4,  20,         true);
+    lh.setUint16(6,  0,          true);
+    lh.setUint16(8,  0,          true);
+    lh.setUint16(10, dosTime,    true);
+    lh.setUint16(12, dosDate,    true);
+    lh.setUint32(14, crc,        true);
+    lh.setUint32(18, data.length,true);
+    lh.setUint32(22, data.length,true);
+    lh.setUint16(26, nameBytes.length, true);
+    lh.setUint16(28, 0,          true);
+    new Uint8Array(lhBuf).set(nameBytes, 30);
+    localHeaders.push({ lhBuf, data, nameBytes, crc, dosDate, dosTime, offset });
+    offset += lhBuf.byteLength + data.length;
+    const cdBuf = new ArrayBuffer(46 + nameBytes.length);
+    const cd    = new DataView(cdBuf);
+    cd.setUint32(0,  0x02014b50, true);
+    cd.setUint16(4,  20,         true);
+    cd.setUint16(6,  20,         true);
+    cd.setUint16(8,  0,          true);
+    cd.setUint16(10, 0,          true);
+    cd.setUint16(12, dosTime,    true);
+    cd.setUint16(14, dosDate,    true);
+    cd.setUint32(16, crc,        true);
+    cd.setUint32(20, data.length,true);
+    cd.setUint32(24, data.length,true);
+    cd.setUint16(28, nameBytes.length, true);
+    cd.setUint16(30, 0,          true);
+    cd.setUint16(32, 0,          true);
+    cd.setUint16(34, 0,          true);
+    cd.setUint16(36, 0,          true);
+    cd.setUint32(40, 0x00000020, true);
+    cd.setUint32(42, localHeaders[localHeaders.length - 1].offset, true);
+    new Uint8Array(cdBuf).set(nameBytes, 46);
+    centralDir.push(cdBuf);
+  }
+  const cdOffset = offset;
+  const cdSize   = centralDir.reduce((s, b) => s + b.byteLength, 0);
+  const n        = files.length;
+  const eocdBuf  = new ArrayBuffer(22);
+  const eocd     = new DataView(eocdBuf);
+  eocd.setUint32(0,  0x06054b50, true);
+  eocd.setUint16(4,  0,  true);
+  eocd.setUint16(6,  0,  true);
+  eocd.setUint16(8,  n,  true);
+  eocd.setUint16(10, n,  true);
+  eocd.setUint32(12, cdSize,   true);
+  eocd.setUint32(16, cdOffset, true);
+  eocd.setUint16(20, 0,  true);
+  const parts = [];
+  for (const lh of localHeaders) { parts.push(new Uint8Array(lh.lhBuf)); parts.push(lh.data); }
+  for (const cd of centralDir) parts.push(new Uint8Array(cd));
+  parts.push(new Uint8Array(eocdBuf));
+  return new Blob(parts, { type: 'application/zip' });
+}
+
+function crc32(data) {
+  if (!crc32._t) {
+    crc32._t = new Uint32Array(256);
+    for (let i = 0; i < 256; i++) {
+      let c = i;
+      for (let j = 0; j < 8; j++) c = (c & 1) ? (0xEDB88320 ^ (c >>> 1)) : (c >>> 1);
+      crc32._t[i] = c;
+    }
+  }
+  let c = 0xFFFFFFFF;
+  for (let i = 0; i < data.length; i++) c = crc32._t[(c ^ data[i]) & 0xFF] ^ (c >>> 8);
+  return (c ^ 0xFFFFFFFF) >>> 0;
+}
+
+// ═══════════════════════════════════════════════════════════
+//  BATCH PROGRESS OVERLAY
+// ═══════════════════════════════════════════════════════════
+let _batchStartTime = 0;
+
+function showBatchProgressOverlay(total, modeLabel) {
+  STATE.batch.autoErrors    = [];
+  STATE.batch.autoSuccesses = 0;
+  STATE.batch.autoFails     = 0;
+  STATE.batch.autoCancel    = false;
+  _batchStartTime           = Date.now();
+  const ov = document.getElementById('batch-progress-overlay');
+  if (!ov) return;
+  ov.classList.add('active');
+  const modeEl = document.getElementById('batch-prog-mode-label');
+  if (modeEl) modeEl.textContent = modeLabel || 'Processing…';
+  const fill = document.getElementById('batch-prog-fill');
+  if (fill) { fill.style.width = '0%'; fill.style.background = 'linear-gradient(90deg, var(--accent), var(--accent2))'; }
+  const cancelBtn = document.getElementById('batch-prog-cancel-btn');
+  const retryBtn  = document.getElementById('batch-prog-retry-btn');
+  const doneBtn   = document.getElementById('batch-prog-done-btn');
+  if (cancelBtn) { cancelBtn.style.display = 'inline-flex'; cancelBtn.disabled = false; cancelBtn.textContent = '✕ Cancel'; }
+  if (retryBtn)  retryBtn.style.display  = 'none';
+  if (doneBtn)   doneBtn.style.display   = 'none';
+  const errLog = document.getElementById('batch-error-log');
+  if (errLog) { errLog.style.display = 'none'; errLog.innerHTML = ''; }
+  updateBatchProgressOverlay(0, total, null);
+}
+
+function updateBatchProgressOverlay(done, total, currentName) {
+  const pct       = total > 0 ? Math.round((done / total) * 100) : 0;
+  const remaining = Math.max(0, total - done);
+  const elapsed   = _batchStartTime > 0 ? (Date.now() - _batchStartTime) / 1000 : 0;
+  const rate      = done > 0 && elapsed > 0 ? done / elapsed : 0;
+  const etaSec    = rate > 0 && remaining > 0 ? Math.ceil(remaining / rate) : null;
+  const etaStr    = done >= total ? 'Complete'
+    : etaSec === null ? 'Calculating…'
+    : etaSec < 60 ? '~' + etaSec + 's left'
+    : '~' + Math.ceil(etaSec / 60) + 'm left';
+  const g = id => document.getElementById(id);
+  const fill = g('batch-prog-fill');
+  if (fill)                    fill.style.width    = pct + '%';
+  if (g('batch-prog-pct'))     g('batch-prog-pct').textContent    = pct + '%';
+  if (g('batch-prog-count'))   g('batch-prog-count').textContent  = done + ' / ' + total;
+  if (g('batch-prog-eta'))     g('batch-prog-eta').textContent    = etaStr;
+  if (g('batch-prog-file'))    g('batch-prog-file').textContent   = currentName ? 'Processing: ' + currentName : (done >= total ? 'All done.' : '');
+  if (g('batch-prog-success-chip')) g('batch-prog-success-chip').textContent = '✓ ' + STATE.batch.autoSuccesses + ' done';
+  if (g('batch-prog-pending-chip')) g('batch-prog-pending-chip').textContent = '◷ ' + remaining + ' remaining';
+  const errChip = g('batch-prog-error-chip');
+  if (errChip) { errChip.textContent = '✕ ' + STATE.batch.autoFails + ' failed'; errChip.style.display = STATE.batch.autoFails > 0 ? 'inline-flex' : 'none'; }
+}
+
+function logBatchError(index, name, message) {
+  STATE.batch.autoErrors.push({ index, name, message });
+  STATE.batch.autoFails++;
+  const errLog = document.getElementById('batch-error-log');
+  if (!errLog) return;
+  errLog.style.display = 'flex';
+  const entry = document.createElement('div');
+  entry.className   = 'batch-error-entry';
+  entry.textContent = '[' + String(index + 1).padStart(3, '0') + '] ' + name + ': ' + message;
+  errLog.appendChild(entry);
+  errLog.scrollTop = errLog.scrollHeight;
+}
+
+function finishBatchProgressOverlay() {
+  const s = STATE.batch.autoSuccesses;
+  const f = STATE.batch.autoFails;
+  const g = id => document.getElementById(id);
+  if (g('batch-prog-cancel-btn')) g('batch-prog-cancel-btn').style.display = 'none';
+  if (g('batch-prog-done-btn'))   g('batch-prog-done-btn').style.display   = 'inline-flex';
+  if (g('batch-prog-retry-btn'))  g('batch-prog-retry-btn').style.display  = f > 0 ? 'inline-flex' : 'none';
+  const modeEl = g('batch-prog-mode-label');
+  if (modeEl) modeEl.textContent = STATE.batch.autoCancel
+    ? 'Cancelled — ' + s + ' processed, ' + f + ' failed'
+    : f === 0 ? 'All ' + s + ' file' + (s === 1 ? '' : 's') + ' processed successfully ✓'
+    : s + ' succeeded · ' + f + ' failed';
+  const fill = g('batch-prog-fill');
+  if (fill) {
+    fill.style.width = '100%';
+    fill.style.background = f > 0 && s === 0
+      ? 'linear-gradient(90deg,var(--danger),#f87171)'
+      : f > 0 ? 'linear-gradient(90deg,var(--accent),var(--warning))'
+      : 'linear-gradient(90deg,var(--success),#6ee7b7)';
+  }
+  _batchStartTime = 0;
+}
+
+function closeBatchProgressOverlay() {
+  const ov = document.getElementById('batch-progress-overlay');
+  if (ov) ov.classList.remove('active');
+}
+
+function cancelBatchProcess() {
+  STATE.batch.autoCancel = true;
+  const btn = document.getElementById('batch-prog-cancel-btn');
+  if (btn) { btn.disabled = true; btn.textContent = 'Cancelling…'; }
+}
+
+async function retryFailedBatchItems() {
+  const failed = STATE.batch.queue.filter(item => item.status === 'error');
+  if (!failed.length) { toast('No failed items to retry.', 'info'); return; }
+  failed.forEach(item => { item.status = 'queued'; });
+  renderBatchQueue();
+  toast('Retrying ' + failed.length + ' failed item' + (failed.length === 1 ? '' : 's') + '…', 'info', 2000);
+  closeBatchProgressOverlay();
+  await new Promise(r => setTimeout(r, 350));
+  runAutomaticBatchProcess();
+}
+
+// ═══════════════════════════════════════════════════════════
+//  BATCH RUNNER
+// ═══════════════════════════════════════════════════════════
+
 
 // ═══════════════════════════════════════════════════════════
 //  LOCAL STORAGE / PROJECT SAVE

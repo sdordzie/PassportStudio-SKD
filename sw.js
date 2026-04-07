@@ -1,105 +1,64 @@
-/**
- * PassportStudio Pro — Service Worker
- * Cache strategy: Cache-First for app shell, Network-First for dynamic requests
- */
-
-const CACHE_NAME    = 'pps-pro-v1';
-const FONT_CACHE    = 'pps-fonts-v1';
-
-// App shell — the single HTML file (update this path to match your deployment)
-const APP_SHELL = [
+const APP_VERSION = 'passportstudio-v2.6.0';
+const STATIC_CACHE = `${APP_VERSION}-static`;
+const RUNTIME_CACHE = `${APP_VERSION}-runtime`;
+const CORE_ASSETS = [
   './',
   './index.html',
+  './manifest.webmanifest',
+  './icons/icon-192.png',
+  './icons/icon-512.png'
 ];
 
-// Google Fonts to pre-cache so the app looks great offline
-const FONT_URLS = [
-  'https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Syne:wght@400;500;600;700;800&family=DM+Sans:wght@300;400;500&display=swap',
-];
-
-// ── INSTALL ───────────────────────────────────────────────────────────────────
 self.addEventListener('install', event => {
-  self.skipWaiting(); // activate immediately
-  event.waitUntil(
-    caches.open(CACHE_NAME).then(cache => cache.addAll(APP_SHELL))
-  );
+  self.skipWaiting();
+  event.waitUntil(caches.open(STATIC_CACHE).then(cache => cache.addAll(CORE_ASSETS)));
 });
 
-// ── ACTIVATE ─────────────────────────────────────────────────────────────────
 self.addEventListener('activate', event => {
-  event.waitUntil(
-    caches.keys().then(keys =>
-      Promise.all(
-        keys
-          .filter(k => k !== CACHE_NAME && k !== FONT_CACHE)
-          .map(k => caches.delete(k))
-      )
-    ).then(() => self.clients.claim())
-  );
+  event.waitUntil((async () => {
+    const keys = await caches.keys();
+    await Promise.all(keys.map(key => {
+      if (![STATIC_CACHE, RUNTIME_CACHE].includes(key)) return caches.delete(key);
+    }));
+    await self.clients.claim();
+  })());
 });
 
-// ── FETCH ─────────────────────────────────────────────────────────────────────
-self.addEventListener('fetch', event => {
-  const { request } = event;
-  const url = new URL(request.url);
-
-  // Skip non-GET and browser-extension requests
-  if (request.method !== 'GET') return;
-  if (url.protocol === 'chrome-extension:') return;
-
-  // ── Fonts: cache-first, long TTL ──────────────────────────────────────────
-  if (url.hostname === 'fonts.googleapis.com' || url.hostname === 'fonts.gstatic.com') {
-    event.respondWith(
-      caches.open(FONT_CACHE).then(cache =>
-        cache.match(request).then(cached => {
-          if (cached) return cached;
-          return fetch(request).then(response => {
-            if (response.ok) cache.put(request, response.clone());
-            return response;
-          }).catch(() => cached); // serve stale if network fails
-        })
-      )
-    );
-    return;
-  }
-
-  // ── App shell: cache-first ─────────────────────────────────────────────────
-  if (url.origin === self.location.origin) {
-    event.respondWith(
-      caches.match(request).then(cached => {
-        const networkFetch = fetch(request)
-          .then(response => {
-            if (response.ok) {
-              caches.open(CACHE_NAME).then(cache => cache.put(request, response.clone()));
-            }
-            return response;
-          })
-          .catch(() => cached); // offline fallback to cache
-
-        // Return cached immediately; update cache in background
-        return cached || networkFetch;
-      })
-    );
-    return;
-  }
-});
-
-// ── MESSAGE HANDLER (page → SW: skip waiting on update) ──────────────────────
 self.addEventListener('message', event => {
-  if (event.data && event.data.type === 'SKIP_WAITING') {
-    self.skipWaiting();
-  }
+  if (event.data && event.data.type === 'SKIP_WAITING') self.skipWaiting();
 });
 
-// ── BACKGROUND SYNC (future-proof stub) ───────────────────────────────────────
-self.addEventListener('sync', event => {
-  if (event.tag === 'pps-sync') {
-    // No remote sync needed for a local-first tool
-    event.waitUntil(Promise.resolve());
-  }
-});
+self.addEventListener('fetch', event => {
+  const req = event.request;
+  if (req.method !== 'GET') return;
+  const url = new URL(req.url);
+  if (url.origin !== self.location.origin) return;
 
-// ── PUSH NOTIFICATIONS (future-proof stub) ────────────────────────────────────
-self.addEventListener('push', event => {
-  // Not used currently; stub prevents unhandled-event warnings
+  // HTML/doc navigation: network first, offline fallback.
+  if (req.mode === 'navigate' || (req.headers.get('accept') || '').includes('text/html')) {
+    event.respondWith((async () => {
+      try {
+        const fresh = await fetch(req);
+        const cache = await caches.open(RUNTIME_CACHE);
+        cache.put(req, fresh.clone());
+        return fresh;
+      } catch (err) {
+        const cached = await caches.match(req) || await caches.match('./index.html');
+        if (cached) return cached;
+        throw err;
+      }
+    })());
+    return;
+  }
+
+  // Same-origin static assets: stale-while-revalidate.
+  event.respondWith((async () => {
+    const cached = await caches.match(req);
+    const fetchPromise = fetch(req).then(async fresh => {
+      const cache = await caches.open(RUNTIME_CACHE);
+      cache.put(req, fresh.clone());
+      return fresh;
+    }).catch(() => cached);
+    return cached || fetchPromise;
+  })());
 });

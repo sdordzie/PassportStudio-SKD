@@ -1,0 +1,46 @@
+{
+  "id": "/passportstudio/",
+  "name": "PassportStudio Pro",
+  "short_name": "PassportStudio",
+  "description": "Professional offline passport and ID photo editor.",
+  "start_url": "./index.html?source=pwa",
+  "scope": "./",
+  "display": "standalone",
+  "display_override": [
+    "window-controls-overlay",
+    "standalone",
+    "minimal-ui"
+  ],
+  "background_color": "#0d0f14",
+  "theme_color": "#4f8ef7",
+  "orientation": "any",
+  "categories": [
+    "photo",
+    "productivity",
+    "utilities"
+  ],
+  "lang": "en",
+  "dir": "ltr",
+  "icons": [
+    {
+      "src": "./icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "./icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "New Photo",
+      "short_name": "New",
+      "description": "Start a new passport photo",
+      "url": "./index.html?action=new"
+    }
+  ]
+}

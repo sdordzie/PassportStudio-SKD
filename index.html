@@ -4,9 +4,12 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>PassportStudio Pro — Offline Photo Tool</title>
+<!-- For full installability, deploy this folder over HTTPS (for example GitHub Pages). -->
 
 <!-- ══ PWA: Web App Manifest (inline) ══════════════════════════════════════ -->
-<link rel="manifest" href="data:application/manifest+json,%7B%22name%22%3A%22PassportStudio%20Pro%22%2C%22short_name%22%3A%22PassportStudio%22%2C%22description%22%3A%22Professional%20offline%20passport%20photo%20editor%22%2C%22start_url%22%3A%22.%2F%22%2C%22display%22%3A%22standalone%22%2C%22orientation%22%3A%22any%22%2C%22background_color%22%3A%22%230d0f14%22%2C%22theme_color%22%3A%22%234f8ef7%22%2C%22icons%22%3A%5B%7B%22src%22%3A%22data%3Aimage%2Fsvg%2Bxml%2C%253Csvg%2520xmlns%3D%2527http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%2527%2520viewBox%3D%25270%25200%2520512%2520512%2527%253E%253Crect%2520width%3D%2527512%2527%2520height%3D%2527512%2527%2520rx%3D%2527100%2527%2520fill%3D%2527%25234f8ef7%2527%2F%253E%253Ctext%2520x%3D%2527256%2527%2520y%3D%2527340%2527%2520font-size%3D%2527280%2527%2520text-anchor%3D%2527middle%2527%2520fill%3D%2527white%2527%253E%25F0%259F%2596%25BC%253C%2Ftext%253E%253C%2Fsvg%253E%22%2C%22sizes%22%3A%22512x512%22%2C%22type%22%3A%22image%2Fsvg%2Bxml%22%2C%22purpose%22%3A%22any%20maskable%22%7D%5D%2C%22categories%22%3A%5B%22photo%22%2C%22productivity%22%2C%22utilities%22%5D%2C%22shortcuts%22%3A%5B%7B%22name%22%3A%22New%20Photo%22%2C%22short_name%22%3A%22New%22%2C%22description%22%3A%22Start%20a%20new%20passport%20photo%22%2C%22url%22%3A%22.%2F%22%7D%5D%7D">
+<link rel="manifest" href="./manifest.webmanifest">
+<link rel="icon" type="image/png" sizes="192x192" href="./icons/icon-192.png">
+<link rel="apple-touch-icon" href="./icons/icon-192.png">
 
 <!-- ══ PWA: Theme & display meta ════════════════════════════════════════════ -->
 <meta name="theme-color" content="#4f8ef7" id="theme-color-meta">
@@ -6852,6 +6855,10 @@ document.addEventListener('keydown', e => {
     const isStandalone = window.matchMedia('(display-mode: standalone)').matches
       || window.navigator.standalone === true;
     if (isStandalone) return;
+
+    if (!window.isSecureContext && location.hostname !== 'localhost' && location.hostname !== '127.0.0.1') {
+      return;
+    }
 
     // Don't show if user dismissed < 7 days ago
     try {

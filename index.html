@@ -4,6 +4,24 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>PassportStudio Pro — Offline Photo Tool</title>
+
+<!-- ══ PWA: Web App Manifest (inline) ══════════════════════════════════════ -->
+<link rel="manifest" href="data:application/manifest+json,%7B%22name%22%3A%22PassportStudio%20Pro%22%2C%22short_name%22%3A%22PassportStudio%22%2C%22description%22%3A%22Professional%20offline%20passport%20photo%20editor%22%2C%22start_url%22%3A%22.%2F%22%2C%22display%22%3A%22standalone%22%2C%22orientation%22%3A%22any%22%2C%22background_color%22%3A%22%230d0f14%22%2C%22theme_color%22%3A%22%234f8ef7%22%2C%22icons%22%3A%5B%7B%22src%22%3A%22data%3Aimage%2Fsvg%2Bxml%2C%253Csvg%2520xmlns%3D%2527http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%2527%2520viewBox%3D%25270%25200%2520512%2520512%2527%253E%253Crect%2520width%3D%2527512%2527%2520height%3D%2527512%2527%2520rx%3D%2527100%2527%2520fill%3D%2527%25234f8ef7%2527%2F%253E%253Ctext%2520x%3D%2527256%2527%2520y%3D%2527340%2527%2520font-size%3D%2527280%2527%2520text-anchor%3D%2527middle%2527%2520fill%3D%2527white%2527%253E%25F0%259F%2596%25BC%253C%2Ftext%253E%253C%2Fsvg%253E%22%2C%22sizes%22%3A%22512x512%22%2C%22type%22%3A%22image%2Fsvg%2Bxml%22%2C%22purpose%22%3A%22any%20maskable%22%7D%5D%2C%22categories%22%3A%5B%22photo%22%2C%22productivity%22%2C%22utilities%22%5D%2C%22shortcuts%22%3A%5B%7B%22name%22%3A%22New%20Photo%22%2C%22short_name%22%3A%22New%22%2C%22description%22%3A%22Start%20a%20new%20passport%20photo%22%2C%22url%22%3A%22.%2F%22%7D%5D%7D">
+
+<!-- ══ PWA: Theme & display meta ════════════════════════════════════════════ -->
+<meta name="theme-color" content="#4f8ef7">
+<meta name="color-scheme" content="dark light">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="PassportStudio">
+<meta name="application-name" content="PassportStudio Pro">
+<meta name="msapplication-TileColor" content="#4f8ef7">
+<meta name="msapplication-navbutton-color" content="#4f8ef7">
+
+<!-- ══ PWA: SEO / Social ════════════════════════════════════════════════════ -->
+<meta name="description" content="Professional offline passport & ID photo editor — crop, adjust, layout and export to any country's specification.">
+<meta name="keywords" content="passport photo, id photo, offline, photo editor, pwa">
 <style>
   @import url('https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Syne:wght@400;500;600;700;800&family=DM+Sans:wght@300;400;500&display=swap');
 
@@ -47,6 +65,123 @@
   }
 
   * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  /* ── PWA: Install banner ──────────────────────────────────────────────── */
+  #pwa-install-banner {
+    position: fixed;
+    bottom: 24px;
+    left: 50%;
+    transform: translateX(-50%) translateY(120px);
+    z-index: 9999;
+    background: var(--surface2);
+    border: 1px solid var(--border2);
+    border-radius: var(--radius-lg);
+    box-shadow: 0 8px 40px rgba(0,0,0,0.55), 0 0 0 1px rgba(79,142,247,0.15);
+    padding: 14px 18px;
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    min-width: 280px;
+    max-width: 380px;
+    transition: transform 0.38s cubic-bezier(0.34,1.56,0.64,1), opacity 0.3s ease;
+    opacity: 0;
+    pointer-events: none;
+  }
+  #pwa-install-banner.pwa-banner-visible {
+    transform: translateX(-50%) translateY(0);
+    opacity: 1;
+    pointer-events: all;
+  }
+  .pwa-banner-icon {
+    width: 42px; height: 42px;
+    background: var(--accent);
+    border-radius: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 22px;
+    flex-shrink: 0;
+  }
+  .pwa-banner-body { flex: 1; min-width: 0; }
+  .pwa-banner-title {
+    font-family: var(--display);
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--text);
+    line-height: 1.2;
+  }
+  .pwa-banner-sub {
+    font-size: 11px;
+    color: var(--text3);
+    font-family: var(--mono);
+    margin-top: 2px;
+  }
+  .pwa-banner-actions { display: flex; gap: 8px; flex-shrink: 0; }
+  .pwa-btn-install {
+    background: var(--accent);
+    color: #fff;
+    border: none;
+    border-radius: 8px;
+    padding: 7px 14px;
+    font-size: 12px;
+    font-weight: 600;
+    font-family: var(--sans);
+    cursor: pointer;
+    white-space: nowrap;
+    transition: background var(--transition), transform var(--transition);
+  }
+  .pwa-btn-install:hover { background: var(--accent2); transform: scale(1.04); }
+  .pwa-btn-dismiss {
+    background: transparent;
+    color: var(--text3);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 7px 10px;
+    font-size: 12px;
+    cursor: pointer;
+    font-family: var(--sans);
+    transition: color var(--transition), border-color var(--transition);
+  }
+  .pwa-btn-dismiss:hover { color: var(--text); border-color: var(--border2); }
+
+  /* ── PWA: SW update toast ─────────────────────────────────────────────── */
+  #pwa-update-bar {
+    position: fixed;
+    top: 12px;
+    left: 50%;
+    transform: translateX(-50%) translateY(-80px);
+    z-index: 9998;
+    background: var(--surface3);
+    border: 1px solid var(--accent);
+    border-radius: var(--radius);
+    padding: 10px 16px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-size: 12px;
+    color: var(--text);
+    font-family: var(--mono);
+    box-shadow: 0 4px 24px rgba(0,0,0,0.4);
+    transition: transform 0.3s ease;
+    pointer-events: none;
+  }
+  #pwa-update-bar.pwa-update-visible {
+    transform: translateX(-50%) translateY(0);
+    pointer-events: all;
+  }
+  #pwa-update-bar span { color: var(--accent2); }
+  .pwa-btn-update {
+    background: var(--accent);
+    color: #fff;
+    border: none;
+    border-radius: 6px;
+    padding: 5px 12px;
+    font-size: 11px;
+    font-weight: 600;
+    cursor: pointer;
+    font-family: var(--sans);
+  }
+  .pwa-btn-update:hover { background: var(--accent2); }
 
   html, body {
     width: 100%;
@@ -6333,6 +6468,186 @@ document.addEventListener('keydown', e => {
     closeSettings(); closeHelp();
   }
 });
+
+// ═══════════════════════════════════════════════════════════
+//  PWA — Service Worker · Install Prompt · Update Detection
+// ═══════════════════════════════════════════════════════════
+(function initPWA() {
+
+  // ── DOM: inject install banner + update bar ──────────────
+  function injectPWAElements() {
+    // Install banner
+    const banner = document.createElement('div');
+    banner.id = 'pwa-install-banner';
+    banner.setAttribute('role', 'dialog');
+    banner.setAttribute('aria-label', 'Install PassportStudio Pro');
+    banner.innerHTML = `
+      <div class="pwa-banner-icon">🖼️</div>
+      <div class="pwa-banner-body">
+        <div class="pwa-banner-title">Install PassportStudio Pro</div>
+        <div class="pwa-banner-sub">Works offline · No internet needed</div>
+      </div>
+      <div class="pwa-banner-actions">
+        <button class="pwa-btn-install" id="pwa-btn-install" aria-label="Install app">Install</button>
+        <button class="pwa-btn-dismiss" id="pwa-btn-dismiss" aria-label="Dismiss install prompt">✕</button>
+      </div>`;
+    document.body.appendChild(banner);
+
+    // Update bar
+    const updateBar = document.createElement('div');
+    updateBar.id = 'pwa-update-bar';
+    updateBar.setAttribute('role', 'status');
+    updateBar.innerHTML = `
+      <span>⚡</span> <span id="pwa-update-msg">New version available</span>
+      <button class="pwa-btn-update" id="pwa-btn-update">Reload</button>`;
+    document.body.appendChild(updateBar);
+  }
+
+  // ── Service Worker registration ──────────────────────────
+  let _swRegistration = null;
+  let _deferredInstallPrompt = null;
+
+  function registerServiceWorker() {
+    if (!('serviceWorker' in navigator)) return;
+
+    navigator.serviceWorker.register('./sw.js', { scope: './' })
+      .then(reg => {
+        _swRegistration = reg;
+
+        // Detect update: a new SW is waiting
+        reg.addEventListener('updatefound', () => {
+          const newWorker = reg.installing;
+          if (!newWorker) return;
+          newWorker.addEventListener('statechange', () => {
+            if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
+              showUpdateBar(newWorker);
+            }
+          });
+        });
+
+        // Periodic update check every 60 s while tab is open
+        setInterval(() => reg.update(), 60_000);
+      })
+      .catch(err => {
+        // SW registration failure is non-fatal; app still works
+        if (typeof console !== 'undefined') console.warn('[PWA] SW registration failed:', err);
+      });
+
+    // If the SW was refreshed externally, reload the page automatically
+    let swRefreshing = false;
+    navigator.serviceWorker.addEventListener('controllerchange', () => {
+      if (!swRefreshing) { swRefreshing = true; window.location.reload(); }
+    });
+  }
+
+  // ── Update bar logic ─────────────────────────────────────
+  function showUpdateBar(newWorker) {
+    const bar = document.getElementById('pwa-update-bar');
+    if (!bar) return;
+    bar.classList.add('pwa-update-visible');
+
+    const btn = document.getElementById('pwa-btn-update');
+    if (btn) {
+      btn.addEventListener('click', () => {
+        bar.classList.remove('pwa-update-visible');
+        newWorker.postMessage({ type: 'SKIP_WAITING' });
+      });
+    }
+
+    // Auto-hide after 20 s
+    setTimeout(() => bar.classList.remove('pwa-update-visible'), 20_000);
+  }
+
+  // ── Install prompt logic ─────────────────────────────────
+  function initInstallPrompt() {
+    // Don't show if already installed (standalone mode)
+    const isStandalone = window.matchMedia('(display-mode: standalone)').matches
+      || window.navigator.standalone === true;
+    if (isStandalone) return;
+
+    // Don't show if user dismissed < 7 days ago
+    try {
+      const dismissed = parseInt(localStorage.getItem('pps-pwa-dismissed') || '0', 10);
+      if (dismissed && (Date.now() - dismissed) < 7 * 24 * 60 * 60 * 1000) return;
+    } catch (_) {}
+
+    window.addEventListener('beforeinstallprompt', e => {
+      e.preventDefault();
+      _deferredInstallPrompt = e;
+
+      // Show banner after a short delay so it doesn't feel intrusive
+      setTimeout(() => {
+        const banner = document.getElementById('pwa-install-banner');
+        if (banner) banner.classList.add('pwa-banner-visible');
+      }, 3000);
+    });
+
+    // Wire up buttons after DOM is ready
+    document.addEventListener('DOMContentLoaded', () => {
+      const installBtn  = document.getElementById('pwa-btn-install');
+      const dismissBtn  = document.getElementById('pwa-btn-dismiss');
+      const banner      = document.getElementById('pwa-install-banner');
+
+      if (installBtn) {
+        installBtn.addEventListener('click', async () => {
+          if (!_deferredInstallPrompt) return;
+          banner.classList.remove('pwa-banner-visible');
+          _deferredInstallPrompt.prompt();
+          const { outcome } = await _deferredInstallPrompt.userChoice;
+          _deferredInstallPrompt = null;
+          if (typeof toast === 'function') {
+            toast(outcome === 'accepted'
+              ? 'App installed! You can now use it offline.'
+              : 'Install cancelled.', outcome === 'accepted' ? 'success' : 'info', 3500);
+          }
+        });
+      }
+
+      if (dismissBtn) {
+        dismissBtn.addEventListener('click', () => {
+          banner.classList.remove('pwa-banner-visible');
+          try { localStorage.setItem('pps-pwa-dismissed', String(Date.now())); } catch (_) {}
+        });
+      }
+    });
+
+    // Hide banner if app gets installed
+    window.addEventListener('appinstalled', () => {
+      const banner = document.getElementById('pwa-install-banner');
+      if (banner) banner.classList.remove('pwa-banner-visible');
+      _deferredInstallPrompt = null;
+      if (typeof toast === 'function') {
+        toast('PassportStudio Pro installed successfully!', 'success', 4000);
+      }
+    });
+  }
+
+  // ── Offline / online indicator ───────────────────────────
+  function initNetworkIndicator() {
+    function updateStatus() {
+      const el = document.getElementById('status-text');
+      if (!el) return;
+      const t = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+      el.textContent = (navigator.onLine ? 'Online' : 'Offline') + ' · ' + t;
+    }
+
+    window.addEventListener('online',  () => {
+      updateStatus();
+      if (typeof toast === 'function') toast('Back online', 'success', 2500);
+    });
+    window.addEventListener('offline', () => {
+      updateStatus();
+      if (typeof toast === 'function') toast('You\'re offline — app still works!', 'info', 3000);
+    });
+  }
+
+  // ── Bootstrap ────────────────────────────────────────────
+  injectPWAElements();
+  registerServiceWorker();
+  initInstallPrompt();
+  initNetworkIndicator();
+
+})();
 
 // ═══════════════════════════════════════════════════════════
 //  INIT

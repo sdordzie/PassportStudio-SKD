@@ -1042,11 +1042,22 @@
 
   /* Improve touch interactions on phones/tablets */
   #edit-canvas,
-  .canvas-wrap,
-  .crop-wrap,
   #crop-container,
   #crop-selection {
     touch-action: none;
+  }
+
+  .canvas-wrap,
+  .crop-wrap,
+  .layout-preview-wrap,
+  .edit-side,
+  .crop-side,
+  .layout-side,
+  .sidebar-nav,
+  #screen-home,
+  #screen-export,
+  .panel-body {
+    touch-action: pan-x pan-y;
   }
 
 
@@ -1699,6 +1710,20 @@
     touch-action: manipulation;
   }
 
+
+  .scroll-smooth-mobile,
+  .edit-side,
+  .crop-side,
+  .layout-side,
+  .sidebar-nav,
+  #screen-home,
+  #screen-export,
+  .layout-preview-wrap,
+  .panel-body {
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior: contain;
+  }
+
   .edit-toolbar,
   .crop-toolbar,
   .layout-toolbar,
@@ -1892,6 +1917,13 @@
       padding: 12px;
       overflow: auto;
       -webkit-overflow-scrolling: touch;
+      touch-action: pan-x pan-y;
+    }
+
+    #edit-canvas,
+    #crop-container,
+    #crop-selection {
+      touch-action: none;
     }
 
     .edit-toolbar,
@@ -7219,6 +7251,21 @@ function scheduleResponsiveRefresh() {
   _layoutRefreshTimer = setTimeout(refreshActiveScreenLayout, 120);
 }
 
+
+function initMobileScrollAssist() {
+  const selectors = [
+    '.edit-side', '.crop-side', '.layout-side', '.sidebar-nav',
+    '#screen-home', '#screen-export', '.layout-preview-wrap', '.panel-body',
+    '.canvas-wrap', '.crop-wrap'
+  ];
+
+  document.querySelectorAll(selectors.join(',')).forEach(el => {
+    el.classList.add('scroll-smooth-mobile');
+    el.style.webkitOverflowScrolling = 'touch';
+    if (!el.style.overscrollBehavior) el.style.overscrollBehavior = 'contain';
+  });
+}
+
 // ═══════════════════════════════════════════════════════════
 //  INIT
 // ═══════════════════════════════════════════════════════════
@@ -7232,6 +7279,7 @@ document.addEventListener('DOMContentLoaded', () => {
   syncCopiesToGrid();
   initBgBrushEditor();
   enhanceMobileTouchExperience();
+  initMobileScrollAssist();
   injectBatchUI();
 
   // Status update

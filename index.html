@@ -1686,6 +1686,116 @@
     white-space: nowrap;
   }
 
+
+  /* ═══════════════════════════════════════
+     ENHANCED TOUCH UX
+  ═══════════════════════════════════════ */
+  html, body, button, input, select, textarea, label, .btn, .nav-item, .mobile-nav-item,
+  .quick-template, .preset-item, .export-card, .recent-item {
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  .btn, .nav-item, .mobile-nav-item, .preset-item, .quick-template, .recent-item, .export-card {
+    touch-action: manipulation;
+  }
+
+  .edit-toolbar,
+  .crop-toolbar,
+  .layout-toolbar,
+  .crop-info-bar {
+    scrollbar-width: thin;
+  }
+
+  @media (hover: none) and (pointer: coarse) {
+    .btn,
+    input[type=text],
+    input[type=number],
+    select,
+    .nav-item,
+    .mobile-nav-item,
+    .preset-item,
+    .quick-template,
+    .recent-item,
+    .export-card {
+      min-height: 44px;
+    }
+
+    .btn:active,
+    .nav-item:active,
+    .mobile-nav-item:active,
+    .preset-item:active,
+    .quick-template:active,
+    .recent-item:active,
+    .export-card:active {
+      transform: scale(0.985);
+    }
+
+    .edit-toolbar,
+    .crop-toolbar,
+    .layout-toolbar {
+      flex-wrap: nowrap;
+      overflow-x: auto;
+      overflow-y: hidden;
+      -webkit-overflow-scrolling: touch;
+      scroll-snap-type: x proximity;
+      padding-bottom: 10px;
+    }
+
+    .edit-toolbar > *,
+    .crop-toolbar > *,
+    .layout-toolbar > * {
+      flex-shrink: 0;
+      scroll-snap-align: start;
+    }
+
+    .toolbar-sep {
+      flex-shrink: 0;
+    }
+
+    #edit-canvas,
+    #crop-img,
+    #crop-selection,
+    #crop-container,
+    .canvas-wrap,
+    .crop-wrap,
+    .layout-preview-wrap {
+      user-select: none;
+      -webkit-user-select: none;
+      -webkit-touch-callout: none;
+    }
+
+    #crop-selection {
+      outline: 1px solid rgba(255,255,255,0.25);
+      outline-offset: 0;
+    }
+
+    .crop-handle {
+      width: 24px;
+      height: 24px;
+      border-width: 3px;
+      border-radius: 999px;
+      box-shadow: 0 2px 10px rgba(0,0,0,0.35);
+    }
+    .crop-handle.nw { top: -12px; left: -12px; }
+    .crop-handle.n  { top: -12px; }
+    .crop-handle.ne { top: -12px; right: -12px; }
+    .crop-handle.e  { right: -12px; }
+    .crop-handle.se { bottom: -12px; right: -12px; }
+    .crop-handle.s  { bottom: -12px; }
+    .crop-handle.sw { bottom: -12px; left: -12px; }
+    .crop-handle.w  { left: -12px; }
+
+    #mobile-nav {
+      backdrop-filter: blur(12px);
+      background: color-mix(in srgb, var(--surface) 88%, transparent);
+    }
+
+    .mobile-nav-item {
+      min-width: 64px;
+      padding: 8px 12px;
+    }
+  }
+
   /* ═══════════════════════════════════════
      RESPONSIVE
   ═══════════════════════════════════════ */
@@ -1729,6 +1839,7 @@
       top: 0;
       z-index: 150;
       padding-top: max(0px, env(safe-area-inset-top));
+      min-height: calc(52px + env(safe-area-inset-top));
     }
 
     #main {
@@ -1747,10 +1858,14 @@
       border-left: none;
       border-right: none;
       border-top: 1px solid var(--border);
-      max-height: 45vh;
+      max-height: 52vh;
+      border-top-left-radius: 18px;
+      border-top-right-radius: 18px;
+      box-shadow: 0 -10px 30px rgba(0,0,0,0.18);
+      padding-bottom: env(safe-area-inset-bottom);
     }
 
-    .layout-side { border-bottom: 1px solid var(--border); max-height: 50vh; order: -1; }
+    .layout-side { border-bottom: 1px solid var(--border); max-height: 56vh; order: -1; }
 
     .export-grid { grid-template-columns: 1fr 1fr; }
     .export-options { grid-template-columns: 1fr; }
@@ -1773,7 +1888,11 @@
     .home-hero h1 { font-size: 26px; }
     .home-upload-zone { padding: 28px 16px; }
 
-    .crop-wrap, .canvas-wrap, .layout-preview-wrap { padding: 12px; }
+    .crop-wrap, .canvas-wrap, .layout-preview-wrap {
+      padding: 12px;
+      overflow: auto;
+      -webkit-overflow-scrolling: touch;
+    }
 
     .edit-toolbar,
     .crop-toolbar,
@@ -1786,7 +1905,8 @@
     .edit-toolbar .btn,
     .crop-toolbar .btn,
     .layout-toolbar .btn {
-      min-height: 40px;
+      min-height: 44px;
+      padding-inline: 14px;
     }
 
     .row {
@@ -3052,6 +3172,60 @@ function closeSidebar() {
   if (bd) bd.classList.remove('active');
 }
 
+
+function enhanceMobileTouchExperience() {
+  const sidebar = document.getElementById('sidebar');
+  const backdrop = document.getElementById('sidebar-backdrop');
+  if (sidebar && !sidebar.dataset.touchEnhanced) {
+    let startX = 0;
+    let startY = 0;
+    let tracking = false;
+
+    sidebar.addEventListener('touchstart', (e) => {
+      if (!e.touches || e.touches.length !== 1) return;
+      startX = e.touches[0].clientX;
+      startY = e.touches[0].clientY;
+      tracking = true;
+    }, { passive: true });
+
+    sidebar.addEventListener('touchmove', (e) => {
+      if (!tracking || !sidebar.classList.contains('mobile-open') || !e.touches || e.touches.length !== 1) return;
+      const dx = e.touches[0].clientX - startX;
+      const dy = Math.abs(e.touches[0].clientY - startY);
+      if (dx < -48 && dy < 36) {
+        closeSidebar();
+        tracking = false;
+      }
+    }, { passive: true });
+
+    sidebar.dataset.touchEnhanced = '1';
+  }
+
+  if (backdrop && !backdrop.dataset.touchEnhanced) {
+    backdrop.addEventListener('touchmove', (e) => e.preventDefault(), { passive: false });
+    backdrop.dataset.touchEnhanced = '1';
+  }
+}
+
+
+
+function getPointerClientPoint(event) {
+  if (!event) return null;
+  if (typeof event.clientX === 'number' && typeof event.clientY === 'number') {
+    return { clientX: event.clientX, clientY: event.clientY };
+  }
+  const touch = event.touches?.[0] || event.changedTouches?.[0] || null;
+  if (!touch) return null;
+  return { clientX: touch.clientX, clientY: touch.clientY };
+}
+
+function isPrimaryPointer(event) {
+  if (!event) return true;
+  if (event.pointerType) return event.isPrimary !== false;
+  if (event.touches) return event.touches.length <= 1;
+  return true;
+}
+
 // ═══════════════════════════════════════════════════════════
 //  THEME
 // ═══════════════════════════════════════════════════════════
@@ -4038,14 +4212,15 @@ function getEditCanvasImagePoint(event) {
   const canvas = document.getElementById('edit-canvas');
   if (!canvas) return null;
   const rect = canvas.getBoundingClientRect();
-  const clientX = event.touches ? event.touches[0].clientX : event.clientX;
-  const clientY = event.touches ? event.touches[0].clientY : event.clientY;
-  const x = ((clientX - rect.left) / rect.width) * canvas.width;
-  const y = ((clientY - rect.top) / rect.height) * canvas.height;
+  const point = getPointerClientPoint(event);
+  if (!point) return null;
+  const x = ((point.clientX - rect.left) / rect.width) * canvas.width;
+  const y = ((point.clientY - rect.top) / rect.height) * canvas.height;
   return { x: Math.max(0, Math.min(canvas.width, x)), y: Math.max(0, Math.min(canvas.height, y)) };
 }
 
 let bgBrushSession = null;
+let _bgBrushController = null;
 
 function paintBgBrushStroke(from, to) {
   const tool = STATE.bgTool || getDefaultBgTool();
@@ -4072,10 +4247,15 @@ function paintBgBrushStroke(from, to) {
 function beginBgBrush(event) {
   const tool = STATE.bgTool || getDefaultBgTool();
   if (!tool.removeEnabled || !['erase', 'restore'].includes(tool.brushMode) || !STATE.originalImage) return;
+  if (!isPrimaryPointer(event)) return;
   const point = getEditCanvasImagePoint(event);
   if (!point) return;
   event.preventDefault();
-  bgBrushSession = { active: true, last: point };
+  const canvas = document.getElementById('edit-canvas');
+  if (event.pointerId != null && canvas?.setPointerCapture) {
+    try { canvas.setPointerCapture(event.pointerId); } catch (_) {}
+  }
+  bgBrushSession = { active: true, last: point, pointerId: event.pointerId ?? null };
   paintBgBrushStroke(point, point);
   buildEditedCanvas();
   renderEditCanvas();
@@ -4083,6 +4263,7 @@ function beginBgBrush(event) {
 
 function moveBgBrush(event) {
   if (!bgBrushSession?.active) return;
+  if (bgBrushSession.pointerId != null && event.pointerId != null && bgBrushSession.pointerId !== event.pointerId) return;
   const point = getEditCanvasImagePoint(event);
   if (!point) return;
   event.preventDefault();
@@ -4092,8 +4273,12 @@ function moveBgBrush(event) {
   renderEditCanvas();
 }
 
-function endBgBrush() {
+function endBgBrush(event) {
   if (!bgBrushSession?.active) return;
+  const canvas = document.getElementById('edit-canvas');
+  if (event?.pointerId != null && canvas?.releasePointerCapture) {
+    try { canvas.releasePointerCapture(event.pointerId); } catch (_) {}
+  }
   bgBrushSession = null;
   buildEditedCanvas();
   renderEditCanvas();
@@ -4101,15 +4286,28 @@ function endBgBrush() {
 }
 
 function initBgBrushEditor() {
+  if (_bgBrushController) _bgBrushController.abort();
+  _bgBrushController = new AbortController();
+  const signal = _bgBrushController.signal;
   const canvas = document.getElementById('edit-canvas');
   if (!canvas) return;
-  canvas.addEventListener('mousedown', beginBgBrush);
-  canvas.addEventListener('touchstart', beginBgBrush, { passive: false });
-  document.addEventListener('mousemove', moveBgBrush);
-  document.addEventListener('touchmove', moveBgBrush, { passive: false });
-  document.addEventListener('mouseup', endBgBrush);
-  document.addEventListener('touchend', endBgBrush);
-  document.addEventListener('touchcancel', endBgBrush);
+
+  canvas.style.touchAction = 'none';
+
+  if (window.PointerEvent) {
+    canvas.addEventListener('pointerdown', beginBgBrush, { signal });
+    window.addEventListener('pointermove', moveBgBrush, { signal, passive: false });
+    window.addEventListener('pointerup', endBgBrush, { signal });
+    window.addEventListener('pointercancel', endBgBrush, { signal });
+  } else {
+    canvas.addEventListener('mousedown', beginBgBrush, { signal });
+    canvas.addEventListener('touchstart', beginBgBrush, { passive: false, signal });
+    document.addEventListener('mousemove', moveBgBrush, { signal });
+    document.addEventListener('touchmove', moveBgBrush, { passive: false, signal });
+    document.addEventListener('mouseup', endBgBrush, { signal });
+    document.addEventListener('touchend', endBgBrush, { signal });
+    document.addEventListener('touchcancel', endBgBrush, { signal });
+  }
 }
 
 function updateImageInfo() {
@@ -4386,35 +4584,44 @@ function setupCropEvents() {
 
   function getRelPos(e, el) {
     const rect = el.getBoundingClientRect();
-    const touch = e.touches ? e.touches[0] : e;
-    return { x: touch.clientX - rect.left, y: touch.clientY - rect.top };
+    const point = getPointerClientPoint(e);
+    if (!point) return { x: 0, y: 0 };
+    return { x: point.clientX - rect.left, y: point.clientY - rect.top };
   }
 
-  function stopCropInteraction() {
+  function stopCropInteraction(e) {
+    if (cropState.pointerId != null && e?.pointerId != null && cropState.pointerId !== e.pointerId) return;
+    if (e?.pointerId != null && sel.releasePointerCapture) {
+      try { sel.releasePointerCapture(e.pointerId); } catch (_) {}
+    }
     cropState.dragging = false;
     cropState.resizing = false;
+    cropState.pointerId = null;
   }
 
   function startDrag(e) {
     if (e.target.classList.contains('crop-handle')) return;
+    if (!isPrimaryPointer(e)) return;
     e.preventDefault();
+    cropState.pointerId = e.pointerId ?? null;
+    if (e.pointerId != null && sel.setPointerCapture) {
+      try { sel.setPointerCapture(e.pointerId); } catch (_) {}
+    }
     cropState.dragging = true;
+    cropState.resizing = false;
     const pos = getRelPos(e, img);
     cropState.startX = pos.x - cropState.crop.x;
     cropState.startY = pos.y - cropState.crop.y;
   }
 
-  sel.addEventListener('mousedown', startDrag, { signal });
-  sel.addEventListener('touchstart', startDrag, { passive: false, signal });
-
-  sel.querySelectorAll('.crop-handle').forEach(h => {
-    h.addEventListener('mousedown', e => startResize(e, h.dataset.dir), { signal });
-    h.addEventListener('touchstart', e => startResize(e, h.dataset.dir), { passive: false, signal });
-  });
-
   function startResize(e, dir) {
     e.stopPropagation();
+    if (!isPrimaryPointer(e)) return;
     e.preventDefault();
+    cropState.pointerId = e.pointerId ?? null;
+    if (e.pointerId != null && sel.setPointerCapture) {
+      try { sel.setPointerCapture(e.pointerId); } catch (_) {}
+    }
     cropState.dragging = false;
     cropState.resizing = true;
     cropState.resizeDir = dir;
@@ -4426,6 +4633,7 @@ function setupCropEvents() {
 
   function onMove(e) {
     if (!cropState.dragging && !cropState.resizing) return;
+    if (cropState.pointerId != null && e.pointerId != null && cropState.pointerId !== e.pointerId) return;
     e.preventDefault();
     const pos = getRelPos(e, img);
     const maxW = img.clientWidth, maxH = img.clientHeight;
@@ -4472,11 +4680,27 @@ function setupCropEvents() {
     updateCropPreview();
   }
 
-  document.addEventListener('mousemove', onMove, { signal });
-  document.addEventListener('touchmove', onMove, { passive: false, signal });
-  document.addEventListener('mouseup', stopCropInteraction, { signal });
-  document.addEventListener('touchend', stopCropInteraction, { signal });
-  document.addEventListener('touchcancel', stopCropInteraction, { signal });
+  if (window.PointerEvent) {
+    sel.addEventListener('pointerdown', startDrag, { signal });
+    sel.querySelectorAll('.crop-handle').forEach(h => {
+      h.addEventListener('pointerdown', e => startResize(e, h.dataset.dir), { signal });
+    });
+    window.addEventListener('pointermove', onMove, { signal, passive: false });
+    window.addEventListener('pointerup', stopCropInteraction, { signal });
+    window.addEventListener('pointercancel', stopCropInteraction, { signal });
+  } else {
+    sel.addEventListener('mousedown', startDrag, { signal });
+    sel.addEventListener('touchstart', startDrag, { passive: false, signal });
+    sel.querySelectorAll('.crop-handle').forEach(h => {
+      h.addEventListener('mousedown', e => startResize(e, h.dataset.dir), { signal });
+      h.addEventListener('touchstart', e => startResize(e, h.dataset.dir), { passive: false, signal });
+    });
+    document.addEventListener('mousemove', onMove, { signal });
+    document.addEventListener('touchmove', onMove, { passive: false, signal });
+    document.addEventListener('mouseup', stopCropInteraction, { signal });
+    document.addEventListener('touchend', stopCropInteraction, { signal });
+    document.addEventListener('touchcancel', stopCropInteraction, { signal });
+  }
 }
 
 function updateCropInfoBar() {
@@ -7007,6 +7231,7 @@ document.addEventListener('DOMContentLoaded', () => {
   initPageSizeGrid();
   syncCopiesToGrid();
   initBgBrushEditor();
+  enhanceMobileTouchExperience();
   injectBatchUI();
 
   // Status update

@@ -1929,6 +1929,471 @@
     #screen-layout .layout-side { display: none; }
     #layout-sheet { box-shadow: none; margin: 0 auto; }
   }
+
+  /* ═══════════════════════════════════════════════════════
+     MOBILE PWA ENHANCEMENTS — Advanced & Professional
+     Full touch control, smooth gestures, native app feel
+  ═══════════════════════════════════════════════════════ */
+
+  /* ── Safe-area awareness everywhere ── */
+  #app {
+    padding-left: env(safe-area-inset-left);
+    padding-right: env(safe-area-inset-right);
+  }
+
+  /* ── Prevent all rubber-band / bounce on iOS ── */
+  html { overscroll-behavior: none; }
+  body { overscroll-behavior-y: none; -webkit-overflow-scrolling: touch; }
+
+  /* ── Disable tap highlight flash on all interactive elements ── */
+  *, *::before, *::after {
+    -webkit-tap-highlight-color: transparent;
+    tap-highlight-color: transparent;
+  }
+
+  /* ── Button / nav active press feedback ── */
+  .btn:active,
+  .mobile-nav-item:active,
+  .nav-item:active,
+  .quick-template:active,
+  .preset-item:active,
+  .export-card:active,
+  .recent-item:active {
+    transform: scale(0.97);
+    opacity: 0.88;
+    transition: transform 0.08s ease, opacity 0.08s ease;
+  }
+
+  /* ── Prevent text selection during touch drags ── */
+  #crop-selection, #crop-container, .edit-toolbar,
+  .crop-wrap, .canvas-wrap, .layout-preview-wrap {
+    -webkit-user-select: none;
+    user-select: none;
+  }
+
+  /* ── Upgraded mobile bottom nav bar ── */
+  @media (max-width: 768px) {
+
+    /* Pill-shaped active indicator on mobile nav */
+    .mobile-nav-item {
+      position: relative;
+      padding: 6px 10px 4px;
+      min-width: 52px;
+      border-radius: 14px;
+      transition: background 0.18s ease, color 0.18s ease, transform 0.1s ease;
+    }
+
+    .mobile-nav-item.active {
+      background: var(--accent-dim);
+      color: var(--accent2);
+    }
+
+    .mobile-nav-item.active svg {
+      filter: drop-shadow(0 0 4px var(--accent-glow));
+    }
+
+    .mobile-nav-item svg {
+      width: 22px;
+      height: 22px;
+      transition: transform 0.15s ease;
+    }
+
+    .mobile-nav-item.active svg {
+      transform: translateY(-1px) scale(1.08);
+    }
+
+    /* Nav bar has glass morphism on mobile */
+    #mobile-nav {
+      background: color-mix(in srgb, var(--surface) 88%, transparent);
+      backdrop-filter: blur(16px) saturate(1.4);
+      -webkit-backdrop-filter: blur(16px) saturate(1.4);
+      border-top: 1px solid color-mix(in srgb, var(--border) 70%, transparent);
+      box-shadow: 0 -4px 24px rgba(0,0,0,0.25);
+      padding: 6px 4px max(10px, env(safe-area-inset-bottom));
+    }
+
+    /* Topbar glass too */
+    #topbar {
+      background: color-mix(in srgb, var(--surface) 90%, transparent);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      padding-left: max(10px, env(safe-area-inset-left));
+      padding-right: max(10px, env(safe-area-inset-right));
+    }
+
+    /* Larger touch targets on all toolbar buttons */
+    .edit-toolbar .btn,
+    .adj-section .btn {
+      min-height: 44px;
+      min-width: 44px;
+      padding: 0 14px;
+    }
+
+    /* Crop handles — bigger on mobile for finger accuracy */
+    .crop-handle {
+      width: 20px;
+      height: 20px;
+      border-radius: 4px;
+      background: white;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.35);
+    }
+
+    .crop-handle.nw { top: -10px; left: -10px; }
+    .crop-handle.n  { top: -10px; left: calc(50% - 10px); }
+    .crop-handle.ne { top: -10px; right: -10px; }
+    .crop-handle.e  { top: calc(50% - 10px); right: -10px; }
+    .crop-handle.se { bottom: -10px; right: -10px; }
+    .crop-handle.s  { bottom: -10px; left: calc(50% - 10px); }
+    .crop-handle.sw { bottom: -10px; left: -10px; }
+    .crop-handle.w  { top: calc(50% - 10px); left: -10px; }
+
+    /* Scrollable side panels — smooth & bounded */
+    .edit-side, .crop-side {
+      max-height: 42vh;
+      overflow-y: auto;
+      -webkit-overflow-scrolling: touch;
+      overscroll-behavior: contain;
+      scroll-snap-type: none;
+      scrollbar-width: thin;
+    }
+
+    /* Layout side panel on mobile — fixed height, scrollable */
+    .layout-side {
+      max-height: 44vh;
+      overflow-y: auto;
+      -webkit-overflow-scrolling: touch;
+      overscroll-behavior: contain;
+    }
+
+    /* Toolbar wraps into two rows cleanly on narrow phones */
+    .edit-toolbar {
+      flex-wrap: wrap;
+      gap: 6px;
+      padding: 8px 10px;
+      row-gap: 6px;
+    }
+
+    /* Canvas area always takes remaining vertical space */
+    .edit-canvas-area, .crop-canvas-area, .layout-preview-area {
+      flex: 1 1 0;
+      min-height: 0;
+    }
+
+    /* Home screen cards — 2 cols on medium phones */
+    .home-quick-actions {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+    }
+
+    .quick-template {
+      min-width: 0;
+    }
+
+    /* Upload zone finger-friendly */
+    .home-upload-zone {
+      padding: 32px 16px;
+      border-radius: 18px;
+    }
+
+    /* Export grid — 2 cols on phones */
+    .export-grid {
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+    }
+
+    .export-card {
+      padding: 16px 12px;
+    }
+
+    /* Range sliders — taller track for finger precision */
+    input[type=range] {
+      height: 36px;
+      cursor: pointer;
+    }
+
+    /* Select dropdowns — full height tap zone */
+    select, input[type=text], input[type=number] {
+      min-height: 44px;
+      font-size: 16px; /* prevent iOS zoom on focus */
+    }
+
+    /* Modals — sheet-style on mobile, slides from bottom */
+    .modal-overlay {
+      align-items: flex-end;
+    }
+
+    .modal {
+      border-radius: 20px 20px 0 0;
+      max-width: 100%;
+      width: 100%;
+      padding-bottom: max(24px, env(safe-area-inset-bottom));
+      max-height: 90dvh;
+      overflow-y: auto;
+    }
+
+    /* Toast — centered at bottom above nav */
+    #toast-container {
+      bottom: calc(72px + env(safe-area-inset-bottom));
+      right: 12px;
+      left: 12px;
+      align-items: center;
+    }
+
+    .toast {
+      max-width: 100%;
+      width: auto;
+      text-align: center;
+      justify-content: center;
+      border-radius: 14px;
+      font-size: 13px;
+    }
+
+    /* Sidebar drawer — slide animation */
+    #sidebar {
+      transform: translateX(-110%);
+      transition: transform 0.28s cubic-bezier(0.4, 0, 0.2, 1);
+      display: flex !important;
+    }
+
+    #sidebar.mobile-open {
+      transform: translateX(0);
+    }
+
+    /* Batch panel — full-width, touch-optimised */
+    .batch-panel {
+      padding: 12px;
+      border-radius: 16px;
+    }
+
+    .batch-item {
+      padding: 12px 10px;
+    }
+
+    .batch-thumb {
+      width: 46px;
+      height: 46px;
+    }
+
+    /* Loading overlay text */
+    .loading-text {
+      font-size: 14px;
+      text-align: center;
+      padding: 0 24px;
+    }
+
+    /* Crop info bar — hide less critical fields on tiny screens */
+    .crop-info-bar {
+      font-size: 11px;
+      padding: 6px 10px;
+      gap: 10px;
+      flex-wrap: nowrap;
+      overflow-x: auto;
+    }
+
+    /* Preset grid in crop — 3 cols instead of 2 */
+    .preset-grid {
+      grid-template-columns: repeat(3, 1fr);
+      gap: 5px;
+    }
+
+    .preset-item {
+      padding: 7px 4px;
+    }
+
+    .preset-name { font-size: 11px; }
+    .preset-size { font-size: 10px; }
+  }
+
+  /* ── Extra-small phones (< 480px) ── */
+  @media (max-width: 480px) {
+    .home-hero h1 { font-size: 22px; letter-spacing: -0.5px; }
+    .home-hero p  { font-size: 13px; }
+
+    /* Single-column export on small phones */
+    .export-grid { grid-template-columns: 1fr; }
+
+    /* Quick templates — 2-col stays, but tighter */
+    .quick-template { padding: 10px 8px; }
+    .quick-template-icon { font-size: 18px; }
+    .quick-template-name { font-size: 12px; }
+
+    /* Nav labels hide on very small phones, just icons */
+    @media (max-width: 360px) {
+      .mobile-nav-item { font-size: 0; gap: 0; padding: 8px 10px; }
+      .mobile-nav-item svg { width: 24px; height: 24px; }
+    }
+
+    /* Toolbar buttons stack into icon-only mode */
+    .edit-toolbar .btn span { display: none; }
+
+    /* Adj labels shorter */
+    .adj-label { width: 58px; font-size: 11px; }
+  }
+
+  /* ── Landscape mode on phones ── */
+  @media (max-width: 768px) and (orientation: landscape) and (max-height: 500px) {
+    /* In landscape, the side panels become horizontal flyouts */
+    .edit-side, .crop-side {
+      max-height: 100%;
+      width: 240px;
+      min-width: 240px;
+      border-left: 1px solid var(--border);
+      border-top: none;
+      position: relative;
+    }
+
+    #screen-edit, #screen-crop {
+      flex-direction: row;
+    }
+
+    /* Nav bar shorter in landscape */
+    #mobile-nav {
+      padding-top: 4px;
+      padding-bottom: max(4px, env(safe-area-inset-bottom));
+    }
+
+    .mobile-nav-item {
+      padding: 3px 10px 2px;
+    }
+
+    .mobile-nav-item svg {
+      width: 20px;
+      height: 20px;
+    }
+  }
+
+  /* ── Floating action button for primary action on mobile ── */
+  @media (max-width: 768px) {
+    .mobile-fab {
+      position: fixed;
+      bottom: calc(72px + env(safe-area-inset-bottom) + 12px);
+      right: 16px;
+      width: 52px;
+      height: 52px;
+      border-radius: 50%;
+      background: var(--accent);
+      color: white;
+      border: none;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      box-shadow: 0 4px 20px var(--accent-glow);
+      cursor: pointer;
+      z-index: 190;
+      transition: transform 0.15s ease, box-shadow 0.15s ease;
+    }
+
+    .mobile-fab:active {
+      transform: scale(0.92);
+      box-shadow: 0 2px 10px var(--accent-glow);
+    }
+
+    /* Step indicator dots for workflow progress */
+    #mobile-step-dots {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      position: fixed;
+      top: calc(52px + env(safe-area-inset-top) + 4px);
+      left: 0; right: 0;
+      z-index: 140;
+      pointer-events: none;
+    }
+
+    .step-dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 3px;
+      background: var(--border2);
+      transition: width 0.2s ease, background 0.2s ease;
+    }
+
+    .step-dot.active {
+      width: 18px;
+      background: var(--accent);
+    }
+
+    .step-dot.done {
+      background: var(--success);
+    }
+
+    /* Pull-to-top swipe hint line */
+    .swipe-hint {
+      width: 36px;
+      height: 4px;
+      border-radius: 2px;
+      background: var(--border2);
+      margin: 6px auto 0;
+    }
+  }
+
+  /* ── Improve scrollbar appearance in side panels ── */
+  .edit-side::-webkit-scrollbar,
+  .crop-side::-webkit-scrollbar,
+  .layout-side::-webkit-scrollbar {
+    width: 3px;
+  }
+
+  .edit-side::-webkit-scrollbar-thumb,
+  .crop-side::-webkit-scrollbar-thumb,
+  .layout-side::-webkit-scrollbar-thumb {
+    background: var(--accent-dim);
+    border-radius: 999px;
+  }
+
+  /* ── PWA installed standalone mode tweaks ── */
+  @media (display-mode: standalone) {
+    #topbar {
+      padding-top: env(safe-area-inset-top);
+    }
+
+    #mobile-nav {
+      padding-bottom: max(16px, env(safe-area-inset-bottom));
+    }
+
+    /* Hide browser-style topbar status since system handles it */
+    .topbar-status { display: none; }
+
+    /* Wider logo area in standalone */
+    .logo-title { font-size: 16px; }
+  }
+
+  /* ── Smooth screen transitions ── */
+  .screen {
+    animation: screenFadeIn 0.2s ease;
+  }
+
+  @keyframes screenFadeIn {
+    from { opacity: 0; transform: translateY(6px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+
+  /* ── Better visibility for batch progress overlay on mobile ── */
+  @media (max-width: 768px) {
+    #batch-progress-overlay {
+      padding: 12px;
+      align-items: flex-end;
+    }
+
+    .batch-progress-modal {
+      border-radius: 20px 20px 0 0;
+      padding: 20px 16px max(20px, env(safe-area-inset-bottom));
+      max-width: 100%;
+    }
+  }
+
+  /* ── Input zoom prevention across all iOS devices ── */
+  @media (max-width: 768px) {
+    input[type="text"],
+    input[type="number"],
+    input[type="email"],
+    select,
+    textarea {
+      font-size: max(16px, 1rem); /* iOS won't zoom if font >= 16px */
+    }
+  }
 </style>
 </head>
 <body>
@@ -1990,7 +2455,7 @@
       <div style="font-size:10px;color:var(--text3);font-family:var(--mono);padding:4px 10px;line-height:1.6">
         🔒 All processing local · v2.1<br>
         Built by Samuel Kwame Dordzie<br>
-        0246652528 · bigsammy86g@gmail.com
+        0246652528 · <a href="/cdn-cgi/l/email-protection" class="__cf_email__" data-cfemail="583a313f2b39353521606e3f183f35393134763b3735">[email&#160;protected]</a>
       </div>
     </div>
   </nav>
@@ -2859,7 +3324,7 @@
   </div>
 </div>
 
-<script>
+<script data-cfasync="false" src="/cdn-cgi/scripts/5c5dd728/cloudflare-static/email-decode.min.js"></script><script>
 // ═══════════════════════════════════════════════════════════
 //  APP STATE
 // ═══════════════════════════════════════════════════════════
@@ -7020,15 +7485,325 @@ document.addEventListener('DOMContentLoaded', () => {
   if (window.visualViewport) {
     window.visualViewport.addEventListener('resize', scheduleResponsiveRefresh, { passive: true });
   }
-  document.addEventListener('keydown', (e) => {
-    if (e.key === 'Escape') closeSidebar();
+  document.addEventListener('keydown',  document.addEventListener('keydown', e => {
+    if (e.ctrlKey || e.metaKey) {
+      if (e.key === 'z') { historyUndo(); e.preventDefault(); }
+      if (e.key === 'y') { historyRedo(); e.preventDefault(); }
+    }
+    if (e.key === 'Escape') { closeSettings(); closeHelp(); }
   });
 
-  scheduleResponsiveRefresh();
-
-  // Welcome toast
-  setTimeout(() => toast('Welcome! Upload an image to get started.', 'info', 4000), 800);
+  // Mobile enhancements init
+  initMobileEnhancements();
 });
+
+// ═══════════════════════════════════════════════════════════
+//  MOBILE PWA ENHANCEMENTS — JS
+// ═══════════════════════════════════════════════════════════
+
+function isMobile() {
+  return window.matchMedia('(max-width: 768px)').matches;
+}
+
+function initMobileEnhancements() {
+  if (!isMobile()) return;
+
+  injectStepDots();
+  injectMobileFAB();
+  initSwipeNavigation();
+  initPinchZoomPrevention();
+  initHapticFeedback();
+  initPullToRefreshBlock();
+  initMobileKeyboardHandler();
+  patchCanvasWrapTouchScroll();
+
+  // Re-run on orientation change
+  window.addEventListener('orientationchange', () => {
+    setTimeout(() => {
+      refreshActiveScreenLayout();
+      updateStepDots();
+    }, 250);
+  }, { passive: true });
+}
+
+// ── Step progress dots ────────────────────────────────────
+function injectStepDots() {
+  if (document.getElementById('mobile-step-dots')) return;
+  const steps = ['home', 'edit', 'crop', 'layout', 'export'];
+  const wrap = document.createElement('div');
+  wrap.id = 'mobile-step-dots';
+  steps.forEach(s => {
+    const dot = document.createElement('div');
+    dot.className = 'step-dot';
+    dot.dataset.screen = s;
+    wrap.appendChild(dot);
+  });
+  document.body.appendChild(wrap);
+  updateStepDots();
+}
+
+function updateStepDots() {
+  const steps = ['home', 'edit', 'crop', 'layout', 'export'];
+  const current = STATE.currentScreen;
+  const currentIdx = steps.indexOf(current);
+  const hasCrop = !!STATE.croppedDataURL;
+  const hasEdit = !!STATE.originalImage;
+
+  document.querySelectorAll('.step-dot').forEach((dot, i) => {
+    dot.classList.remove('active', 'done');
+    if (i === currentIdx) {
+      dot.classList.add('active');
+    } else if (
+      (i === 0) ||
+      (i === 1 && hasEdit && currentIdx > 1) ||
+      (i === 2 && hasCrop && currentIdx > 2) ||
+      (i === 3 && hasCrop && currentIdx > 3)
+    ) {
+      dot.classList.add('done');
+    }
+  });
+}
+
+// ── Floating Action Button ────────────────────────────────
+const FAB_CONFIG = {
+  home:   { icon: '📷', label: 'Upload Photo', action: () => document.getElementById('file-input')?.click() },
+  edit:   { icon: '✂️', label: 'Go to Crop',   action: () => applyEditAndCrop() },
+  crop:   { icon: '✅', label: 'Apply Crop',   action: () => applyCrop() },
+  layout: { icon: '📤', label: 'Export',        action: () => goScreen('export') },
+  export: { icon: '📥', label: 'Download PDF', action: () => exportPDF() },
+};
+
+function injectMobileFAB() {
+  if (document.getElementById('mobile-fab')) return;
+  const fab = document.createElement('button');
+  fab.id = 'mobile-fab';
+  fab.className = 'mobile-fab';
+  fab.setAttribute('aria-label', 'Primary action');
+  fab.innerHTML = '<span style="font-size:22px">📷</span>';
+  fab.addEventListener('click', () => {
+    triggerHaptic('medium');
+    const cfg = FAB_CONFIG[STATE.currentScreen];
+    if (cfg) cfg.action();
+  });
+  document.body.appendChild(fab);
+  updateMobileFAB();
+}
+
+function updateMobileFAB() {
+  const fab = document.getElementById('mobile-fab');
+  if (!fab) return;
+  const cfg = FAB_CONFIG[STATE.currentScreen];
+  if (!cfg) { fab.style.display = 'none'; return; }
+
+  // Hide FAB on export (too many buttons already) and hide when no image on edit/crop
+  const hide = (STATE.currentScreen === 'export') ||
+               (STATE.currentScreen === 'edit' && !STATE.originalImage) ||
+               (STATE.currentScreen === 'crop' && !STATE.editedCanvas);
+  fab.style.display = hide ? 'none' : 'flex';
+  fab.innerHTML = `<span style="font-size:22px">${cfg.icon}</span>`;
+  fab.setAttribute('aria-label', cfg.label);
+}
+
+// Patch goScreen to update dots + FAB on every navigation
+const _origGoScreen = goScreen;
+window.goScreen = function(name) {
+  _origGoScreen(name);
+  updateStepDots();
+  updateMobileFAB();
+};
+
+// ── Swipe left/right between screens ─────────────────────
+function initSwipeNavigation() {
+  const SCREENS = ['home', 'edit', 'crop', 'layout', 'export'];
+  let touchStartX = 0;
+  let touchStartY = 0;
+  let touchStartTime = 0;
+  let swiping = false;
+
+  document.addEventListener('touchstart', e => {
+    const t = e.touches[0];
+    touchStartX = t.clientX;
+    touchStartY = t.clientY;
+    touchStartTime = Date.now();
+    swiping = true;
+  }, { passive: true });
+
+  document.addEventListener('touchend', e => {
+    if (!swiping) return;
+    swiping = false;
+    const t = e.changedTouches[0];
+    const dx = t.clientX - touchStartX;
+    const dy = t.clientY - touchStartY;
+    const dt = Date.now() - touchStartTime;
+
+    // Only horizontal, fast, long enough swipes — and not inside side panels or crop area
+    const isHorizontal = Math.abs(dx) > Math.abs(dy) * 1.6;
+    const isFastEnough = dt < 380;
+    const isLongEnough = Math.abs(dx) > 52;
+    const isEdgeSwipe  = touchStartX < 30 || touchStartX > window.innerWidth - 30;
+
+    // Don't swipe when interacting with a crop/canvas touch target
+    const target = e.target;
+    const inCropArea    = target.closest('#crop-selection, .crop-handle, #crop-container');
+    const inSidePanel   = target.closest('.edit-side, .crop-side, .layout-side, .sidebar-nav');
+    const inScrollable  = target.closest('.adj-section, .batch-list, .preset-grid, .panel-body');
+    if (inCropArea || inSidePanel || inScrollable) return;
+
+    if (!isHorizontal || !isFastEnough || !isLongEnough) return;
+
+    const currentIdx = SCREENS.indexOf(STATE.currentScreen);
+    if (currentIdx === -1) return;
+
+    if (dx < 0 && currentIdx < SCREENS.length - 1) {
+      // Swipe left → next screen
+      triggerHaptic('light');
+      goScreen(SCREENS[currentIdx + 1]);
+    } else if (dx > 0 && currentIdx > 0) {
+      // Swipe right → previous screen (also accepts edge swipe from left as sidebar open)
+      if (isEdgeSwipe && dx > 0) {
+        toggleSidebar();
+      } else {
+        triggerHaptic('light');
+        goScreen(SCREENS[currentIdx - 1]);
+      }
+    }
+  }, { passive: true });
+}
+
+// ── Pinch zoom prevention (keeps the PWA feeling native) ─
+function initPinchZoomPrevention() {
+  // Allow pinch zoom only inside canvas areas
+  document.addEventListener('touchmove', e => {
+    if (e.touches.length > 1) {
+      const inCanvas = e.target.closest('#canvas-wrap, .crop-wrap, .layout-preview-wrap');
+      if (!inCanvas) e.preventDefault();
+    }
+  }, { passive: false });
+
+  // Also block double-tap zoom on buttons and nav items
+  let lastTap = 0;
+  document.addEventListener('touchend', e => {
+    const now = Date.now();
+    if (now - lastTap < 300) {
+      const inInteractive = e.target.closest('.btn, .mobile-nav-item, .nav-item, .quick-template, .export-card, .preset-item');
+      if (inInteractive) e.preventDefault();
+    }
+    lastTap = now;
+  }, { passive: false });
+}
+
+// ── Haptic feedback (Vibration API) ──────────────────────
+function triggerHaptic(intensity = 'light') {
+  if (!('vibrate' in navigator)) return;
+  const patterns = { light: 8, medium: 18, heavy: 35 };
+  try { navigator.vibrate(patterns[intensity] || 8); } catch (_) {}
+}
+
+function initHapticFeedback() {
+  // Add haptic to all primary buttons
+  document.addEventListener('pointerdown', e => {
+    const btn = e.target.closest('.btn-primary, .pwa-btn-install');
+    if (btn) triggerHaptic('light');
+  }, { passive: true });
+
+  // Stronger haptic for destructive actions
+  document.addEventListener('pointerdown', e => {
+    const btn = e.target.closest('.btn-danger');
+    if (btn) triggerHaptic('medium');
+  }, { passive: true });
+
+  // Haptic on nav item tap
+  document.addEventListener('pointerdown', e => {
+    const navItem = e.target.closest('.mobile-nav-item');
+    if (navItem) triggerHaptic('light');
+  }, { passive: true });
+}
+
+// ── Pull-to-refresh block (avoid accidental page refresh) ─
+function initPullToRefreshBlock() {
+  let startY = 0;
+  document.addEventListener('touchstart', e => {
+    startY = e.touches[0].clientY;
+  }, { passive: true });
+
+  document.addEventListener('touchmove', e => {
+    const dy = e.touches[0].clientY - startY;
+    // Block pull-down only at the very top of the main scrollable area
+    if (dy > 0 && (window.scrollY === 0 || document.documentElement.scrollTop === 0)) {
+      const inScrollable = e.target.closest('#screen-home, #screen-export, .edit-side, .crop-side, .layout-side');
+      if (!inScrollable) e.preventDefault();
+    }
+  }, { passive: false });
+}
+
+// ── Virtual keyboard handler ──────────────────────────────
+// When the soft keyboard opens, scroll the focused input into view
+function initMobileKeyboardHandler() {
+  if (!window.visualViewport) return;
+
+  let keyboardOpen = false;
+  const initialViewportHeight = window.visualViewport.height;
+
+  window.visualViewport.addEventListener('resize', () => {
+    const currentH = window.visualViewport.height;
+    const diff = initialViewportHeight - currentH;
+    keyboardOpen = diff > 150; // keyboard is probably open
+
+    if (keyboardOpen) {
+      // Scroll focused element into view
+      setTimeout(() => {
+        const focused = document.activeElement;
+        if (focused && (focused.tagName === 'INPUT' || focused.tagName === 'SELECT')) {
+          focused.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }
+      }, 100);
+
+      // Nudge the FAB up above keyboard
+      const fab = document.getElementById('mobile-fab');
+      if (fab) fab.style.bottom = (diff + 16) + 'px';
+    } else {
+      const fab = document.getElementById('mobile-fab');
+      if (fab) fab.style.bottom = '';
+    }
+  }, { passive: true });
+}
+
+// ── Canvas wrap: allow vertical scroll inside canvas area ─
+function patchCanvasWrapTouchScroll() {
+  // The canvas wrap uses touch-action:none which blocks scroll in side panels.
+  // Ensure side panels still allow vertical finger scroll.
+  ['.edit-side', '.crop-side', '.layout-side', '.sidebar-nav',
+   '#screen-home', '#screen-export'].forEach(sel => {
+    document.querySelectorAll(sel).forEach(el => {
+      el.style.touchAction = 'pan-y';
+    });
+  });
+}
+
+// ── Patch closeSidebar to work with transform-based animation ──
+const _origCloseSidebar = closeSidebar;
+window.closeSidebar = function() {
+  const sb = document.getElementById('sidebar');
+  const bd = document.getElementById('sidebar-backdrop');
+  if (sb) sb.classList.remove('mobile-open');
+  if (bd) bd.classList.remove('active');
+};
+
+const _origToggleSidebar = toggleSidebar;
+window.toggleSidebar = function() {
+  const sb = document.getElementById('sidebar');
+  const bd = document.getElementById('sidebar-backdrop');
+  if (!sb) return;
+  const isOpen = sb.classList.contains('mobile-open');
+  if (isOpen) {
+    sb.classList.remove('mobile-open');
+    if (bd) bd.classList.remove('active');
+  } else {
+    sb.classList.add('mobile-open');
+    if (bd) bd.classList.add('active');
+    triggerHaptic('light');
+  }
+};
 </script>
 </body>
 </html>

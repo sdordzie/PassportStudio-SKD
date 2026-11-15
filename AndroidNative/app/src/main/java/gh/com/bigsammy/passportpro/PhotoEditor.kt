@@ -73,6 +73,16 @@ private fun cropForPreset(source: Bitmap, preset: String, customRatio: Float? = 
     return Bitmap.createBitmap(source, (source.width - w) / 2, (source.height - h) / 2, w, h)
 }
 
+private fun transformPhoto(source: Bitmap, rotation: Int, flipHorizontal: Boolean, flipVertical: Boolean): Bitmap {
+    val normalized = ((rotation % 360) + 360) % 360
+    if (normalized == 0 && !flipHorizontal && !flipVertical) return source
+    val matrix = Matrix().apply {
+        postRotate(normalized.toFloat())
+        postScale(if (flipHorizontal) -1f else 1f, if (flipVertical) -1f else 1f)
+    }
+    return Bitmap.createBitmap(source, 0, 0, source.width, source.height, matrix, true)
+}
+
 private fun adjustPhoto(source: Bitmap, brightness: Float, contrast: Float, saturation: Float): Bitmap {
     if (brightness == 0f && contrast == 1f && saturation == 1f) return source
     val w = source.width
@@ -149,6 +159,9 @@ internal fun PhotoEditorScreen(photoPath: String, onRetake: () -> Unit, onSaved:
     var crop by remember { mutableStateOf("Original") }
     var perspectiveCorners by remember { mutableStateOf(listOf(Offset(0f, 0f), Offset(1f, 0f), Offset(1f, 1f), Offset(0f, 1f))) }
     var perspectiveEnabled by remember { mutableStateOf(false) }
+    var rotation by remember(photoPath) { mutableIntStateOf(0) }
+    var flipHorizontal by remember(photoPath) { mutableStateOf(false) }
+    var flipVertical by remember(photoPath) { mutableStateOf(false) }
     var customWidth by remember { mutableStateOf("600") }
     var customHeight by remember { mutableStateOf("800") }
     var customUnit by remember { mutableStateOf("px") }
@@ -162,11 +175,12 @@ internal fun PhotoEditorScreen(photoPath: String, onRetake: () -> Unit, onSaved:
         if (w == null || h == null) null else w / h
     }
     // Keep the preview visible and responsive; all pixel work runs away from the UI thread.
-    LaunchedEffect(editedBase, brightness, contrast, saturation, crop, customRatio, perspectiveEnabled, perspectiveCorners) {
+    LaunchedEffect(editedBase, brightness, contrast, saturation, crop, customRatio, perspectiveEnabled, perspectiveCorners, rotation, flipHorizontal, flipVertical) {
         val base = editedBase
         if (base != null) {
             preview = withContext(Dispatchers.Default) {
-                val small = fitPreview(base, 1000)
+                val oriented = transformPhoto(base, rotation, flipHorizontal, flipVertical)
+                val small = fitPreview(oriented, 1000)
                 val perspective = if (perspectiveEnabled) perspectiveCorrect(small, perspectiveCorners) else small
                 val cropped = cropForPreset(perspective, crop, if (crop == "Custom") customRatio else null)
                 adjustPhoto(cropped, brightness, contrast, saturation)
@@ -278,6 +292,16 @@ internal fun PhotoEditorScreen(photoPath: String, onRetake: () -> Unit, onSaved:
                     Text("The selected area is corrected to a straight rectangle.", color=Color(0xFF9AA7B8), fontSize=10.sp, modifier=Modifier.weight(1f))
                 }
             }
+            Text("TRANSFORM", color=Color(0xFF9AA7B8), fontSize=10.sp, fontWeight=FontWeight.Bold)
+            Row(horizontalArrangement=Arrangement.spacedBy(6.dp), modifier=Modifier.fillMaxWidth()) {
+                OutlinedButton(onClick={ rotation=(rotation+270)%360 }, modifier=Modifier.weight(1f)) { Text("↶ 90°") }
+                OutlinedButton(onClick={ rotation=(rotation+90)%360 }, modifier=Modifier.weight(1f)) { Text("90° ↷") }
+            }
+            Row(horizontalArrangement=Arrangement.spacedBy(6.dp), modifier=Modifier.fillMaxWidth()) {
+                FilterChip(selected=flipHorizontal, onClick={flipHorizontal=!flipHorizontal}, label={Text("Mirror ↔")})
+                FilterChip(selected=flipVertical, onClick={flipVertical=!flipVertical}, label={Text("Flip ↕")})
+                Text("Rotation: $rotation°", color=Color(0xFF9AA7B8), fontSize=10.sp, modifier=Modifier.align(Alignment.CenterVertically))
+            }
             Text("AI BACKGROUND", color=Color(0xFF9AA7B8), fontSize=10.sp, fontWeight=FontWeight.Bold)
             Row(Modifier.horizontalScroll(androidx.compose.foundation.rememberScrollState()), horizontalArrangement=Arrangement.spacedBy(6.dp)) {
                 listOf("White" to Pixel.WHITE, "Blue" to Pixel.rgb(35,91,170), "Red" to Pixel.rgb(190,35,48), "Grey" to Pixel.LTGRAY).forEach { (label, color) ->
@@ -380,7 +404,7 @@ internal fun PhotoEditorScreen(photoPath: String, onRetake: () -> Unit, onSaved:
             Row(horizontalArrangement=Arrangement.spacedBy(7.dp)) {
                 OutlinedButton(onClick=onRetake,enabled=!busy,modifier=Modifier.weight(1f)) { Text("Retake") }
                 OutlinedButton(onClick={
-                    editedBase=original; brightness=0f; contrast=1f; saturation=1f; crop="Original"; perspectiveEnabled=false; perspectiveCorners=listOf(Offset(0f,0f),Offset(1f,0f),Offset(1f,1f),Offset(0f,1f))
+                    editedBase=original; brightness=0f; contrast=1f; saturation=1f; crop="Original"; rotation=0; flipHorizontal=false; flipVertical=false; perspectiveEnabled=false; perspectiveCorners=listOf(Offset(0f,0f),Offset(1f,0f),Offset(1f,1f),Offset(0f,1f))
                     customWidth="600"; customHeight="800"; customUnit="px"; outputDpi=300
                     status="Edits reset."
                 },enabled=!busy,modifier=Modifier.weight(1f)) { Text("Reset") }
@@ -392,7 +416,8 @@ internal fun PhotoEditorScreen(photoPath: String, onRetake: () -> Unit, onSaved:
                         scope.launch {
                             try {
                                 val finalBitmap=withContext(Dispatchers.Default) {
-                                    val perspective=if(perspectiveEnabled) perspectiveCorrect(base,perspectiveCorners) else base
+                                    val oriented=transformPhoto(base,rotation,flipHorizontal,flipVertical)
+                                    val perspective=if(perspectiveEnabled) perspectiveCorrect(oriented,perspectiveCorners) else oriented
                                     val cropped=cropForPreset(perspective,crop, if(crop=="Custom") customRatio else null)
                                     val adjusted=adjustPhoto(cropped,brightness,contrast,saturation)
                                     if (crop=="Custom" && customRatio!=null) {

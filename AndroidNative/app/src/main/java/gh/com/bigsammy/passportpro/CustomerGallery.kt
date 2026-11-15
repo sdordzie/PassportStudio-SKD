@@ -106,6 +106,9 @@ internal fun GalleryScreen(modifier: Modifier = Modifier) {
     val context = LocalContext.current
     var refresh by remember { mutableIntStateOf(0) }
     var selectedFile by remember { mutableStateOf<File?>(null) }
+    var selectionMode by remember { mutableStateOf(false) }
+    var selectedPaths by remember { mutableStateOf(setOf<String>()) }
+    var confirmDelete by remember { mutableStateOf(false) }
     val files = remember(refresh) {
         listOf(File(context.filesDir, "PassportPro/Captures"), File(context.getExternalFilesDir(null), "PassportPro/Edited"))
             .flatMap { root -> if (root.exists()) root.walkTopDown().filter { it.isFile && it.extension.lowercase() in listOf("jpg", "jpeg", "png") }.toList() else emptyList() }
@@ -113,6 +116,10 @@ internal fun GalleryScreen(modifier: Modifier = Modifier) {
     }
     val selectedBitmap = remember(selectedFile?.absolutePath, selectedFile?.lastModified()) {
         selectedFile?.let { BitmapFactory.decodeFile(it.absolutePath) }
+    }
+    fun toggleSelection(file: File) {
+        val path = file.absolutePath
+        selectedPaths = if (path in selectedPaths) selectedPaths - path else selectedPaths + path
     }
     Column(modifier.fillMaxSize().padding(horizontal = 14.dp, vertical = 12.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
         Text("PHOTO LIBRARY • STUDIO", color = Color(0xFFE4B45D), fontSize = 11.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.2.sp)
@@ -127,6 +134,25 @@ internal fun GalleryScreen(modifier: Modifier = Modifier) {
             Surface(color = Color(0xFF1B2433), shape = RoundedCornerShape(12.dp)) { Text("CAPTURED  ${files.count { it.parentFile?.name != "Edited" }}", color = Color.White, modifier = Modifier.padding(10.dp), fontSize = 10.sp) }
             Surface(color = Color(0xFF1B2433), shape = RoundedCornerShape(12.dp)) { Text("EDITED  ${files.count { it.parentFile?.name == "Edited" }}", color = Color(0xFFE4B45D), modifier = Modifier.padding(10.dp), fontSize = 10.sp) }
         }
+        if (files.isNotEmpty()) {
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                TextButton(onClick = {
+                    selectionMode = !selectionMode
+                    selectedPaths = emptySet()
+                }) { Text(if (selectionMode) "Cancel selection" else "Select photos", color = Color(0xFFE4B45D)) }
+                if (selectionMode) {
+                    TextButton(onClick = {
+                        selectedPaths = if (selectedPaths.size == files.size) emptySet() else files.map { it.absolutePath }.toSet()
+                    }) { Text(if (selectedPaths.size == files.size) "Deselect all" else "Select all", color = Color.White) }
+                    Text("${selectedPaths.size} selected", color = Color(0xFF9AA7B8), fontSize = 11.sp)
+                    Spacer(Modifier.weight(1f))
+                    Button(onClick = { confirmDelete = true }, enabled = selectedPaths.isNotEmpty(),
+                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFB93838))) {
+                        Icon(Icons.Default.Delete, null); Spacer(Modifier.width(4.dp)); Text("Delete")
+                    }
+                }
+            }
+        }
         if (files.isEmpty()) {
             Column(Modifier.weight(1f).fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
                 Icon(Icons.Default.Photo, null, tint = Color(0xFFE4B45D), modifier = Modifier.size(56.dp))
@@ -136,13 +162,22 @@ internal fun GalleryScreen(modifier: Modifier = Modifier) {
         } else {
             LazyVerticalGrid(columns = GridCells.Adaptive(minSize = 104.dp), modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(10.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 items(files, key = { it.absolutePath }) { file ->
+                    val isSelected = file.absolutePath in selectedPaths
                     val thumb = remember(file.absolutePath, file.lastModified()) {
                         BitmapFactory.decodeFile(file.absolutePath, BitmapFactory.Options().apply { inSampleSize = 4 })
                     }
-                    Surface(color = Color(0xFF1B2433), shape = RoundedCornerShape(13.dp), onClick = { selectedFile = file }) {
+                    Surface(color = if (isSelected) Color(0xFF34445C) else Color(0xFF1B2433), shape = RoundedCornerShape(13.dp),
+                        onClick = {
+                            if (selectionMode) toggleSelection(file) else selectedFile = file
+                        }) {
                         Column(Modifier.padding(6.dp), verticalArrangement = Arrangement.spacedBy(5.dp)) {
-                            if (thumb != null) Image(thumb.asImageBitmap(), "Photo thumbnail", Modifier.fillMaxWidth().height(142.dp), contentScale = ContentScale.Crop)
-                            else Box(Modifier.fillMaxWidth().height(142.dp), contentAlignment = Alignment.Center) { Icon(Icons.Default.Photo, null, tint = Color(0xFF9AA7B8)) }
+                            Box {
+                                if (thumb != null) Image(thumb.asImageBitmap(), "Photo thumbnail", Modifier.fillMaxWidth().height(142.dp), contentScale = ContentScale.Crop)
+                                else Box(Modifier.fillMaxWidth().height(142.dp), contentAlignment = Alignment.Center) { Icon(Icons.Default.Photo, null, tint = Color(0xFF9AA7B8)) }
+                                if (selectionMode) Surface(color = if (isSelected) Color(0xFFE4B45D) else Color(0xCC101522), shape = RoundedCornerShape(50), modifier = Modifier.align(Alignment.TopEnd).padding(5.dp)) {
+                                    Text(if (isSelected) "✓" else " ", color = Color(0xFF101522), modifier = Modifier.padding(horizontal = 9.dp, vertical = 3.dp), fontWeight = FontWeight.Bold)
+                                }
+                            }
                             Text(if (file.parentFile?.name == "Edited") "EDITED PHOTO" else "ORIGINAL CAPTURE", color = Color(0xFFE4B45D), fontSize = 9.sp, fontWeight = FontWeight.Bold)
                             Text(SimpleDateFormat("dd MMM yyyy • HH:mm", Locale.getDefault()).format(Date(file.lastModified())), color = Color(0xFF9AA7B8), fontSize = 9.sp)
                         }
@@ -151,32 +186,58 @@ internal fun GalleryScreen(modifier: Modifier = Modifier) {
             }
         }
     }
+    if (confirmDelete) {
+        AlertDialog(
+            onDismissRequest = { confirmDelete = false },
+            title = { Text("Delete selected photographs?") },
+            text = { Text("This will permanently delete ${selectedPaths.size} selected file(s) from this device. This cannot be undone.") },
+            confirmButton = {
+                TextButton(onClick = {
+                    val targets = files.filter { it.absolutePath in selectedPaths }
+                    val deleted = targets.count { it.exists() && it.delete() }
+                    selectedPaths = emptySet()
+                    selectionMode = false
+                    confirmDelete = false
+                    refresh++
+                    android.widget.Toast.makeText(context, "$deleted photograph(s) deleted", android.widget.Toast.LENGTH_SHORT).show()
+                }) { Text("Delete permanently", color = Color(0xFFB93838)) }
+            },
+            dismissButton = { TextButton(onClick = { confirmDelete = false }) { Text("Cancel") } }
+        )
+    }
     if (selectedFile != null) {
         Dialog(onDismissRequest = { selectedFile = null }) {
-            Surface(color = Color(0xFF101522), shape = RoundedCornerShape(20.dp), modifier = Modifier.fillMaxWidth()) {
-                Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(9.dp)) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
+            Surface(color=Color(0xFF101522),shape=RoundedCornerShape(20.dp),modifier=Modifier.fillMaxWidth()) {
+                Column(Modifier.padding(12.dp),verticalArrangement=Arrangement.spacedBy(9.dp)) {
+                    Row(verticalAlignment=Alignment.CenterVertically) {
                         Column(Modifier.weight(1f)) {
-                            Text(if (selectedFile?.parentFile?.name == "Edited") "EDITED PHOTOGRAPH" else "ORIGINAL CAPTURE", color = Color(0xFFE4B45D), fontSize = 10.sp, fontWeight = FontWeight.Bold)
-                            Text(selectedFile?.name ?: "", color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, maxLines = 1)
+                            Text(if(selectedFile?.parentFile?.name=="Edited") "EDITED PHOTOGRAPH" else "ORIGINAL CAPTURE",color=Color(0xFFE4B45D),fontSize=10.sp,fontWeight=FontWeight.Bold)
+                            Text(selectedFile?.name ?: "",color=Color.White,fontSize=13.sp,fontWeight=FontWeight.SemiBold,maxLines=1)
                         }
-                        IconButton(onClick = { selectedFile = null }) { Icon(Icons.Default.Close, "Close", tint = Color.White) }
+                        IconButton(onClick={selectedFile=null}) { Icon(Icons.Default.Close,"Close",tint=Color.White) }
                     }
-                    if (selectedBitmap != null) Image(selectedBitmap.asImageBitmap(), "Full photograph preview", Modifier.fillMaxWidth().heightIn(max = 480.dp), contentScale = ContentScale.Fit)
-                    Text(selectedFile?.let { SimpleDateFormat("dd MMMM yyyy, HH:mm", Locale.getDefault()).format(Date(it.lastModified())) } ?: "", color = Color(0xFF9AA7B8), fontSize = 11.sp)
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Button(onClick = {
+                    if(selectedBitmap!=null) Image(selectedBitmap.asImageBitmap(),"Full photograph preview",Modifier.fillMaxWidth().heightIn(max=480.dp),contentScale=ContentScale.Fit)
+                    Text(selectedFile?.let { SimpleDateFormat("dd MMMM yyyy, HH:mm",Locale.getDefault()).format(Date(it.lastModified())) } ?: "",color=Color(0xFF9AA7B8),fontSize=11.sp)
+                    Row(horizontalArrangement=Arrangement.spacedBy(8.dp)) {
+                        Button(onClick={
                             selectedFile?.let { file ->
                                 try {
-                                    val uri = FileProvider.getUriForFile(context, context.packageName + ".fileprovider", file)
-                                    val intent = Intent(Intent.ACTION_SEND).apply { type = "image/*"; putExtra(Intent.EXTRA_STREAM, uri); addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION) }
-                                    context.startActivity(Intent.createChooser(intent, "Share photograph"))
-                                } catch (e: Exception) { android.widget.Toast.makeText(context, "Unable to share photo: ${e.localizedMessage}", android.widget.Toast.LENGTH_LONG).show() }
+                                    val uri=FileProvider.getUriForFile(context,context.packageName+".fileprovider",file)
+                                    val intent=Intent(Intent.ACTION_SEND).apply { type="image/*"; putExtra(Intent.EXTRA_STREAM,uri); addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION) }
+                                    context.startActivity(Intent.createChooser(intent,"Share photograph"))
+                                } catch(e:Exception) { android.widget.Toast.makeText(context,"Unable to share photo: ${e.localizedMessage}",android.widget.Toast.LENGTH_LONG).show() }
                             }
-                        }, modifier = Modifier.weight(1f), colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFE4B45D), contentColor = Color(0xFF101522))) {
-                            Icon(Icons.Default.Share, null); Spacer(Modifier.width(5.dp)); Text("Share")
+                        },modifier=Modifier.weight(1f),colors=ButtonDefaults.buttonColors(containerColor=Color(0xFFE4B45D),contentColor=Color(0xFF101522))) {
+                            Icon(Icons.Default.Share,null); Spacer(Modifier.width(5.dp)); Text("Share")
                         }
-                        OutlinedButton(onClick = { selectedFile = null }, modifier = Modifier.weight(1f)) { Text("Done") }
+                        OutlinedButton(onClick={
+                            selectedFile?.let { file ->
+                                if (file.exists() && file.delete()) {
+                                    selectedFile=null; refresh++
+                                    android.widget.Toast.makeText(context,"Photograph deleted",android.widget.Toast.LENGTH_SHORT).show()
+                                } else android.widget.Toast.makeText(context,"Unable to delete photograph",android.widget.Toast.LENGTH_LONG).show()
+                            }
+                        },modifier=Modifier.weight(1f)) { Icon(Icons.Default.Delete,null); Text("Delete") }
                     }
                 }
             }

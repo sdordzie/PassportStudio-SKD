@@ -136,7 +136,13 @@ private fun backupSources(c: Context): List<BackupSource> {
     val out = mutableListOf<BackupSource>()
     listOf("passportpro_customers.db", "passportpro_business.db").forEach { name ->
         val f = c.getDatabasePath(name)
-        if (f.exists() && f.length() > 0) out.add(BackupSource("databases/" + name, f))
+        if (f.exists() && f.length() > 0) {
+            runCatching {
+                val db = SQLiteDatabase.openDatabase(f.absolutePath, null, SQLiteDatabase.OPEN_READWRITE)
+                try { db.rawQuery("PRAGMA wal_checkpoint(FULL)", null).use { it.moveToFirst() } } finally { db.close() }
+            }
+            out.add(BackupSource("databases/" + name, f))
+        }
     }
     val roots = listOf(
         "photos/captures/" to File(c.filesDir, "PassportPro/Captures"),
@@ -259,5 +265,6 @@ private fun createAutomaticBackup(c: Context): Int {
         zip.write(manifest.toString().toByteArray(Charsets.UTF_8))
         zip.closeEntry()
     }
+    folder.listFiles()?.filter { it.isFile && it.name.endsWith(".zip") }?.sortedByDescending { it.lastModified() }?.drop(5)?.forEach { it.delete() }
     return files.size
 }

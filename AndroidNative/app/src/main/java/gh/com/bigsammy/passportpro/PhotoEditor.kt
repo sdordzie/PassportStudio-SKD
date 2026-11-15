@@ -272,13 +272,14 @@ internal fun PhotoEditorScreen(photoPath: String, onRetake: () -> Unit, onSaved:
         ) {
             val displayPhoto = if (showOriginal) original else if (perspectiveEnabled) perspectiveGuide ?: preview else preview
             if (displayPhoto != null) {
-                Image(displayPhoto.asImageBitmap(), if (perspectiveEnabled) "Uncorrected photograph for perspective adjustment" else "Live passport photo editing preview",
+                Image(displayPhoto.asImageBitmap(), if (showOriginal) "Original photograph for before and after comparison" else if (perspectiveEnabled) "Uncorrected photograph for perspective adjustment" else "Live passport photo editing preview",
                     Modifier.fillMaxSize().padding(5.dp), contentScale=ContentScale.Fit)
-                if (perspectiveEnabled) {
+                if (perspectiveEnabled && !showOriginal) {
                     Canvas(Modifier.fillMaxSize().pointerInput(displayPhoto, perspectiveCorners) {
                         var activeCorner = -1
                         detectDragGestures(
                             onDragStart = { point ->
+                                recordUndo()
                                 val w = size.width.toFloat()
                                 val h = size.height.toFloat()
                                 val ratio = displayPhoto.width.toFloat() / displayPhoto.height
@@ -316,7 +317,7 @@ internal fun PhotoEditorScreen(photoPath: String, onRetake: () -> Unit, onSaved:
                             }
                         )
                     }) {
-                        val ratio = preview!!.width.toFloat() / preview!!.height
+                        val ratio = displayPhoto.width.toFloat() / displayPhoto.height
                         val boxRatio = size.width / size.height
                         val dw = if (ratio > boxRatio) size.width else size.height * ratio
                         val dh = if (ratio > boxRatio) size.width / ratio else size.height

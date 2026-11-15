@@ -70,7 +70,7 @@ internal fun BackupRestoreScreen(modifier: Modifier = Modifier) {
     }
     val open = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri -> restoreUri = uri }
     Column(modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(18.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
-        Text("PHASE 10 • DATA PROTECTION", color = SafeGold, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+        Text("BACKUP & DATA PROTECTION", color = SafeGold, fontSize = 11.sp, fontWeight = FontWeight.Bold)
         Text("Backup & Restore", color = Color.White, fontSize = 27.sp, fontWeight = FontWeight.Bold)
         Text("Create a portable ZIP backup containing your customer database, business jobs, captured photos and edited photos. Choose phone storage, an SD card or a cloud drive in the Android file picker.", color = SafeMuted, fontSize = 13.sp)
         Text("CHOOSE BACKUP CONTENT", color = SafeGold, fontSize = 11.sp, fontWeight = FontWeight.Bold)

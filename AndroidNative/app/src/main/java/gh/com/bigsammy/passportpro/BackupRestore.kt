@@ -12,6 +12,10 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Backup
 import androidx.compose.material.icons.filled.Restore
+import androidx.compose.material.icons.filled.PhotoLibrary
+import androidx.compose.material.icons.filled.Storage
+import androidx.compose.material.icons.filled.Schedule
+import androidx.compose.material3.Switch
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
@@ -43,10 +47,23 @@ internal fun BackupRestoreScreen(modifier: Modifier = Modifier) {
     var message by remember { mutableStateOf("Back up your studio records and photographs to a location you control.") }
     var working by remember { mutableStateOf(false) }
     var restoreUri by remember { mutableStateOf<Uri?>(null) }
+    var backupScope by remember { mutableStateOf("Full studio") }
+    var autoBackup by remember { mutableStateOf(context.getSharedPreferences("passportpro_backup", Context.MODE_PRIVATE).getBoolean("auto_enabled", false)) }
+    LaunchedEffect(Unit) {
+        if (autoBackup) {
+            val prefs = context.getSharedPreferences("passportpro_backup", Context.MODE_PRIVATE)
+            val last = prefs.getLong("last_auto_backup", 0L)
+            if (System.currentTimeMillis() - last >= 24L * 60L * 60L * 1000L) {
+                val result = withContext(Dispatchers.IO) { runCatching { createAutomaticBackup(context) } }
+                result.onSuccess { prefs.edit().putLong("last_auto_backup", System.currentTimeMillis()).apply(); message = "Automatic local backup completed." }
+                    .onFailure { message = "Automatic backup failed: " + (it.localizedMessage ?: "Unknown error") }
+            }
+        }
+    }
     val save = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/zip")) { uri ->
         if (uri != null) scope.launch {
             working = true
-            val result = withContext(Dispatchers.IO) { runCatching { exportBackup(context, uri) } }
+            val result = withContext(Dispatchers.IO) { runCatching { exportBackup(context, uri, backupScope) } }
             message = result.fold({ "Backup completed. " + it + " files included." }, { "Backup failed: " + (it.localizedMessage ?: "Unknown error") })
             working = false
         }
@@ -56,17 +73,30 @@ internal fun BackupRestoreScreen(modifier: Modifier = Modifier) {
         Text("PHASE 10 • DATA PROTECTION", color = SafeGold, fontSize = 11.sp, fontWeight = FontWeight.Bold)
         Text("Backup & Restore", color = Color.White, fontSize = 27.sp, fontWeight = FontWeight.Bold)
         Text("Create a portable ZIP backup containing your customer database, business jobs, captured photos and edited photos. Choose phone storage, an SD card or a cloud drive in the Android file picker.", color = SafeMuted, fontSize = 13.sp)
-        BackupPanelCard("FULL STUDIO BACKUP", "Export all PassportPro databases and photographs with SHA-256 integrity checks.", Icons.Default.Backup, "Create backup", working) {
+        Text("CHOOSE BACKUP CONTENT", color = SafeGold, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            listOf("Full studio", "Records only", "Photos only").forEach { scopeName ->
+                FilterChip(selected = backupScope == scopeName, onClick = { backupScope = scopeName }, label = { Text(scopeName, fontSize = 10.sp) }, enabled = !working)
+            }
+        }
+        BackupPanelCard("EXPORT " + backupScope.uppercase(), "Create a verified ZIP backup for the selected data. Each file is protected by a SHA-256 checksum.", Icons.Default.Backup, "Create backup", working) {
             val stamp = SimpleDateFormat("yyyyMMdd_HHmm", Locale.US).format(Date())
             save.launch("PassportPro_Backup_" + stamp + ".zip")
         }
-        BackupPanelCard("RESTORE STUDIO BACKUP", "Validate the backup before replacing existing records and photo folders.", Icons.Default.Restore, "Choose backup ZIP", working) {
+        Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
+            Column(Modifier.weight(1f)) {
+                Text("AUTOMATIC LOCAL BACKUP", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                Text("Create a private full backup when this screen is opened after 24 hours. Runs only while the app is opened.", color = SafeMuted, fontSize = 11.sp)
+            }
+            Switch(checked = autoBackup, onCheckedChange = { autoBackup = it; context.getSharedPreferences("passportpro_backup", Context.MODE_PRIVATE).edit().putBoolean("auto_enabled", it).apply() })
+        }
+        BackupPanelCard("RESTORE FROM BACKUP", "The archive is verified before the included records or photos are restored.", Icons.Default.Restore, "Choose backup ZIP", working) {
             open.launch(arrayOf("application/zip", "application/octet-stream"))
         }
         Surface(color = SafePanel, shape = RoundedCornerShape(16.dp), modifier = Modifier.fillMaxWidth()) {
             Column(Modifier.padding(15.dp), verticalArrangement = Arrangement.spacedBy(7.dp)) {
                 Text("IMPORTANT RESTORE NOTES", color = SafeGold, fontWeight = FontWeight.Bold, fontSize = 12.sp)
-                Text("• The archive is checked against its SHA-256 manifest before restore.\n• Current files are copied to a private safety folder before replacement.\n• Restore replaces the current customer/business databases and photo folders.\n• Close and reopen PassportPro after restoring so all screens reload the restored data.\n• Backup files contain personal photos, phone numbers and payment records; keep them private.", color = Color.White, fontSize = 12.sp, lineHeight = 19.sp)
+                Text("• The archive is checked against its SHA-256 manifest before restore.\n• Current files are copied to a private safety folder before replacement.\n• Restore replaces only the data categories included in the archive.\n• Close and reopen PassportPro after restoring so all screens reload the restored data.\n• Backup files contain personal photos, phone numbers and payment records; keep them private.", color = Color.White, fontSize = 12.sp, lineHeight = 19.sp)
             }
         }
         if (working) LinearProgressIndicator(modifier = Modifier.fillMaxWidth(), color = SafeGold)
@@ -202,4 +232,32 @@ private fun importBackup(c: Context, uri: Uri): Int {
     }
     stage.deleteRecursively()
     return entries.size
+}
+
+private fun selectBackupSources(c: Context, scope: String): List<BackupSource> {
+    val all = backupSources(c)
+    return when (scope) {
+        "Records only" -> all.filter { it.path.startsWith("databases/") }
+        "Photos only" -> all.filter { it.path.startsWith("photos/") }
+        else -> all
+    }
+}
+private fun createAutomaticBackup(c: Context): Int {
+    val folder = File(c.getExternalFilesDir(null), "PassportPro/AutomaticBackups").apply { mkdirs() }
+    val stamp = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.US).format(Date())
+    val destination = File(folder, "PassportPro_Auto_" + stamp + ".zip")
+    val files = backupSources(c)
+    ZipOutputStream(destination.outputStream().buffered()).use { zip ->
+        val manifest = StringBuilder("PASSPORTPRO_BACKUP_V1\n")
+        files.forEach { item ->
+            zip.putNextEntry(ZipEntry(item.path))
+            item.file.inputStream().buffered().use { it.copyTo(zip) }
+            zip.closeEntry()
+            manifest.append(item.path).append("|").append(digest(item.file)).append("\n")
+        }
+        zip.putNextEntry(ZipEntry("manifest.sha256.txt"))
+        zip.write(manifest.toString().toByteArray(Charsets.UTF_8))
+        zip.closeEntry()
+    }
+    return files.size
 }

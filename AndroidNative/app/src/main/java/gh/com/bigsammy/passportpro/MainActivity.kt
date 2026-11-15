@@ -215,12 +215,7 @@ private fun CameraStudioScreen(modifier: Modifier = Modifier) {
         }
 
         if (savedPhoto != null && photoBitmap != null) {
-            Image(bitmap = photoBitmap.asImageBitmap(), contentDescription = "Captured passport photograph", modifier = Modifier.weight(1f).fillMaxWidth(), contentScale = androidx.compose.ui.layout.ContentScale.Fit)
-            Text("Photograph saved on this device", color = Good, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
-            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                OutlinedButton(onClick = { savedPhoto = null }, modifier = Modifier.weight(1f)) { Text("Retake") }
-                Button(onClick = { savedPhoto = null; message = "Ready for another capture" }, modifier = Modifier.weight(1f), colors = ButtonDefaults.buttonColors(containerColor = Gold, contentColor = Ink)) { Text("Done") }
-            }
+            PhotoEditorScreen(photoPath = savedPhoto!!, onRetake = { savedPhoto = null }, onSaved = { savedPhoto = null; message = "Edited photograph saved successfully" })
         } else if (!hasPermission) {
             Column(Modifier.weight(1f).fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
                 Icon(Icons.Default.NoPhotography, null, tint = Gold, modifier = Modifier.size(52.dp))

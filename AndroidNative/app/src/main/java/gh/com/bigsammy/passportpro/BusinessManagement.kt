@@ -47,6 +47,11 @@ private class BusinessDatabase(context: Context) : SQLiteOpenHelper(context, "pa
         val values = ContentValues().apply { put("customer",customer.trim()); put("phone",phone.trim()); put("service",service.trim()); put("total_pesewas",total); put("paid_pesewas",paid.coerceIn(0,total)); put("created",System.currentTimeMillis()) }
         writableDatabase.insert("jobs",null,values)
     }
+    fun delete(ids: Set<Long>): Int {
+        if (ids.isEmpty()) return 0
+        val placeholders = ids.joinToString(",") { "?" }
+        return writableDatabase.delete("jobs", "id IN ($placeholders)", ids.map { it.toString() }.toTypedArray())
+    }
     fun all(): List<StudioJob> {
         val rows=mutableListOf<StudioJob>()
         readableDatabase.rawQuery("SELECT id,customer,phone,service,total_pesewas,paid_pesewas,created FROM jobs ORDER BY created DESC",null).use { c ->
@@ -68,6 +73,9 @@ internal fun BusinessManagementScreen(modifier: Modifier = Modifier) {
     var total by remember { mutableStateOf("") }
     var paid by remember { mutableStateOf("0") }
     var message by remember { mutableStateOf("") }
+    var selectionMode by remember { mutableStateOf(false) }
+    var selectedJobIds by remember { mutableStateOf(setOf<Long>()) }
+    var confirmDeleteJobs by remember { mutableStateOf(false) }
     val totalPesewas=((total.toDoubleOrNull() ?: 0.0)*100).toLong().coerceAtLeast(0)
     val paidPesewas=((paid.toDoubleOrNull() ?: 0.0)*100).toLong().coerceAtLeast(0)
     val calendar=Calendar.getInstance()
@@ -114,12 +122,23 @@ internal fun BusinessManagementScreen(modifier: Modifier = Modifier) {
             Text("RECENT JOBS",color=BizMuted,fontSize=11.sp,fontWeight=FontWeight.Bold)
             Spacer(Modifier.weight(1f)); Text(jobs.size.toString()+" records",color=BizGold,fontSize=11.sp)
         }
+        if (jobs.isNotEmpty()) {
+            Row(verticalAlignment=Alignment.CenterVertically) {
+                TextButton(onClick={ selectionMode=!selectionMode; selectedJobIds=emptySet() }) { Text(if(selectionMode) "Cancel selection" else "Select jobs",color=BizGold) }
+                if(selectionMode) {
+                    TextButton(onClick={ selectedJobIds=if(selectedJobIds.size==jobs.size) emptySet() else jobs.map { it.id }.toSet() }) { Text(if(selectedJobIds.size==jobs.size) "Deselect all" else "Select all",color=Color.White) }
+                    Text(selectedJobIds.size.toString()+" selected",color=BizMuted,fontSize=11.sp,modifier=Modifier.weight(1f))
+                    Button(onClick={confirmDeleteJobs=true},enabled=selectedJobIds.isNotEmpty(),colors=ButtonDefaults.buttonColors(containerColor=Color(0xFFB93838))) { Text("Delete") }
+                }
+            }
+        }
         if(jobs.isEmpty()) {
             Surface(color=BizPanel,shape=RoundedCornerShape(14.dp),modifier=Modifier.fillMaxWidth()) { Text("No jobs recorded yet. Add the first customer job above.",color=BizMuted,modifier=Modifier.padding(16.dp),fontSize=12.sp) }
         } else {
             jobs.forEach { job ->
-                Surface(color=BizPanel,shape=RoundedCornerShape(14.dp),modifier=Modifier.fillMaxWidth()) {
+                Surface(color=if(job.id in selectedJobIds) Color(0xFF34445C) else BizPanel,shape=RoundedCornerShape(14.dp),modifier=Modifier.fillMaxWidth()) {
                     Column(Modifier.padding(13.dp),verticalArrangement=Arrangement.spacedBy(5.dp)) {
+                        if(selectionMode) TextButton(onClick={ selectedJobIds=if(job.id in selectedJobIds) selectedJobIds-job.id else selectedJobIds+job.id }) { Text(if(job.id in selectedJobIds) "✓ Selected" else "Select job",color=BizGold) }
                         Row(verticalAlignment=Alignment.CenterVertically) {
                             Text(job.customer,color=Color.White,fontWeight=FontWeight.SemiBold,fontSize=15.sp,modifier=Modifier.weight(1f))
                             AssistChip(onClick={},label={Text(job.status,fontSize=9.sp)},colors=AssistChipDefaults.assistChipColors(labelColor=if(job.status=="PAID") Color(0xFF64D6A0) else BizGold))
@@ -127,7 +146,7 @@ internal fun BusinessManagementScreen(modifier: Modifier = Modifier) {
                         Text(job.service,color=BizMuted,fontSize=12.sp)
                         Text("Total "+money(job.totalPesewas)+" • Paid "+money(job.paidPesewas)+" • Balance "+money(job.balancePesewas),color=Color.White,fontSize=11.sp)
                         Text(SimpleDateFormat("dd MMM yyyy, HH:mm",Locale.getDefault()).format(Date(job.created)),color=BizMuted,fontSize=10.sp)
-                        TextButton(onClick={
+                        if(!selectionMode) TextButton(onClick={
                             val date=SimpleDateFormat("dd MMM yyyy, HH:mm",Locale.getDefault()).format(Date(job.created))
                             val receipt="PASSPORTPRO STUDIO\nCUSTOMER RECEIPT\n\nReceipt No: PP-"+job.id+"\nDate: "+date+"\nCustomer: "+job.customer+"\nPhone: "+job.phone+"\nService: "+job.service+"\nTotal: "+money(job.totalPesewas)+"\nAmount paid: "+money(job.paidPesewas)+"\nBalance: "+money(job.balancePesewas)+"\nStatus: "+job.status+"\n\nThank you for your patronage."
                             val send=Intent(Intent.ACTION_SEND).apply { type="text/plain"; putExtra(Intent.EXTRA_SUBJECT,"PassportPro receipt PP-"+job.id); putExtra(Intent.EXTRA_TEXT,receipt) }
@@ -137,6 +156,17 @@ internal fun BusinessManagementScreen(modifier: Modifier = Modifier) {
                 }
             }
         }
+        if(confirmDeleteJobs) AlertDialog(
+            onDismissRequest={confirmDeleteJobs=false},
+            title={Text("Delete selected jobs?")},
+            text={Text("Permanently delete "+selectedJobIds.size+" selected job records? This action cannot be undone.")},
+            confirmButton={TextButton(onClick={
+                val count=db.delete(selectedJobIds)
+                jobs=db.all(); selectedJobIds=emptySet(); selectionMode=false; confirmDeleteJobs=false
+                message=count.toString()+" job record(s) deleted."
+            }) { Text("Delete permanently",color=Color(0xFFB93838)) }},
+            dismissButton={TextButton(onClick={confirmDeleteJobs=false}) { Text("Cancel") }}
+        )
         Text("Offline storage • Ghana cedi (GH₵) • Receipts shared through your phone's share menu",color=BizMuted,fontSize=10.sp)
     }
 }

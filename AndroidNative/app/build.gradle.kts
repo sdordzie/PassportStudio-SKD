@@ -10,8 +10,8 @@ android {
         applicationId = "gh.com.bigsammy.passportpro"
         minSdk = 26
         targetSdk = 35
-        versionCode = 25
-        versionName = "1.0.1"
+        versionCode = 26
+        versionName = "1.0.2"
     }
     signingConfigs {
         create("release") {

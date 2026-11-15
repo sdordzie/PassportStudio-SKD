@@ -13,6 +13,7 @@ import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -30,146 +31,251 @@ import java.nio.ByteOrder
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
-import kotlin.math.min
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
+private fun fitPreview(source: Bitmap, maxEdge: Int = 1100): Bitmap {
+    val largest = maxOf(source.width, source.height)
+    if (largest <= maxEdge) return source
+    val scale = maxEdge.toFloat() / largest
+    return Bitmap.createScaledBitmap(source, (source.width * scale).toInt().coerceAtLeast(1),
+        (source.height * scale).toInt().coerceAtLeast(1), true)
+}
+
+private fun cropForPreset(source: Bitmap, preset: String): Bitmap {
+    val ratio = when (preset) {
+        "35 × 45 mm" -> 35f / 45f
+        "Square" -> 1f
+        "4 × 6" -> 2f / 3f
+        else -> source.width.toFloat() / source.height
+    }
+    val sourceRatio = source.width.toFloat() / source.height
+    val w: Int
+    val h: Int
+    if (sourceRatio > ratio) {
+        h = source.height
+        w = (h * ratio).toInt().coerceIn(1, source.width)
+    } else {
+        w = source.width
+        h = (w / ratio).toInt().coerceIn(1, source.height)
+    }
+    return Bitmap.createBitmap(source, (source.width - w) / 2, (source.height - h) / 2, w, h)
+}
+
+private fun adjustPhoto(source: Bitmap, brightness: Float, contrast: Float, saturation: Float): Bitmap {
+    if (brightness == 0f && contrast == 1f && saturation == 1f) return source
+    val w = source.width
+    val h = source.height
+    val pixels = IntArray(w * h)
+    source.getPixels(pixels, 0, w, 0, 0, w, h)
+    for (i in pixels.indices) {
+        val p = pixels[i]
+        fun channel(v: Int) = (contrast * (v - 128) + 128 + brightness * 255).toInt().coerceIn(0, 255)
+        val r = channel(Pixel.red(p))
+        val g = channel(Pixel.green(p))
+        val b = channel(Pixel.blue(p))
+        val grey = .299f * r + .587f * g + .114f * b
+        pixels[i] = Pixel.rgb(
+            (grey + (r - grey) * saturation).toInt().coerceIn(0, 255),
+            (grey + (g - grey) * saturation).toInt().coerceIn(0, 255),
+            (grey + (b - grey) * saturation).toInt().coerceIn(0, 255)
+        )
+    }
+    return Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888).also {
+        it.setPixels(pixels, 0, w, 0, 0, w, h)
+    }
+}
+
 @Composable
 internal fun PhotoEditorScreen(photoPath: String, onRetake: () -> Unit, onSaved: () -> Unit) {
     val context = LocalContext.current
-    val original = remember(photoPath) { BitmapFactory.decodeFile(photoPath)?.copy(Bitmap.Config.ARGB_8888, true) }
-    var image by remember(photoPath) { mutableStateOf(original) }
+    val scope = rememberCoroutineScope()
+    val original = remember(photoPath) {
+        BitmapFactory.decodeFile(photoPath)?.copy(Bitmap.Config.ARGB_8888, false)?.let { fitPreview(it, 2200) }
+    }
+    var editedBase by remember(photoPath) { mutableStateOf(original) }
+    var preview by remember(photoPath) { mutableStateOf(original?.let { fitPreview(it, 1000) }) }
     var background by remember { mutableIntStateOf(Pixel.WHITE) }
     var brightness by remember { mutableFloatStateOf(0f) }
     var contrast by remember { mutableFloatStateOf(1f) }
     var saturation by remember { mutableFloatStateOf(1f) }
     var crop by remember { mutableStateOf("Original") }
     var busy by remember { mutableStateOf(false) }
-    var status by remember { mutableStateOf("Original photo preserved • Editing is on-device") }
-    val scope = rememberCoroutineScope()
+    var status by remember { mutableStateOf("Your photograph is ready. Changes appear in the preview.") }
 
-    fun adjust(source: Bitmap): Bitmap {
-        val w = source.width; val h = source.height
-        val pixels = IntArray(w * h)
-        source.getPixels(pixels, 0, w, 0, 0, w, h)
-        for (i in pixels.indices) {
-            val p = pixels[i]
-            fun c(v: Int) = (contrast * (v - 128) + 128 + brightness * 255).toInt().coerceIn(0, 255)
-            val r = c(Pixel.red(p)); val g = c(Pixel.green(p)); val b = c(Pixel.blue(p))
-            val grey = .299f * r + .587f * g + .114f * b
-            pixels[i] = Pixel.rgb(
-                (grey + (r - grey) * saturation).toInt().coerceIn(0,255),
-                (grey + (g - grey) * saturation).toInt().coerceIn(0,255),
-                (grey + (b - grey) * saturation).toInt().coerceIn(0,255))
-        }
-        return Bitmap.createBitmap(w,h,Bitmap.Config.ARGB_8888).also { it.setPixels(pixels,0,w,0,0,w,h) }
-    }
-
-    fun cropBitmap(src: Bitmap): Bitmap {
-        val ratio = when(crop) { "35 × 45 mm" -> 35f/45f; "Square" -> 1f; "4 × 6" -> 2f/3f; else -> src.width.toFloat()/src.height }
-        val sr = src.width.toFloat()/src.height
-        val w: Int; val h: Int
-        if(sr > ratio) { h=src.height; w=(h*ratio).toInt() } else { w=src.width; h=(w/ratio).toInt() }
-        return Bitmap.createBitmap(src,(src.width-w)/2,(src.height-h)/2,w,h)
-    }
-
-    Column(Modifier.fillMaxSize().padding(12.dp), verticalArrangement=Arrangement.spacedBy(6.dp)) {
-        Text("PHASE 3 • PHOTO EDITOR", color=Color(0xFFE4B45D), fontSize=11.sp, fontWeight=FontWeight.Bold)
-        Text("Professional photo editing", color=Color.White, fontSize=21.sp, fontWeight=FontWeight.Bold)
-        Box(Modifier.weight(1f).fillMaxWidth().background(Color(0xFF090D14), RoundedCornerShape(14.dp)), contentAlignment=Alignment.Center) {
-            image?.let { Image(it.asImageBitmap(), "Passport photo preview", Modifier.fillMaxSize().padding(6.dp), contentScale=ContentScale.Fit) }
-        }
-        Text("BACKGROUND REPLACEMENT", color=Color(0xFF9AA7B8), fontSize=10.sp, fontWeight=FontWeight.Bold)
-        Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement=Arrangement.spacedBy(6.dp)) {
-            listOf("White" to Pixel.WHITE, "Blue" to Pixel.rgb(35,91,170), "Red" to Pixel.rgb(190,35,48), "Grey" to Pixel.LTGRAY).forEach { (name, color) ->
-                FilterChip(selected=background==color, onClick={background=color}, label={Text(name)})
+    // Keep the preview visible and responsive; all pixel work runs away from the UI thread.
+    LaunchedEffect(editedBase, brightness, contrast, saturation, crop) {
+        val base = editedBase
+        if (base != null) {
+            preview = withContext(Dispatchers.Default) {
+                val small = fitPreview(base, 1000)
+                val cropped = cropForPreset(small, crop)
+                adjustPhoto(cropped, brightness, contrast, saturation)
             }
         }
-        Button(onClick={
-            val src=original
-            if(src!=null) {
-                busy=true
-                status="AI is analysing the photo…"
-                val selectedBackground=background
-                val detector=Segmentation.getClient(SelfieSegmenterOptions.Builder().setDetectorMode(SelfieSegmenterOptions.SINGLE_IMAGE_MODE).build())
-                detector.process(InputImage.fromBitmap(src,0))
-                    .addOnSuccessListener { mask ->
-                        scope.launch {
-                            try {
-                                status="Applying new background…"
-                                val result=withContext(Dispatchers.Default) {
-                                    val mw=mask.width
-                                    val mh=mask.height
-                                    val maskBuffer=mask.buffer.order(ByteOrder.nativeOrder()).apply { rewind() }
-                                    val confidenceMap=FloatArray(mw*mh) { maskBuffer.getFloat() .coerceIn(0f,1f) }
-                                    val input=IntArray(src.width*src.height)
-                                    src.getPixels(input,0,src.width,0,0,src.width,src.height)
-                                    val output=IntArray(input.size)
-                                    val bgR=Pixel.red(selectedBackground)
-                                    val bgG=Pixel.green(selectedBackground)
-                                    val bgB=Pixel.blue(selectedBackground)
-                                    for(y in 0 until src.height) {
-                                        val my=(y.toLong()*mh/src.height).toInt().coerceAtMost(mh-1)
-                                        for(x in 0 until src.width) {
-                                            val mx=(x.toLong()*mw/src.width).toInt().coerceAtMost(mw-1)
-                                            val confidence=confidenceMap[my*mw+mx]
-                                            val p=input[y*src.width+x]
-                                            val inverse=1f-confidence
-                                            val r=(Pixel.red(p)*confidence+bgR*inverse).toInt().coerceIn(0,255)
-                                            val g=(Pixel.green(p)*confidence+bgG*inverse).toInt().coerceIn(0,255)
-                                            val b=(Pixel.blue(p)*confidence+bgB*inverse).toInt().coerceIn(0,255)
-                                            output[y*src.width+x]=Pixel.rgb(r,g,b)
+    }
+
+    Column(Modifier.fillMaxSize().padding(horizontal = 12.dp, vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(7.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Column(Modifier.weight(1f)) {
+                Text("PHOTO EDITOR", color=Color(0xFFE4B45D), fontSize=11.sp, fontWeight=FontWeight.Bold, letterSpacing=1.2.sp)
+                Text("Live editing preview", color=Color.White, fontSize=21.sp, fontWeight=FontWeight.Bold)
+            }
+            Surface(color=Color(0xFF1B2433), shape=RoundedCornerShape(10.dp)) {
+                Text("ON DEVICE", color=Color(0xFF64D6A0), modifier=Modifier.padding(horizontal=10.dp, vertical=7.dp), fontSize=9.sp, fontWeight=FontWeight.Bold)
+            }
+        }
+
+        // Dedicated preview gets guaranteed screen space; controls scroll independently below.
+        Box(
+            Modifier.weight(1.15f).fillMaxWidth().heightIn(min=170.dp)
+                .background(Color(0xFF090D14), RoundedCornerShape(14.dp)),
+            contentAlignment=Alignment.Center
+        ) {
+            if (preview != null) {
+                Image(preview!!.asImageBitmap(), "Live passport photo editing preview",
+                    Modifier.fillMaxSize().padding(5.dp), contentScale=ContentScale.Fit)
+            } else {
+                Text("Unable to load photograph", color=Color.White)
+            }
+            if (busy) {
+                Surface(color=Color(0xDD101522), shape=RoundedCornerShape(12.dp), modifier=Modifier.align(Alignment.BottomCenter).padding(10.dp)) {
+                    Row(Modifier.padding(horizontal=12.dp, vertical=8.dp), verticalAlignment=Alignment.CenterVertically) {
+                        CircularProgressIndicator(Modifier.size(16.dp), strokeWidth=2.dp, color=Color(0xFFE4B45D))
+                        Spacer(Modifier.width(8.dp))
+                        Text(status, color=Color.White, fontSize=11.sp)
+                    }
+                }
+            }
+        }
+
+        Column(
+            Modifier.weight(1.25f).fillMaxWidth().verticalScroll(rememberScrollState()),
+            verticalArrangement=Arrangement.spacedBy(6.dp)
+        ) {
+            Text("AI BACKGROUND", color=Color(0xFF9AA7B8), fontSize=10.sp, fontWeight=FontWeight.Bold)
+            Row(Modifier.horizontalScroll(androidx.compose.foundation.rememberScrollState()), horizontalArrangement=Arrangement.spacedBy(6.dp)) {
+                listOf("White" to Pixel.WHITE, "Blue" to Pixel.rgb(35,91,170), "Red" to Pixel.rgb(190,35,48), "Grey" to Pixel.LTGRAY).forEach { (label, color) ->
+                    FilterChip(selected=background==color, onClick={background=color}, label={Text(label)})
+                }
+            }
+            Button(
+                onClick = {
+                    val source = editedBase ?: return@Button
+                    busy = true
+                    status = "AI is analysing your photograph…"
+                    val selectedBackground = background
+                    val detector = Segmentation.getClient(
+                        SelfieSegmenterOptions.Builder().setDetectorMode(SelfieSegmenterOptions.SINGLE_IMAGE_MODE).build()
+                    )
+                    detector.process(InputImage.fromBitmap(source, 0))
+                        .addOnSuccessListener { mask ->
+                            scope.launch {
+                                try {
+                                    status = "Replacing background…"
+                                    val result = withContext(Dispatchers.Default) {
+                                        val mw = mask.width
+                                        val mh = mask.height
+                                        val buffer = mask.buffer.order(ByteOrder.nativeOrder()).apply { rewind() }
+                                        val confidence = FloatArray(mw * mh) { buffer.getFloat().coerceIn(0f, 1f) }
+                                        val input = IntArray(source.width * source.height)
+                                        source.getPixels(input, 0, source.width, 0, 0, source.width, source.height)
+                                        val output = IntArray(input.size)
+                                        val br = Pixel.red(selectedBackground)
+                                        val bg = Pixel.green(selectedBackground)
+                                        val bb = Pixel.blue(selectedBackground)
+                                        for (y in 0 until source.height) {
+                                            val my = (y.toLong() * mh / source.height).toInt().coerceAtMost(mh - 1)
+                                            for (x in 0 until source.width) {
+                                                val mx = (x.toLong() * mw / source.width).toInt().coerceAtMost(mw - 1)
+                                                val alpha = confidence[my * mw + mx]
+                                                val p = input[y * source.width + x]
+                                                output[y * source.width + x] = Pixel.rgb(
+                                                    (Pixel.red(p) * alpha + br * (1f-alpha)).toInt().coerceIn(0,255),
+                                                    (Pixel.green(p) * alpha + bg * (1f-alpha)).toInt().coerceIn(0,255),
+                                                    (Pixel.blue(p) * alpha + bb * (1f-alpha)).toInt().coerceIn(0,255)
+                                                )
+                                            }
+                                        }
+                                        Bitmap.createBitmap(source.width, source.height, Bitmap.Config.ARGB_8888).also {
+                                            it.setPixels(output, 0, source.width, 0, 0, source.width, source.height)
                                         }
                                     }
-                                    Bitmap.createBitmap(src.width,src.height,Bitmap.Config.ARGB_8888).also {
-                                        it.setPixels(output,0,src.width,0,0,src.width,src.height)
-                                    }
+                                    editedBase = result
+                                    status = "Background replaced. Your preview has been updated."
+                                } catch (e: Exception) {
+                                    status = "Background replacement failed: ${e.localizedMessage ?: "try another photo"}"
+                                } finally {
+                                    busy = false
+                                    detector.close()
                                 }
-                                image=result
-                                status="Background replaced successfully."
-                            } catch(e:Exception) {
-                                status="Could not process image: ${e.localizedMessage ?: "unknown error"}"
-                            } finally {
-                                busy=false
-                                detector.close()
                             }
                         }
-                    }.addOnFailureListener { e ->
-                        status="AI segmentation failed: ${e.localizedMessage ?: "please try again"}"
-                        busy=false
-                        detector.close()
-                    }
+                        .addOnFailureListener { e ->
+                            status = "AI could not process this photo: ${e.localizedMessage ?: "please try again"}"
+                            busy = false
+                            detector.close()
+                        }
+                },
+                enabled=!busy && editedBase!=null,
+                modifier=Modifier.fillMaxWidth(),
+                colors=ButtonDefaults.buttonColors(containerColor=Color(0xFFE4B45D),contentColor=Color(0xFF101522))
+            ) { Text(if(busy) "PROCESSING…" else "REMOVE / REPLACE BACKGROUND WITH AI", fontWeight=FontWeight.Bold) }
+
+            Text("CROP FORMAT", color=Color(0xFF9AA7B8), fontSize=10.sp, fontWeight=FontWeight.Bold)
+            Row(Modifier.horizontalScroll(androidx.compose.foundation.rememberScrollState()), horizontalArrangement=Arrangement.spacedBy(5.dp)) {
+                listOf("Original","35 × 45 mm","Square","4 × 6").forEach { value ->
+                    FilterChip(selected=crop==value,onClick={crop=value},label={Text(value,fontSize=10.sp)})
+                }
             }
-        }, enabled=!busy && original!=null, modifier=Modifier.fillMaxWidth(), colors=ButtonDefaults.buttonColors(containerColor=Color(0xFFE4B45D),contentColor=Color(0xFF101522))) {
-            if(busy) CircularProgressIndicator(Modifier.size(18.dp),strokeWidth=2.dp) else Text("REMOVE BACKGROUND WITH AI",fontWeight=FontWeight.Bold)
-        }
-        Text("CROP PRESET", color=Color(0xFF9AA7B8), fontSize=10.sp, fontWeight=FontWeight.Bold)
-        Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement=Arrangement.spacedBy(5.dp)) {
-            listOf("Original","35 × 45 mm","Square","4 × 6").forEach { v ->
-                FilterChip(selected=crop==v,onClick={crop=v; original?.let { image=cropBitmap(it) }},label={Text(v,fontSize=10.sp)})
+            Text("Brightness ${(brightness*100).toInt()}%",color=Color(0xFF9AA7B8),fontSize=10.sp)
+            Slider(value=brightness,onValueChange={brightness=it},valueRange=-.35f.. .35f)
+            Text("Contrast ${(contrast*100).toInt()}%",color=Color(0xFF9AA7B8),fontSize=10.sp)
+            Slider(value=contrast,onValueChange={contrast=it},valueRange=.5f..1.8f)
+            Text("Saturation ${(saturation*100).toInt()}%",color=Color(0xFF9AA7B8),fontSize=10.sp)
+            Slider(value=saturation,onValueChange={saturation=it},valueRange=0f..2f)
+            Text(status,color=Color(0xFF9AA7B8),fontSize=10.sp)
+            Row(horizontalArrangement=Arrangement.spacedBy(7.dp)) {
+                OutlinedButton(onClick=onRetake,enabled=!busy,modifier=Modifier.weight(1f)) { Text("Retake") }
+                OutlinedButton(onClick={
+                    editedBase=original; brightness=0f; contrast=1f; saturation=1f; crop="Original"
+                    status="Edits reset."
+                },enabled=!busy,modifier=Modifier.weight(1f)) { Text("Reset") }
+                Button(
+                    onClick={
+                        val base=editedBase ?: return@Button
+                        busy=true
+                        status="Preparing full-quality photograph…"
+                        scope.launch {
+                            try {
+                                val finalBitmap=withContext(Dispatchers.Default) {
+                                    val cropped=cropForPreset(base,crop)
+                                    adjustPhoto(cropped,brightness,contrast,saturation)
+                                }
+                                val file=withContext(Dispatchers.IO) {
+                                    val dir=File(context.getExternalFilesDir(null),"PassportPro/Edited").apply { mkdirs() }
+                                    val name="PassportPro_${SimpleDateFormat("yyyyMMdd_HHmmss",Locale.US).format(Date())}.jpg"
+                                    val output=File(dir,name)
+                                    FileOutputStream(output).use { stream ->
+                                        finalBitmap.compress(CompressFormat.JPEG,92,stream)
+                                        stream.flush()
+                                    }
+                                    output
+                                }
+                                status="Saved successfully: ${file.name}"
+                                onSaved()
+                            } catch(e:Exception) {
+                                status="Save failed: ${e.localizedMessage ?: "please try again"}"
+                                busy=false
+                            }
+                        }
+                    },
+                    enabled=!busy && editedBase!=null,
+                    modifier=Modifier.weight(1f),
+                    colors=ButtonDefaults.buttonColors(containerColor=Color(0xFFE4B45D),contentColor=Color(0xFF101522))
+                ) { Text(if(busy) "Saving…" else "Save",fontWeight=FontWeight.Bold) }
             }
-        }
-        Text("Brightness ${(brightness*100).toInt()}%", color=Color(0xFF9AA7B8),fontSize=10.sp)
-        Slider(value=brightness,onValueChange={brightness=it;original?.let { image=adjust(it) }},valueRange=-.35f.. .35f)
-        Text("Contrast ${(contrast*100).toInt()}%",color=Color(0xFF9AA7B8),fontSize=10.sp)
-        Slider(value=contrast,onValueChange={contrast=it;original?.let { image=adjust(it) }},valueRange=.5f..1.8f)
-        Text("Saturation ${(saturation*100).toInt()}%",color=Color(0xFF9AA7B8),fontSize=10.sp)
-        Slider(value=saturation,onValueChange={saturation=it;original?.let { image=adjust(it) }},valueRange=0f..2f)
-        Text(status,color=Color(0xFF9AA7B8),fontSize=10.sp)
-        Row(horizontalArrangement=Arrangement.spacedBy(8.dp)) {
-            OutlinedButton(onClick=onRetake,modifier=Modifier.weight(1f)){Text("Retake")}
-            OutlinedButton(onClick={image=original;brightness=0f;contrast=1f;saturation=1f;crop="Original";status="Edits reset"},modifier=Modifier.weight(1f)){Text("Reset")}
-            Button(onClick={
-                try {
-                    val result=image ?: return@Button
-                    val finalImage=adjust(cropBitmap(result))
-                    val dir=File(context.getExternalFilesDir(null),"PassportPro/Edited").apply{mkdirs()}
-                    val name="PassportPro_${SimpleDateFormat("yyyyMMdd_HHmmss",Locale.US).format(Date())}.jpg"
-                    FileOutputStream(File(dir,name)).use { finalImage.compress(CompressFormat.JPEG,95,it) }
-                    onSaved()
-                } catch(e:Exception) { status="Save failed: ${e.localizedMessage}" }
-            },enabled=image!=null,modifier=Modifier.weight(1f),colors=ButtonDefaults.buttonColors(containerColor=Color(0xFFE4B45D),contentColor=Color(0xFF101522))){Text("Save",fontWeight=FontWeight.Bold)}
         }
     }
 }

@@ -86,7 +86,7 @@ private fun PassportProApp() {
     var appearance by remember { mutableStateOf(appearancePrefs.getString("appearance_mode", "System default") ?: "System default") }
     val systemDark = isSystemInDarkTheme()
     val darkMode = when (appearance) { "Light" -> false; "Dark" -> true; else -> systemDark }
-    val palette = if (darkMode) darkColorScheme(primary = Color(0xFFE4B45D), background = Color(0xFF101522), surface = Color(0xFF1B2433), onBackground = Color.White, onSurface = Color.White) else lightColorScheme(primary = Color(0xFF9A6418), background = Color(0xFFF5F6F8), surface = PrimaryText, onBackground = Color(0xFF182230), onSurface = Color(0xFF182230), secondary = Color(0xFF765016))
+    val palette = if (darkMode) darkColorScheme(primary = Color(0xFFE4B45D), background = Color(0xFF101522), surface = Color(0xFF1B2433), onBackground = Color.White, onSurface = Color.White) else lightColorScheme(primary = Color(0xFF9A6418), onPrimary = Color.White, background = Ink, onBackground = PrimaryText, surface = Panel, onSurface = PrimaryText, surfaceVariant = Color(0xFFE9EDF2), onSurfaceVariant = Muted, outline = Color(0xFF98A2B3), secondary = Color(0xFF765016))
     var tab by remember { mutableStateOf(if (onboardingPrefs.getBoolean("complete", false)) "Home" else "Welcome") }
     var editorPhotoPath by remember { mutableStateOf<String?>(null) }
     var importError by remember { mutableStateOf<String?>(null) }

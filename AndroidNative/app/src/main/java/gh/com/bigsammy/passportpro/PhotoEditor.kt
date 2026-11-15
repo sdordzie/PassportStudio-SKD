@@ -324,7 +324,7 @@ internal fun PhotoEditorScreen(photoPath: String, onRetake: () -> Unit, onSaved:
         Row(verticalAlignment = Alignment.CenterVertically) {
             Column(Modifier.weight(1f)) {
                 Text("PHOTO EDITOR", color=Color(0xFFE4B45D), fontSize=11.sp, fontWeight=FontWeight.Bold, letterSpacing=1.2.sp)
-                Text("Live editing preview", color=Color.White, fontSize=21.sp, fontWeight=FontWeight.Bold)
+                Text("Live editing preview", color=PrimaryText, fontSize=21.sp, fontWeight=FontWeight.Bold)
             }
             Surface(color=Color(0xFF1B2433), shape=RoundedCornerShape(10.dp)) {
                 Text("ON DEVICE", color=Color(0xFF64D6A0), modifier=Modifier.padding(horizontal=10.dp, vertical=7.dp), fontSize=9.sp, fontWeight=FontWeight.Bold)
@@ -433,18 +433,18 @@ internal fun PhotoEditorScreen(photoPath: String, onRetake: () -> Unit, onSaved:
                 }, enabled=redoStack.isNotEmpty() && !busy, modifier=Modifier.weight(1f)) { Text("Redo ↷") }
                 FilterChip(selected=showOriginal, onClick={showOriginal=!showOriginal}, label={Text(if(showOriginal) "Show edited" else "Before / after")})
             }
-            Text("MANUAL PERSPECTIVE", color=Color(0xFF9AA7B8), fontSize=10.sp, fontWeight=FontWeight.Bold)
+            Text("MANUAL PERSPECTIVE", color=Muted, fontSize=10.sp, fontWeight=FontWeight.Bold)
             Row(verticalAlignment=Alignment.CenterVertically, horizontalArrangement=Arrangement.spacedBy(8.dp)) {
                 FilterChip(selected=perspectiveEnabled, onClick={recordUndo(); perspectiveEnabled = !perspectiveEnabled}, label={Text(if (perspectiveEnabled) "Adjust corners: ON" else "Adjust corners: OFF")})
-                Text("Drag the four gold corner handles to straighten a tilted photo.", color=Color(0xFF9AA7B8), fontSize=10.sp, modifier=Modifier.weight(1f))
+                Text("Drag the four gold corner handles to straighten a tilted photo.", color=Muted, fontSize=10.sp, modifier=Modifier.weight(1f))
             }
             if (perspectiveEnabled) {
                 Row(horizontalArrangement=Arrangement.spacedBy(8.dp)) {
                     OutlinedButton(onClick={recordUndo(); perspectiveCorners=listOf(Offset(0f,0f),Offset(1f,0f),Offset(1f,1f),Offset(0f,1f))}) { Text("Reset corners") }
-                    Text("The selected area is corrected to a straight rectangle.", color=Color(0xFF9AA7B8), fontSize=10.sp, modifier=Modifier.weight(1f))
+                    Text("The selected area is corrected to a straight rectangle.", color=Muted, fontSize=10.sp, modifier=Modifier.weight(1f))
                 }
             }
-            Text("TRANSFORM", color=Color(0xFF9AA7B8), fontSize=10.sp, fontWeight=FontWeight.Bold)
+            Text("TRANSFORM", color=Muted, fontSize=10.sp, fontWeight=FontWeight.Bold)
             Row(horizontalArrangement=Arrangement.spacedBy(6.dp), modifier=Modifier.fillMaxWidth()) {
                 OutlinedButton(onClick={ recordUndo(); rotation=(rotation+270)%360 }, modifier=Modifier.weight(1f)) { Text("↶ 90°") }
                 OutlinedButton(onClick={ recordUndo(); rotation=(rotation+90)%360 }, modifier=Modifier.weight(1f)) { Text("90° ↷") }
@@ -452,20 +452,20 @@ internal fun PhotoEditorScreen(photoPath: String, onRetake: () -> Unit, onSaved:
             Row(horizontalArrangement=Arrangement.spacedBy(6.dp), modifier=Modifier.fillMaxWidth()) {
                 FilterChip(selected=flipHorizontal, onClick={recordUndo(); flipHorizontal=!flipHorizontal}, label={Text("Mirror ↔")})
                 FilterChip(selected=flipVertical, onClick={recordUndo(); flipVertical=!flipVertical}, label={Text("Flip ↕")})
-                Text("Rotation: $rotation°", color=Color(0xFF9AA7B8), fontSize=10.sp, modifier=Modifier.align(Alignment.CenterVertically))
+                Text("Rotation: $rotation°", color=Muted, fontSize=10.sp, modifier=Modifier.align(Alignment.CenterVertically))
             }
-            Text("AI BACKGROUND • EDGE REFINEMENT", color=Color(0xFF9AA7B8), fontSize=10.sp, fontWeight=FontWeight.Bold)
+            Text("AI BACKGROUND • EDGE REFINEMENT", color=Muted, fontSize=10.sp, fontWeight=FontWeight.Bold)
             Row(Modifier.horizontalScroll(androidx.compose.foundation.rememberScrollState()), horizontalArrangement=Arrangement.spacedBy(6.dp)) {
                 listOf("White" to Pixel.WHITE, "Blue" to Pixel.rgb(35,91,170), "Red" to Pixel.rgb(190,35,48), "Grey" to Pixel.LTGRAY).forEach { (label, color) ->
                     FilterChip(selected=background==color, onClick={background=color}, label={Text(label)})
                 }
             }
-            Text("Edge softness ${(maskSoftness*100).toInt()}%", color=Color(0xFF9AA7B8), fontSize=10.sp)
+            Text("Edge softness ${(maskSoftness*100).toInt()}%", color=Muted, fontSize=10.sp)
             Slider(value=maskSoftness,onValueChange={maskSoftness=it},valueRange=0.04f..0.42f)
-            Text("Fine-detail preservation ${(maskDetail*100).toInt()}%", color=Color(0xFF9AA7B8), fontSize=10.sp)
+            Text("Fine-detail preservation ${(maskDetail*100).toInt()}%", color=Muted, fontSize=10.sp)
             Slider(value=maskDetail,onValueChange={maskDetail=it},valueRange=0f..1f)
             Row(horizontalArrangement=Arrangement.spacedBy(5.dp),verticalAlignment=Alignment.CenterVertically) {
-                Text("Mask smoothing",color=Color(0xFF9AA7B8),fontSize=10.sp)
+                Text("Mask smoothing",color=Muted,fontSize=10.sp)
                 listOf(0,1,2,3).forEach { level -> FilterChip(selected=maskRadius==level,onClick={maskRadius=level},label={Text(listOf("Off","Low","Medium","High")[level],fontSize=9.sp)}) }
             }
             Button(
@@ -538,14 +538,14 @@ internal fun PhotoEditorScreen(photoPath: String, onRetake: () -> Unit, onSaved:
                 colors=ButtonDefaults.buttonColors(containerColor=Color(0xFFE4B45D),contentColor=Color(0xFF101522))
             ) { Text(if(busy) "PROCESSING…" else "REMOVE / REPLACE BACKGROUND WITH AI", fontWeight=FontWeight.Bold) }
 
-            Text("CROP FORMAT", color=Color(0xFF9AA7B8), fontSize=10.sp, fontWeight=FontWeight.Bold)
+            Text("CROP FORMAT", color=Muted, fontSize=10.sp, fontWeight=FontWeight.Bold)
             Row(Modifier.horizontalScroll(androidx.compose.foundation.rememberScrollState()), horizontalArrangement=Arrangement.spacedBy(5.dp)) {
                 listOf("Original","Portrait","Landscape","35 × 45 mm","Square","4 × 6","Custom").forEach { value ->
                     FilterChip(selected=crop==value,onClick={recordUndo(); crop=value},label={Text(value,fontSize=10.sp)})
                 }
             }
             if (crop == "Custom") {
-                Text("CUSTOM CROP DIMENSIONS", color=Color(0xFF9AA7B8), fontSize=10.sp, fontWeight=FontWeight.Bold)
+                Text("CUSTOM CROP DIMENSIONS", color=Muted, fontSize=10.sp, fontWeight=FontWeight.Bold)
                 Row(horizontalArrangement=Arrangement.spacedBy(8.dp), verticalAlignment=Alignment.CenterVertically) {
                     OutlinedTextField(value=customWidth, onValueChange={ customWidth=it.filter(Char::isDigit).take(6) }, label={Text("Width")}, modifier=Modifier.weight(1f), singleLine=true, keyboardOptions=KeyboardOptions(keyboardType=KeyboardType.Number))
                     OutlinedTextField(value=customHeight, onValueChange={ customHeight=it.filter(Char::isDigit).take(6) }, label={Text("Height")}, modifier=Modifier.weight(1f), singleLine=true, keyboardOptions=KeyboardOptions(keyboardType=KeyboardType.Number))
@@ -554,12 +554,12 @@ internal fun PhotoEditorScreen(photoPath: String, onRetake: () -> Unit, onSaved:
                     listOf("px","mm","cm","in").forEach { unit -> FilterChip(selected=customUnit==unit,onClick={customUnit=unit},label={Text(unit)}) }
                 }
                 if (customUnit != "px") {
-                    Text("Output resolution: " + outputDpi + " DPI", color=Color(0xFF9AA7B8), fontSize=10.sp)
+                    Text("Output resolution: " + outputDpi + " DPI", color=Muted, fontSize=10.sp)
                     Row(horizontalArrangement=Arrangement.spacedBy(5.dp)) {
                         listOf(150,300,600).forEach { dpi -> FilterChip(selected=outputDpi==dpi,onClick={outputDpi=dpi},label={Text("$dpi DPI")}) }
                     }
                 }
-                Text("Preview follows the width-to-height ratio. Physical units convert to pixels using the selected DPI.", color=Color(0xFF9AA7B8), fontSize=10.sp)
+                Text("Preview follows the width-to-height ratio. Physical units convert to pixels using the selected DPI.", color=Muted, fontSize=10.sp)
                 Row(
                     Modifier.fillMaxWidth(),
                     horizontalArrangement=Arrangement.spacedBy(8.dp),
@@ -597,13 +597,13 @@ internal fun PhotoEditorScreen(photoPath: String, onRetake: () -> Unit, onSaved:
                     Text("Automatic default is ON: " + customWidth + " × " + customHeight + " " + customUnit + (if (customUnit == "px") "" else " • " + outputDpi + " DPI"), color=Color(0xFF64D6A0), fontSize=10.sp)
                 }
             }
-            Text("Brightness ${(brightness*100).toInt()}%",color=Color(0xFF9AA7B8),fontSize=10.sp)
+            Text("Brightness ${(brightness*100).toInt()}%",color=Muted,fontSize=10.sp)
             Slider(value=brightness,onValueChange={recordUndo(); brightness=it},valueRange=-.35f.. .35f)
-            Text("Contrast ${(contrast*100).toInt()}%",color=Color(0xFF9AA7B8),fontSize=10.sp)
+            Text("Contrast ${(contrast*100).toInt()}%",color=Muted,fontSize=10.sp)
             Slider(value=contrast,onValueChange={recordUndo(); contrast=it},valueRange=.5f..1.8f)
-            Text("Saturation ${(saturation*100).toInt()}%",color=Color(0xFF9AA7B8),fontSize=10.sp)
+            Text("Saturation ${(saturation*100).toInt()}%",color=Muted,fontSize=10.sp)
             Slider(value=saturation,onValueChange={recordUndo(); saturation=it},valueRange=0f..2f)
-            Text(status,color=Color(0xFF9AA7B8),fontSize=10.sp)
+            Text(status,color=Muted,fontSize=10.sp)
             Row(horizontalArrangement=Arrangement.spacedBy(7.dp)) {
                 OutlinedButton(onClick=onRetake,enabled=!busy,modifier=Modifier.weight(1f)) { Text("Retake") }
                 OutlinedButton(onClick={

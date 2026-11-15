@@ -1,6 +1,7 @@
 package gh.com.bigsammy.passportpro
 
 import android.content.Context
+import android.database.sqlite.SQLiteDatabase
 import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -172,6 +173,10 @@ private fun importBackup(c: Context, uri: Uri): Int {
     entries.forEach { pair ->
         val file = File(stage, pair.key).canonicalFile
         require(file.toPath().startsWith(stage.canonicalFile.toPath()) && file.exists() && digest(file) == pair.value) { "Integrity check failed: " + pair.key }
+        if (pair.key.startsWith("databases/")) {
+            val db = SQLiteDatabase.openDatabase(file.absolutePath, null, SQLiteDatabase.OPEN_READONLY)
+            try { db.rawQuery("PRAGMA integrity_check", null).use { cursor -> require(cursor.moveToFirst() && cursor.getString(0) == "ok") { "Database validation failed: " + pair.key } } } finally { db.close() }
+        }
     }
     require(entries.keys.all { it == "databases/passportpro_customers.db" || it == "databases/passportpro_business.db" || it.startsWith("photos/captures/") || it.startsWith("photos/edited/") }) { "Unexpected backup content" }
     val safety = File(c.filesDir, "PassportPro/PreRestoreSafety").apply { mkdirs() }

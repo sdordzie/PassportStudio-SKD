@@ -52,7 +52,7 @@ internal fun StudioControlCentreScreen(modifier: Modifier = Modifier) {
     fun save(key: String, value: String) { prefs.edit().putString(key, value).apply() }
 
     Column(modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(18.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
-        Text("PHASE 19 • FINAL STUDIO CONTROL CENTRE", color = ControlGold, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+        Text("STUDIO CONTROL CENTRE", color = ControlGold, fontSize = 11.sp, fontWeight = FontWeight.Bold)
         Text("Studio Control Centre", color = Color.White, fontSize = 26.sp, fontWeight = FontWeight.Bold)
         Text("Set your studio identity, preferred photo workflow, print access and data-care settings in one place.", color = ControlMuted, fontSize = 13.sp)
 

@@ -8,6 +8,9 @@ import android.database.sqlite.SQLiteOpenHelper
 import android.graphics.BitmapFactory
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -15,6 +18,8 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.PersonAdd
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.Photo
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -25,6 +30,8 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.window.Dialog
 import androidx.core.content.FileProvider
 import java.io.File
 import java.text.SimpleDateFormat
@@ -98,42 +105,78 @@ internal fun CustomersScreen(modifier: Modifier = Modifier) {
 internal fun GalleryScreen(modifier: Modifier = Modifier) {
     val context = LocalContext.current
     var refresh by remember { mutableIntStateOf(0) }
+    var selectedFile by remember { mutableStateOf<File?>(null) }
     val files = remember(refresh) {
-        val roots = listOf(File(context.filesDir,"PassportPro/Captures"),File(context.getExternalFilesDir(null),"PassportPro/Edited"))
-        roots.flatMap { root -> if(root.exists()) root.walkTopDown().filter { it.isFile && it.extension.lowercase() in listOf("jpg","jpeg","png") }.toList() else emptyList() }
+        listOf(File(context.filesDir, "PassportPro/Captures"), File(context.getExternalFilesDir(null), "PassportPro/Edited"))
+            .flatMap { root -> if (root.exists()) root.walkTopDown().filter { it.isFile && it.extension.lowercase() in listOf("jpg", "jpeg", "png") }.toList() else emptyList() }
             .sortedByDescending { it.lastModified() }
     }
-    Column(modifier.fillMaxSize().padding(16.dp),verticalArrangement=Arrangement.spacedBy(10.dp)) {
-        Text("PHOTO LIBRARY • PHASE 4",color=Color(0xFFE4B45D),fontSize=11.sp,fontWeight=FontWeight.Bold)
-        Row(verticalAlignment=Alignment.CenterVertically) {
-            Text("Studio gallery",color=Color.White,fontSize=24.sp,fontWeight=FontWeight.Bold,modifier=Modifier.weight(1f))
-            TextButton(onClick={refresh++}) { Text("Refresh",color=Color(0xFFE4B45D)) }
-        }
-        Text("${files.size} photographs stored on this device",color=Color(0xFF9AA7B8),fontSize=12.sp)
-        if(files.isEmpty()) {
-            Column(Modifier.fillMaxSize(),horizontalAlignment=Alignment.CenterHorizontally,verticalArrangement=Arrangement.Center) {
-                Icon(Icons.Default.Photo,null,tint=Color(0xFFE4B45D),modifier=Modifier.size(48.dp))
-                Text("Your gallery is empty",color=Color.White,fontSize=18.sp,fontWeight=FontWeight.Bold)
-                Text("Captured and edited photos will appear here.",color=Color(0xFF9AA7B8),fontSize=12.sp)
+    val selectedBitmap = remember(selectedFile?.absolutePath, selectedFile?.lastModified()) {
+        selectedFile?.let { BitmapFactory.decodeFile(it.absolutePath) }
+    }
+    Column(modifier.fillMaxSize().padding(horizontal = 14.dp, vertical = 12.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        Text("PHOTO LIBRARY • STUDIO", color = Color(0xFFE4B45D), fontSize = 11.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.2.sp)
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Column(Modifier.weight(1f)) {
+                Text("Studio gallery", color = Color.White, fontSize = 25.sp, fontWeight = FontWeight.Bold)
+                Text("${files.size} photographs • Stored securely on this device", color = Color(0xFF9AA7B8), fontSize = 11.sp)
             }
-        } else LazyColumn(verticalArrangement=Arrangement.spacedBy(10.dp)) {
-            items(files,key={it.absolutePath}) { file ->
-                val bitmap = remember(file.absolutePath,file.lastModified()) { BitmapFactory.decodeFile(file.absolutePath) }
-                Surface(color=Color(0xFF1B2433),shape=RoundedCornerShape(14.dp),modifier=Modifier.fillMaxWidth()) {
-                    Row(Modifier.padding(10.dp),verticalAlignment=Alignment.CenterVertically,horizontalArrangement=Arrangement.spacedBy(12.dp)) {
-                        if(bitmap!=null) Image(bitmap.asImageBitmap(),contentDescription="Saved passport photograph",modifier=Modifier.size(width=78.dp,height=92.dp))
-                        Column(Modifier.weight(1f),verticalArrangement=Arrangement.spacedBy(4.dp)) {
-                            Text(file.name,color=Color.White,fontSize=12.sp,fontWeight=FontWeight.SemiBold)
-                            Text(if(file.parentFile?.name=="Edited") "Edited photo" else "Original capture",color=Color(0xFF9AA7B8),fontSize=11.sp)
-                            Text(SimpleDateFormat("dd MMM yyyy, HH:mm",Locale.getDefault()).format(Date(file.lastModified())),color=Color(0xFF718096),fontSize=10.sp)
-                            TextButton(onClick={
-                                try {
-                                    val uri=FileProvider.getUriForFile(context,context.packageName+".fileprovider",file)
-                                    val intent=Intent(Intent.ACTION_SEND).apply { type="image/jpeg"; putExtra(Intent.EXTRA_STREAM,uri); addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION) }
-                                    context.startActivity(Intent.createChooser(intent,"Share passport photo"))
-                                } catch(e:Exception) { android.widget.Toast.makeText(context,"Unable to share this photo: ${e.localizedMessage}",android.widget.Toast.LENGTH_LONG).show() }
-                            }) { Icon(Icons.Default.Share,null,tint=Color(0xFFE4B45D)); Spacer(Modifier.width(5.dp)); Text("Share / WhatsApp",color=Color(0xFFE4B45D),fontSize=11.sp) }
+            TextButton(onClick = { refresh++ }) { Text("Refresh", color = Color(0xFFE4B45D)) }
+        }
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Surface(color = Color(0xFF1B2433), shape = RoundedCornerShape(12.dp)) { Text("CAPTURED  ${files.count { it.parentFile?.name != "Edited" }}", color = Color.White, modifier = Modifier.padding(10.dp), fontSize = 10.sp) }
+            Surface(color = Color(0xFF1B2433), shape = RoundedCornerShape(12.dp)) { Text("EDITED  ${files.count { it.parentFile?.name == "Edited" }}", color = Color(0xFFE4B45D), modifier = Modifier.padding(10.dp), fontSize = 10.sp) }
+        }
+        if (files.isEmpty()) {
+            Column(Modifier.weight(1f).fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
+                Icon(Icons.Default.Photo, null, tint = Color(0xFFE4B45D), modifier = Modifier.size(56.dp))
+                Text("Your studio is waiting for its first photo", color = Color.White, fontSize = 17.sp, fontWeight = FontWeight.Bold)
+                Text("Captured and edited photographs will appear here automatically.", color = Color(0xFF9AA7B8), fontSize = 12.sp)
+            }
+        } else {
+            LazyVerticalGrid(columns = GridCells.Adaptive(minSize = 104.dp), modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(10.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                items(files, key = { it.absolutePath }) { file ->
+                    val thumb = remember(file.absolutePath, file.lastModified()) {
+                        BitmapFactory.decodeFile(file.absolutePath, BitmapFactory.Options().apply { inSampleSize = 4 })
+                    }
+                    Surface(color = Color(0xFF1B2433), shape = RoundedCornerShape(13.dp), onClick = { selectedFile = file }) {
+                        Column(Modifier.padding(6.dp), verticalArrangement = Arrangement.spacedBy(5.dp)) {
+                            if (thumb != null) Image(thumb.asImageBitmap(), "Photo thumbnail", Modifier.fillMaxWidth().height(142.dp), contentScale = ContentScale.Crop)
+                            else Box(Modifier.fillMaxWidth().height(142.dp), contentAlignment = Alignment.Center) { Icon(Icons.Default.Photo, null, tint = Color(0xFF9AA7B8)) }
+                            Text(if (file.parentFile?.name == "Edited") "EDITED PHOTO" else "ORIGINAL CAPTURE", color = Color(0xFFE4B45D), fontSize = 9.sp, fontWeight = FontWeight.Bold)
+                            Text(SimpleDateFormat("dd MMM yyyy • HH:mm", Locale.getDefault()).format(Date(file.lastModified())), color = Color(0xFF9AA7B8), fontSize = 9.sp)
                         }
+                    }
+                }
+            }
+        }
+    }
+    if (selectedFile != null) {
+        Dialog(onDismissRequest = { selectedFile = null }) {
+            Surface(color = Color(0xFF101522), shape = RoundedCornerShape(20.dp), modifier = Modifier.fillMaxWidth()) {
+                Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(9.dp)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Column(Modifier.weight(1f)) {
+                            Text(if (selectedFile?.parentFile?.name == "Edited") "EDITED PHOTOGRAPH" else "ORIGINAL CAPTURE", color = Color(0xFFE4B45D), fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                            Text(selectedFile?.name ?: "", color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, maxLines = 1)
+                        }
+                        IconButton(onClick = { selectedFile = null }) { Icon(Icons.Default.Close, "Close", tint = Color.White) }
+                    }
+                    if (selectedBitmap != null) Image(selectedBitmap.asImageBitmap(), "Full photograph preview", Modifier.fillMaxWidth().heightIn(max = 480.dp), contentScale = ContentScale.Fit)
+                    Text(selectedFile?.let { SimpleDateFormat("dd MMMM yyyy, HH:mm", Locale.getDefault()).format(Date(it.lastModified())) } ?: "", color = Color(0xFF9AA7B8), fontSize = 11.sp)
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Button(onClick = {
+                            selectedFile?.let { file ->
+                                try {
+                                    val uri = FileProvider.getUriForFile(context, context.packageName + ".fileprovider", file)
+                                    val intent = Intent(Intent.ACTION_SEND).apply { type = "image/*"; putExtra(Intent.EXTRA_STREAM, uri); addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION) }
+                                    context.startActivity(Intent.createChooser(intent, "Share photograph"))
+                                } catch (e: Exception) { android.widget.Toast.makeText(context, "Unable to share photo: ${e.localizedMessage}", android.widget.Toast.LENGTH_LONG).show() }
+                            }
+                        }, modifier = Modifier.weight(1f), colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFE4B45D), contentColor = Color(0xFF101522))) {
+                            Icon(Icons.Default.Share, null); Spacer(Modifier.width(5.dp)); Text("Share")
+                        }
+                        OutlinedButton(onClick = { selectedFile = null }, modifier = Modifier.weight(1f)) { Text("Done") }
                     }
                 }
             }

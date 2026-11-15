@@ -52,6 +52,11 @@ private class CustomerDatabase(context: Context) : SQLiteOpenHelper(context, "pa
         }
         return result
     }
+    fun delete(ids: Set<Long>): Int {
+        if (ids.isEmpty()) return 0
+        val placeholders = ids.joinToString(",") { "?" }
+        return writableDatabase.delete("customers", "id IN ($placeholders)", ids.map { it.toString() }.toTypedArray())
+    }
     fun add(name: String, phone: String, notes: String) {
         val values = ContentValues().apply { put("name",name.trim()); put("phone",phone.trim()); put("notes",notes.trim()); put("created",System.currentTimeMillis()) }
         writableDatabase.insert("customers",null,values)
@@ -66,6 +71,9 @@ internal fun CustomersScreen(modifier: Modifier = Modifier) {
     var name by remember { mutableStateOf("") }
     var phone by remember { mutableStateOf("") }
     var notes by remember { mutableStateOf("") }
+    var selectionMode by remember { mutableStateOf(false) }
+    var selectedCustomerIds by remember { mutableStateOf(setOf<Long>()) }
+    var confirmDeleteCustomers by remember { mutableStateOf(false) }
     Column(modifier.fillMaxSize().padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
         Text("CUSTOMER MANAGEMENT • PHASE 4", color=Color(0xFFE4B45D), fontSize=11.sp, fontWeight=FontWeight.Bold)
         Text("Customer records", color=Color.White, fontSize=24.sp, fontWeight=FontWeight.Bold)
@@ -82,14 +90,25 @@ internal fun CustomersScreen(modifier: Modifier = Modifier) {
             Text("SAVED CUSTOMERS",color=Color(0xFF9AA7B8),fontSize=11.sp,fontWeight=FontWeight.Bold)
             Spacer(Modifier.weight(1f)); Text("${customers.size} records",color=Color(0xFFE4B45D),fontSize=11.sp)
         }
+        if(customers.isNotEmpty()) {
+            Row(verticalAlignment=Alignment.CenterVertically) {
+                TextButton(onClick={selectionMode=!selectionMode; selectedCustomerIds=emptySet()}) { Text(if(selectionMode) "Cancel selection" else "Select customers",color=Color(0xFFE4B45D)) }
+                if(selectionMode) {
+                    TextButton(onClick={selectedCustomerIds=if(selectedCustomerIds.size==customers.size) emptySet() else customers.map { it.id }.toSet()}) { Text(if(selectedCustomerIds.size==customers.size) "Deselect all" else "Select all",color=Color.White) }
+                    Text(selectedCustomerIds.size.toString()+" selected",color=Color(0xFF9AA7B8),fontSize=11.sp,modifier=Modifier.weight(1f))
+                    Button(onClick={confirmDeleteCustomers=true},enabled=selectedCustomerIds.isNotEmpty(),colors=ButtonDefaults.buttonColors(containerColor=Color(0xFFB93838))) { Text("Delete") }
+                }
+            }
+        }
         if(customers.isEmpty()) {
             Surface(color=Color(0xFF1B2433),shape=RoundedCornerShape(16.dp),modifier=Modifier.fillMaxWidth()) {
                 Text("No customers yet. Add your first customer above.",color=Color(0xFF9AA7B8),modifier=Modifier.padding(18.dp),fontSize=13.sp)
             }
         } else LazyColumn(verticalArrangement=Arrangement.spacedBy(8.dp),modifier=Modifier.weight(1f)) {
             items(customers,key={it.id}) { customer ->
-                Surface(color=Color(0xFF1B2433),shape=RoundedCornerShape(14.dp),modifier=Modifier.fillMaxWidth()) {
+                Surface(color=if(customer.id in selectedCustomerIds) Color(0xFF34445C) else Color(0xFF1B2433),shape=RoundedCornerShape(14.dp),modifier=Modifier.fillMaxWidth()) {
                     Column(Modifier.padding(14.dp),verticalArrangement=Arrangement.spacedBy(4.dp)) {
+                        if(selectionMode) TextButton(onClick={selectedCustomerIds=if(customer.id in selectedCustomerIds) selectedCustomerIds-customer.id else selectedCustomerIds+customer.id}) { Text(if(customer.id in selectedCustomerIds) "✓ Selected" else "Select customer",color=Color(0xFFE4B45D)) }
                         Text(customer.name,color=Color.White,fontWeight=FontWeight.SemiBold,fontSize=16.sp)
                         if(customer.phone.isNotBlank()) Text(customer.phone,color=Color(0xFFE4B45D),fontSize=13.sp)
                         if(customer.notes.isNotBlank()) Text(customer.notes,color=Color(0xFF9AA7B8),fontSize=12.sp)
@@ -99,6 +118,18 @@ internal fun CustomersScreen(modifier: Modifier = Modifier) {
             }
         }
     }
+    if(confirmDeleteCustomers) AlertDialog(
+        onDismissRequest={confirmDeleteCustomers=false},
+        title={Text("Delete selected customers?")},
+        text={Text("Permanently delete "+selectedCustomerIds.size+" selected customer records? This cannot be undone.")},
+        confirmButton={TextButton(onClick={
+            val count=db.delete(selectedCustomerIds)
+            customers=db.all(); selectedCustomerIds=emptySet(); selectionMode=false; confirmDeleteCustomers=false
+            android.widget.Toast.makeText(context,count.toString()+" customer record(s) deleted",android.widget.Toast.LENGTH_SHORT).show()
+        }) { Text("Delete permanently",color=Color(0xFFB93838)) }},
+        dismissButton={TextButton(onClick={confirmDeleteCustomers=false}) { Text("Cancel") }}
+    )
+
 }
 
 @Composable

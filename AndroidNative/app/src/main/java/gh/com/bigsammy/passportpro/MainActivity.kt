@@ -21,6 +21,8 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
@@ -76,7 +78,8 @@ class MainActivity : ComponentActivity() {
 private fun PassportProApp() {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
-    var tab by remember { mutableStateOf("Home") }
+    val onboardingPrefs = remember { context.getSharedPreferences("passportpro_onboarding", android.content.Context.MODE_PRIVATE) }
+    var tab by remember { mutableStateOf(if (onboardingPrefs.getBoolean("complete", false)) "Home" else "Welcome") }
     var editorPhotoPath by remember { mutableStateOf<String?>(null) }
     var importError by remember { mutableStateOf<String?>(null) }
     val imagePicker = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
@@ -99,21 +102,24 @@ private fun PassportProApp() {
     }
     MaterialTheme(colorScheme = darkColorScheme(primary = Gold, background = Ink, surface = Panel, onBackground = Color.White, onSurface = Color.White)) {
         Scaffold(containerColor = Ink, topBar = {
-            CenterAlignedTopAppBar(
+            if (tab != "Welcome") CenterAlignedTopAppBar(
                 title = { Text("PASSPORTPRO STUDIO", color = Gold, fontSize = 13.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.4.sp) },
                 actions = {
+                    IconButton(onClick = { tab = "Guide" }) { Icon(Icons.Default.MenuBook, contentDescription = "Open user guide", tint = Gold) }
                     IconButton(onClick = { tab = "Print" }) { Icon(Icons.Default.Print, contentDescription = "Open Print Designer", tint = Gold) }
                 },
                 colors = TopAppBarDefaults.centerAlignedTopAppBarColors(containerColor = Ink)
             )
         }, bottomBar = {
-            NavigationBar(containerColor = Panel) {
+            if (tab != "Welcome" && tab != "Guide") NavigationBar(containerColor = Panel) {
                 listOf("Home" to Icons.Default.Home, "Capture" to Icons.Default.CameraAlt, "Customers" to Icons.Default.People, "Gallery" to Icons.Default.PhotoLibrary, "Business" to Icons.Default.AccountBalanceWallet).forEach { (label, icon) ->
                     NavigationBarItem(selected = tab == label, onClick = { tab = label }, icon = { Icon(icon, contentDescription = label) }, label = { Text(label, fontSize = 10.sp) }, colors = NavigationBarItemDefaults.colors(selectedIconColor = Gold, selectedTextColor = Gold, indicatorColor = Gold.copy(alpha = .14f), unselectedIconColor = Muted, unselectedTextColor = Muted))
                 }
             }
         }) { padding ->
             when (tab) {
+                "Welcome" -> WelcomeScreen(onContinue = { onboardingPrefs.edit().putBoolean("complete", true).apply(); tab = "Home" })
+                "Guide" -> UserGuideScreen(Modifier.padding(padding), onBack = { tab = "Home" })
                 "Home" -> Dashboard(Modifier.padding(padding), onCapture = { tab = "Capture" }, onNavigate = { tab = it })
                 "Capture" -> CameraStudioScreen(Modifier.padding(padding))
                 "Editor" -> {
@@ -159,7 +165,8 @@ private fun Dashboard(modifier: Modifier, onCapture: () -> Unit, onNavigate: (St
         StudioTool("Customers", "Profiles and photo history", Icons.Default.People, "Customers"),
         StudioTool("Business Reports", "Sales and job summaries", Icons.Default.BarChart, "Business"),
         StudioTool("Backup & Restore", "Protect photos and business records", Icons.Default.Security, "Backup"),
-        StudioTool("Studio Control Centre", "Branding, print, privacy and diagnostics", Icons.Default.Settings, "Control Centre")
+        StudioTool("Studio Control Centre", "Branding, print, privacy and diagnostics", Icons.Default.Settings, "Control Centre"),
+        StudioTool("Hints & User Guide", "Learn the studio workflow step by step", Icons.Default.MenuBook, "Guide")
     )
     Column(modifier.fillMaxSize().padding(20.dp), verticalArrangement = Arrangement.spacedBy(18.dp)) {
         Column {
@@ -177,6 +184,16 @@ private fun Dashboard(modifier: Modifier, onCapture: () -> Unit, onNavigate: (St
                 }
             }
         }
+        Surface(onClick = { onNavigate("Guide") }, color = Gold.copy(alpha = .12f), shape = RoundedCornerShape(16.dp), modifier = Modifier.fillMaxWidth()) {
+            Row(Modifier.padding(14.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                Icon(Icons.Default.Lightbulb, contentDescription = null, tint = Gold)
+                Column(Modifier.weight(1f)) {
+                    Text("NEW TO PASSPORTPRO?", color = Gold, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                    Text("Open the quick guide, helpful hints and workflow tips.", color = Muted, fontSize = 12.sp)
+                }
+                Icon(Icons.Default.ChevronRight, contentDescription = null, tint = Gold)
+            }
+        }
         Text("STUDIO WORKSPACE", color = Muted, fontSize = 11.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.5.sp)
         LazyVerticalGrid(columns = GridCells.Fixed(2), modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(12.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             items(tools) { tool ->
@@ -190,6 +207,94 @@ private fun Dashboard(modifier: Modifier, onCapture: () -> Unit, onNavigate: (St
             }
         }
         Text("PROFESSIONAL CAMERA STUDIO", color = Gold, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+    }
+}
+
+
+@Composable
+private fun WelcomeScreen(onContinue: () -> Unit) {
+    var page by remember { mutableIntStateOf(0) }
+    val pages = listOf(
+        Triple("Welcome to PassportPro Studio", "Your complete offline-ready workspace for passport photography, photo editing, printing and studio business management.", Icons.Default.WavingHand),
+        Triple("Capture or import", "Take a new photograph with live face guidance, or open Photo Editor to choose an existing image from your phone.", Icons.Default.PhotoCamera),
+        Triple("Edit with precision", "Replace backgrounds, refine image quality, crop to the required dimensions, correct perspective and save your finished photo.", Icons.Default.AutoFixHigh),
+        Triple("Print, deliver and manage", "Arrange photos on print sheets, export PDFs, share images, manage customers and jobs, record payments, track expenses and back up your studio.", Icons.Default.Print)
+    )
+    val item = pages[page]
+    Column(
+        Modifier.fillMaxSize().background(Ink).padding(horizontal = 26.dp, vertical = 30.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center
+    ) {
+        Text("BIGSAMMY GRAPHICS", color = Gold, fontSize = 11.sp, fontWeight = FontWeight.Bold, letterSpacing = 2.sp)
+        Spacer(Modifier.height(28.dp))
+        Surface(color = Panel, shape = RoundedCornerShape(30.dp), modifier = Modifier.size(104.dp)) {
+            Box(contentAlignment = Alignment.Center) { Icon(item.third, contentDescription = null, tint = Gold, modifier = Modifier.size(54.dp)) }
+        }
+        Spacer(Modifier.height(30.dp))
+        Text(item.first, color = Color.White, fontSize = 26.sp, fontWeight = FontWeight.Bold, textAlign = androidx.compose.ui.text.style.TextAlign.Center)
+        Spacer(Modifier.height(14.dp))
+        Text(item.second, color = Muted, fontSize = 15.sp, lineHeight = 23.sp, textAlign = androidx.compose.ui.text.style.TextAlign.Center)
+        Spacer(Modifier.height(30.dp))
+        Row(horizontalArrangement = Arrangement.spacedBy(7.dp)) {
+            pages.indices.forEach { index ->
+                Box(Modifier.size(if (index == page) 22.dp else 7.dp, 7.dp).background(if (index == page) Gold else Muted.copy(alpha = .45f), RoundedCornerShape(8.dp)))
+            }
+        }
+        Spacer(Modifier.height(30.dp))
+        Button(
+            onClick = { if (page < pages.lastIndex) page++ else onContinue() },
+            modifier = Modifier.fillMaxWidth().height(54.dp),
+            colors = ButtonDefaults.buttonColors(containerColor = Gold, contentColor = Ink),
+            shape = RoundedCornerShape(15.dp)
+        ) { Text(if (page == pages.lastIndex) "ENTER PASSPORTPRO STUDIO" else "CONTINUE", fontWeight = FontWeight.Bold) }
+        TextButton(onClick = onContinue) { Text(if (page == pages.lastIndex) "Get started" else "Skip introduction", color = Muted) }
+        Text("Professional photo studio • Your files stay on your device", color = Muted, fontSize = 10.sp, textAlign = androidx.compose.ui.text.style.TextAlign.Center)
+    }
+}
+
+@Composable
+private fun UserGuideScreen(modifier: Modifier = Modifier, onBack: () -> Unit) {
+    val guides = listOf(
+        Triple("1. Start a photo session", "Open New Session. Allow camera access when asked, position one face inside the oval guide and capture. Use the camera switch and torch controls when needed.", Icons.Default.CameraAlt),
+        Triple("2. Edit an existing photo", "Choose Photo Editor from Home, tap Choose Photo from Device and select an image from Gallery, Downloads or another storage location. You do not need to capture a new photo.", Icons.Default.PhotoLibrary),
+        Triple("3. Refine the photograph", "Use crop presets or custom dimensions, adjust brightness and colour, replace the background, refine hair and edges, rotate or mirror, and use perspective correction when required. Save the finished image.", Icons.Default.AutoFixHigh),
+        Triple("4. Prepare a print sheet", "Open Print Designer, select your photographs, choose a passport or print layout, set copies, margins, spacing and DPI, then export and share the PDF. Check your printer's paper and scaling settings before printing.", Icons.Default.Print),
+        Triple("5. Deliver and manage jobs", "Use Gallery to preview and share photos. Register customers and jobs, update job progress, record payments, issue receipts and review business reports and the cashbook.", Icons.Default.People),
+        Triple("6. Protect your studio data", "Open Backup & Restore to create a full or selective backup and restore it when needed. Keep a copy of important backups somewhere separate from your phone.", Icons.Default.Security)
+    )
+    Column(modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(20.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            IconButton(onClick = onBack) { Icon(Icons.Default.ArrowBack, contentDescription = "Back", tint = Gold) }
+            Column {
+                Text("PASSPORTPRO QUICK GUIDE", color = Gold, fontSize = 11.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.2.sp)
+                Text("Hints, help and getting started", color = Color.White, fontSize = 21.sp, fontWeight = FontWeight.Bold)
+            }
+        }
+        Surface(color = Gold.copy(alpha = .12f), shape = RoundedCornerShape(15.dp)) {
+            Column(Modifier.padding(15.dp), verticalArrangement = Arrangement.spacedBy(5.dp)) {
+                Text("A SIMPLE WORKFLOW", color = Gold, fontWeight = FontWeight.Bold, fontSize = 11.sp)
+                Text("Capture or import  →  Edit  →  Print  →  Deliver  →  Record the job  →  Back up", color = Color.White, fontSize = 13.sp)
+            }
+        }
+        guides.forEach { guide ->
+            Surface(color = Panel, shape = RoundedCornerShape(17.dp), modifier = Modifier.fillMaxWidth()) {
+                Row(Modifier.padding(16.dp), horizontalArrangement = Arrangement.spacedBy(13.dp), verticalAlignment = Alignment.Top) {
+                    Icon(guide.third, contentDescription = null, tint = Gold, modifier = Modifier.size(25.dp))
+                    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                        Text(guide.first, color = Color.White, fontWeight = FontWeight.Bold, fontSize = 15.sp)
+                        Text(guide.second, color = Muted, fontSize = 13.sp, lineHeight = 19.sp)
+                    }
+                }
+            }
+        }
+        Surface(color = Panel, shape = RoundedCornerShape(17.dp)) {
+            Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                Text("HELPFUL STUDIO HINTS", color = Gold, fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                Text("• Use good, even lighting and keep the camera at face level.\n• Keep the background plain and avoid harsh shadows.\n• Check the crop dimensions and print preview before exporting.\n• Use 300 DPI for a good balance of print quality and file size; use 600 DPI when higher detail is needed and supported.\n• Confirm the correct printer, paper size and scaling before printing.\n• Back up regularly, especially before changing phones or restoring records.", color = Muted, fontSize = 13.sp, lineHeight = 20.sp)
+            }
+        }
+        Button(onClick = onBack, modifier = Modifier.fillMaxWidth(), colors = ButtonDefaults.buttonColors(containerColor = Gold, contentColor = Ink)) { Text("BACK TO STUDIO HOME", fontWeight = FontWeight.Bold) }
     }
 }
 

@@ -180,7 +180,7 @@ internal fun PrintDesignerScreen(modifier: Modifier = Modifier) {
     }
 
     Column(modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        Text("PHASE 5 • PRINT DESIGNER", color=Color(0xFFE4B45D), fontSize=11.sp, fontWeight=FontWeight.Bold, letterSpacing=1.3.sp)
+        Text("PROFESSIONAL PRINT DESIGNER", color=Color(0xFFE4B45D), fontSize=11.sp, fontWeight=FontWeight.Bold, letterSpacing=1.3.sp)
         Text("Print-ready photo sheets", color=Color.White, fontSize=24.sp, fontWeight=FontWeight.Bold)
         Text("Arrange passport and ID photographs on printable sheets. Works offline.", color=Color(0xFF9AA7B8), fontSize=12.sp)
 

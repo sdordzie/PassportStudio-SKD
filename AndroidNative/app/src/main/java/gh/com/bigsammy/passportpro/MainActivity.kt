@@ -68,6 +68,7 @@ class MainActivity : ComponentActivity() {
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun PassportProApp() {
     var tab by remember { mutableStateOf("Home") }

@@ -73,7 +73,7 @@ private fun PassportProApp() {
     MaterialTheme(colorScheme = darkColorScheme(primary = Gold, background = Ink, surface = Panel, onBackground = Color.White, onSurface = Color.White)) {
         Scaffold(containerColor = Ink, bottomBar = {
             NavigationBar(containerColor = Panel) {
-                listOf("Home" to Icons.Default.Home, "Capture" to Icons.Default.CameraAlt, "Customers" to Icons.Default.People, "Gallery" to Icons.Default.PhotoLibrary, "More" to Icons.Default.Menu).forEach { (label, icon) ->
+                listOf("Home" to Icons.Default.Home, "Capture" to Icons.Default.CameraAlt, "Customers" to Icons.Default.People, "Gallery" to Icons.Default.PhotoLibrary, "Print" to Icons.Default.Print, "More" to Icons.Default.Menu).forEach { (label, icon) ->
                     NavigationBarItem(selected = tab == label, onClick = { tab = label }, icon = { Icon(icon, contentDescription = label) }, label = { Text(label, fontSize = 10.sp) }, colors = NavigationBarItemDefaults.colors(selectedIconColor = Gold, selectedTextColor = Gold, indicatorColor = Gold.copy(alpha = .14f), unselectedIconColor = Muted, unselectedTextColor = Muted))
                 }
             }
@@ -83,6 +83,7 @@ private fun PassportProApp() {
                 "Capture" -> CameraStudioScreen(Modifier.padding(padding))
                 "Customers" -> CustomersScreen(Modifier.padding(padding))
                 "Gallery" -> GalleryScreen(Modifier.padding(padding))
+                "Print" -> PrintDesignerScreen(Modifier.padding(padding))
                 else -> Workspace(tab, Modifier.padding(padding))
             }
         }

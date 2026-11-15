@@ -75,7 +75,7 @@ internal fun CustomersScreen(modifier: Modifier = Modifier) {
     var selectedCustomerIds by remember { mutableStateOf(setOf<Long>()) }
     var confirmDeleteCustomers by remember { mutableStateOf(false) }
     Column(modifier.fillMaxSize().padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-        Text("CUSTOMER MANAGEMENT • PHASE 4", color=Color(0xFFE4B45D), fontSize=11.sp, fontWeight=FontWeight.Bold)
+        Text("CUSTOMER MANAGEMENT", color=Color(0xFFE4B45D), fontSize=11.sp, fontWeight=FontWeight.Bold)
         Text("Customer records", color=Color.White, fontSize=24.sp, fontWeight=FontWeight.Bold)
         Text("Save customer contacts and notes locally on this device.", color=Color(0xFF9AA7B8), fontSize=12.sp)
         OutlinedTextField(value=name,onValueChange={name=it},label={Text("Customer name")},singleLine=true,modifier=Modifier.fillMaxWidth())

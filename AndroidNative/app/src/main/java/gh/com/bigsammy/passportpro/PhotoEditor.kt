@@ -26,6 +26,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import java.io.File
 import java.io.FileOutputStream
+import java.nio.ByteOrder
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -89,12 +90,12 @@ internal fun PhotoEditorScreen(photoPath: String, onRetake: () -> Unit, onSaved:
                 detector.process(InputImage.fromBitmap(src,0))
                     .addOnSuccessListener { mask ->
                         try {
-                            val buf=mask.buffer; buf.rewind()
+                            val buf=mask.buffer.order(ByteOrder.nativeOrder()); buf.rewind()
                             val mw=mask.width; val mh=mask.height
                             val input=IntArray(src.width*src.height); src.getPixels(input,0,src.width,0,0,src.width,src.height)
                             val output=IntArray(input.size)
                             for(y in 0 until src.height) for(x in 0 until src.width) {
-                                val confidence=buf.get(min(mh-1,y*mh/src.height)*mw+min(mw-1,x*mw/src.width)).coerceIn(0f,1f)
+                                val confidence=buf.getFloat((min(mh-1,y*mh/src.height)*mw+min(mw-1,x*mw/src.width))*4).coerceIn(0f,1f)
                                 val p=input[y*src.width+x]
                                 val r=(Pixel.red(p)*confidence+Pixel.red(background)*(1-confidence)).toInt()
                                 val g=(Pixel.green(p)*confidence+Pixel.green(background)*(1-confidence)).toInt()

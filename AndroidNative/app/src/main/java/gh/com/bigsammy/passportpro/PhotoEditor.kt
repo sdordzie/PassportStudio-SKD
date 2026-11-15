@@ -176,6 +176,59 @@ private fun perspectiveCorrect(source: Bitmap, corners: List<Offset>): Bitmap {
     return output
 }
 
+private fun refineSegmentationMask(raw: FloatArray, width: Int, height: Int, radius: Int, edgeBias: Float): FloatArray {
+    if (width <= 0 || height <= 0 || raw.size != width * height) return raw
+    val horizontal = FloatArray(raw.size)
+    val weights = when (radius.coerceIn(0, 3)) {
+        0 -> floatArrayOf(1f)
+        1 -> floatArrayOf(0.25f, 0.5f, 0.25f)
+        2 -> floatArrayOf(0.0625f, 0.25f, 0.375f, 0.25f, 0.0625f)
+        else -> floatArrayOf(0.03125f, 0.109375f, 0.21875f, 0.28125f, 0.21875f, 0.109375f, 0.03125f)
+    }
+    val reach = weights.size / 2
+    for (y in 0 until height) for (x in 0 until width) {
+        var sum = 0f; var total = 0f
+        for (k in -reach..reach) {
+            val xx = (x + k).coerceIn(0, width - 1)
+            val weight = weights[k + reach]
+            sum += raw[y * width + xx] * weight; total += weight
+        }
+        horizontal[y * width + x] = sum / total
+    }
+    val smooth = FloatArray(raw.size)
+    for (y in 0 until height) for (x in 0 until width) {
+        var sum = 0f; var total = 0f
+        for (k in -reach..reach) {
+            val yy = (y + k).coerceIn(0, height - 1)
+            val weight = weights[k + reach]
+            sum += horizontal[yy * width + x] * weight; total += weight
+        }
+        val original = raw[y * width + x]
+        val blurred = sum / total
+        val edge = kotlin.math.abs(original - 0.5f) * 2f
+        smooth[y * width + x] = (original * edgeBias + blurred * (1f - edgeBias)).coerceIn(0f, 1f)
+    }
+    return smooth
+}
+
+private fun sampleMaskBilinear(mask: FloatArray, width: Int, height: Int, x: Float, y: Float): Float {
+    val px = x.coerceIn(0f, (width - 1).toFloat())
+    val py = y.coerceIn(0f, (height - 1).toFloat())
+    val x0 = px.toInt(); val y0 = py.toInt()
+    val x1 = (x0 + 1).coerceAtMost(width - 1); val y1 = (y0 + 1).coerceAtMost(height - 1)
+    val fx = px - x0; val fy = py - y0
+    val a = mask[y0 * width + x0] * (1f - fx) + mask[y0 * width + x1] * fx
+    val b = mask[y1 * width + x0] * (1f - fx) + mask[y1 * width + x1] * fx
+    return (a * (1f - fy) + b * fy).coerceIn(0f, 1f)
+}
+
+private fun smoothAlpha(value: Float, softness: Float): Float {
+    val low = (0.5f - softness.coerceIn(0.02f, 0.48f)).coerceIn(0f, 0.49f)
+    val high = 1f - low
+    val t = ((value - low) / (high - low)).coerceIn(0f, 1f)
+    return t * t * (3f - 2f * t)
+}
+
 @Composable
 internal fun PhotoEditorScreen(photoPath: String, onRetake: () -> Unit, onSaved: () -> Unit) {
     val context = LocalContext.current
@@ -187,6 +240,9 @@ internal fun PhotoEditorScreen(photoPath: String, onRetake: () -> Unit, onSaved:
     var preview by remember(photoPath) { mutableStateOf(original?.let { fitPreview(it, 1000) }) }
     var perspectiveGuide by remember(photoPath) { mutableStateOf(original?.let { fitPreview(it, 1000) }) }
     var background by remember { mutableIntStateOf(Pixel.WHITE) }
+    var maskSoftness by remember { mutableFloatStateOf(0.18f) }
+    var maskDetail by remember { mutableFloatStateOf(0.72f) }
+    var maskRadius by remember { mutableIntStateOf(2) }
     var brightness by remember { mutableFloatStateOf(0f) }
     var contrast by remember { mutableFloatStateOf(1f) }
     var saturation by remember { mutableFloatStateOf(1f) }
@@ -387,11 +443,19 @@ internal fun PhotoEditorScreen(photoPath: String, onRetake: () -> Unit, onSaved:
                 FilterChip(selected=flipVertical, onClick={recordUndo(); flipVertical=!flipVertical}, label={Text("Flip ↕")})
                 Text("Rotation: $rotation°", color=Color(0xFF9AA7B8), fontSize=10.sp, modifier=Modifier.align(Alignment.CenterVertically))
             }
-            Text("AI BACKGROUND", color=Color(0xFF9AA7B8), fontSize=10.sp, fontWeight=FontWeight.Bold)
+            Text("AI BACKGROUND • EDGE REFINEMENT", color=Color(0xFF9AA7B8), fontSize=10.sp, fontWeight=FontWeight.Bold)
             Row(Modifier.horizontalScroll(androidx.compose.foundation.rememberScrollState()), horizontalArrangement=Arrangement.spacedBy(6.dp)) {
                 listOf("White" to Pixel.WHITE, "Blue" to Pixel.rgb(35,91,170), "Red" to Pixel.rgb(190,35,48), "Grey" to Pixel.LTGRAY).forEach { (label, color) ->
                     FilterChip(selected=background==color, onClick={background=color}, label={Text(label)})
                 }
+            }
+            Text("Edge softness ${(maskSoftness*100).toInt()}%", color=Color(0xFF9AA7B8), fontSize=10.sp)
+            Slider(value=maskSoftness,onValueChange={maskSoftness=it},valueRange=0.04f..0.42f)
+            Text("Fine-detail preservation ${(maskDetail*100).toInt()}%", color=Color(0xFF9AA7B8), fontSize=10.sp)
+            Slider(value=maskDetail,onValueChange={maskDetail=it},valueRange=0f..1f)
+            Row(horizontalArrangement=Arrangement.spacedBy(5.dp),verticalAlignment=Alignment.CenterVertically) {
+                Text("Mask smoothing",color=Color(0xFF9AA7B8),fontSize=10.sp)
+                listOf(0,1,2,3).forEach { level -> FilterChip(selected=maskRadius==level,onClick={maskRadius=level},label={Text(listOf("Off","Low","Medium","High")[level],fontSize=9.sp)}) }
             }
             Button(
                 onClick = {
@@ -399,6 +463,9 @@ internal fun PhotoEditorScreen(photoPath: String, onRetake: () -> Unit, onSaved:
                     busy = true
                     status = "AI is analysing your photograph…"
                     val selectedBackground = background
+                    val selectedSoftness = maskSoftness
+                    val selectedDetail = maskDetail
+                    val selectedRadius = maskRadius
                     val detector = Segmentation.getClient(
                         SelfieSegmenterOptions.Builder().setDetectorMode(SelfieSegmenterOptions.SINGLE_IMAGE_MODE).build()
                     )
@@ -411,7 +478,8 @@ internal fun PhotoEditorScreen(photoPath: String, onRetake: () -> Unit, onSaved:
                                         val mw = mask.width
                                         val mh = mask.height
                                         val buffer = mask.buffer.order(ByteOrder.nativeOrder()).apply { rewind() }
-                                        val confidence = FloatArray(mw * mh) { buffer.getFloat().coerceIn(0f, 1f) }
+                                        val rawMask = FloatArray(mw * mh) { buffer.getFloat().coerceIn(0f, 1f) }
+                                        val confidence = refineSegmentationMask(rawMask,mw,mh,selectedRadius,selectedDetail)
                                         val input = IntArray(source.width * source.height)
                                         source.getPixels(input, 0, source.width, 0, 0, source.width, source.height)
                                         val output = IntArray(input.size)
@@ -422,7 +490,8 @@ internal fun PhotoEditorScreen(photoPath: String, onRetake: () -> Unit, onSaved:
                                             val my = (y.toLong() * mh / source.height).toInt().coerceAtMost(mh - 1)
                                             for (x in 0 until source.width) {
                                                 val mx = (x.toLong() * mw / source.width).toInt().coerceAtMost(mw - 1)
-                                                val alpha = confidence[my * mw + mx]
+                                                val sampled = sampleMaskBilinear(confidence,mw,mh,(x.toFloat() * mw / source.width),(y.toFloat() * mh / source.height))
+                                                val alpha = smoothAlpha(sampled,selectedSoftness)
                                                 val p = input[y * source.width + x]
                                                 output[y * source.width + x] = Pixel.rgb(
                                                     (Pixel.red(p) * alpha + br * (1f-alpha)).toInt().coerceIn(0,255),
@@ -436,7 +505,7 @@ internal fun PhotoEditorScreen(photoPath: String, onRetake: () -> Unit, onSaved:
                                         }
                                     }
                                     editedBase = result
-                                    status = "Background replaced. Your preview has been updated."
+                                    status = "Background replaced with refined edges. Preview updated."
                                 } catch (e: Exception) {
                                     status = "Background replacement failed: ${e.localizedMessage ?: "try another photo"}"
                                 } finally {

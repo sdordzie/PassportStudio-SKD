@@ -29,7 +29,7 @@ jobs:
           test -n "$KEYSTORE_PASSWORD" || (echo "Missing PASSPORTPRO_KEYSTORE_PASSWORD repository secret" && exit 1)
           test -n "$KEY_ALIAS" || (echo "Missing PASSPORTPRO_KEY_ALIAS repository secret" && exit 1)
           test -n "$KEY_PASSWORD" || (echo "Missing PASSPORTPRO_KEY_PASSWORD repository secret" && exit 1)
-          printf '%s' "$KEYSTORE_BASE64" | tr -cd 'A-Za-z0-9+/=' | base64 --decode > "$KEYSTORE_FILE"
+          printf '%s' "$KEYSTORE_BASE64" | tr -cd 'A-Za-z0-9+/=' | base64 --decode > "$GITHUB_WORKSPACE/AndroidNative/app/$KEYSTORE_FILE"
           test -s "$KEYSTORE_FILE" || (echo "Decoded keystore is empty; re-copy the complete Base64 file contents" && exit 1)
 
       - name: Set up JDK 17

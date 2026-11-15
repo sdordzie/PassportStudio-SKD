@@ -151,6 +151,13 @@ internal fun BusinessManagementScreen(modifier: Modifier = Modifier) {
     var paymentMethod by remember { mutableStateOf("Cash") }
     var paymentReference by remember { mutableStateOf("") }
     var paymentMessage by remember { mutableStateOf("") }
+    var editJob by remember { mutableStateOf<StudioJob?>(null) }
+    var editCustomer by remember { mutableStateOf("") }
+    var editPhone by remember { mutableStateOf("") }
+    var editService by remember { mutableStateOf("") }
+    var editTotal by remember { mutableStateOf("") }
+    var editDue by remember { mutableStateOf("") }
+    var editMessage by remember { mutableStateOf("") }
     val totalPesewas = ((total.toDoubleOrNull() ?: 0.0) * 100).toLong().coerceAtLeast(0)
     val paidPesewas = ((paid.toDoubleOrNull() ?: 0.0) * 100).toLong().coerceAtLeast(0)
     val now = Calendar.getInstance()
@@ -182,7 +189,7 @@ internal fun BusinessManagementScreen(modifier: Modifier = Modifier) {
     }
 
     Column(modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        Text("PHASE 11 • PROFESSIONAL STUDIO OPERATIONS", color = BizGold, fontSize = 10.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.sp)
+        Text("PHASE 13 • JOB EDITING & AUDIT TRAIL", color = BizGold, fontSize = 10.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.sp)
         Text("Studio operations", color = Color.White, fontSize = 25.sp, fontWeight = FontWeight.Bold)
         Text("Track each job from registration to delivery, review customer history and monitor business performance.", color = BizMuted, fontSize = 12.sp)
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -287,6 +294,15 @@ internal fun BusinessManagementScreen(modifier: Modifier = Modifier) {
                             val paymentDate = SimpleDateFormat("dd MMM yyyy, HH:mm", Locale.getDefault()).format(Date(payment.created))
                             Text("${money(payment.amountPesewas)} • ${payment.method} • $paymentDate" + if (payment.reference.isNotBlank()) " • ${payment.reference}" else "", color = Color.White, fontSize = 10.sp)
                         }
+                        TextButton(onClick = {
+                            editJob = job
+                            editCustomer = job.customer
+                            editPhone = job.phone
+                            editService = job.service
+                            editTotal = String.format(Locale.US, "%.2f", job.totalPesewas / 100.0)
+                            editDue = job.dueDate
+                            editMessage = ""
+                        }) { Text("EDIT JOB DETAILS", color = BizGold, fontSize = 10.sp) }
                         Box {
                             TextButton(onClick = { menuOpen = true }) { Text("UPDATE JOB STAGE ▾", color = BizGold, fontSize = 10.sp) }
                             DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
@@ -304,6 +320,29 @@ internal fun BusinessManagementScreen(modifier: Modifier = Modifier) {
                     }
                 }
             }
+        }
+        if (editJob != null) {
+            val target = editJob!!
+            AlertDialog(onDismissRequest = { editJob = null }, title = { Text("Edit job details") },
+                text = { Column(verticalArrangement = Arrangement.spacedBy(7.dp)) {
+                    OutlinedTextField(editCustomer, { editCustomer = it }, label = { Text("Customer name") }, singleLine = true)
+                    OutlinedTextField(editPhone, { editPhone = it }, label = { Text("Phone") }, singleLine = true)
+                    OutlinedTextField(editService, { editService = it }, label = { Text("Service") }, singleLine = true)
+                    OutlinedTextField(editTotal, { editTotal = it.filter { ch -> ch.isDigit() || ch == '.' } }, label = { Text("Total (GH₵)") }, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal), singleLine = true)
+                    OutlinedTextField(editDue, { editDue = it }, label = { Text("Due date") }, singleLine = true)
+                    Text("Total cannot be lower than payments already received (" + money(target.paidPesewas) + ").", color = BizMuted, fontSize = 10.sp)
+                    if (editMessage.isNotBlank()) Text(editMessage, color = Color(0xFFE18A75), fontSize = 11.sp)
+                } },
+                confirmButton = { TextButton(onClick = {
+                    val amount = ((editTotal.toDoubleOrNull() ?: 0.0) * 100).toLong()
+                    if (amount < target.paidPesewas) editMessage = "Total cannot be less than the amount already paid."
+                    else if (db.updateJob(target, editCustomer, editPhone, editService, amount, editDue)) {
+                        jobs = db.all()
+                        editJob = null
+                        message = "Job updated successfully."
+                    } else editMessage = "Enter a valid customer, service and total."
+                }) { Text("Save changes", color = BizGold) } },
+                dismissButton = { TextButton(onClick = { editJob = null }) { Text("Cancel") } })
         }
         if (paymentJob != null) {
             val target = paymentJob!!

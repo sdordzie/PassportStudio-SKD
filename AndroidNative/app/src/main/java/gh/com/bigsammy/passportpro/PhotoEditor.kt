@@ -247,19 +247,26 @@ internal fun PhotoEditorScreen(photoPath: String, onRetake: () -> Unit, onSaved:
     var maskSoftness by remember { mutableFloatStateOf(0.18f) }
     var maskDetail by remember { mutableFloatStateOf(0.72f) }
     var maskRadius by remember { mutableIntStateOf(2) }
+    val editorDefaults = remember {
+        context.getSharedPreferences("passportpro_editor_defaults", android.content.Context.MODE_PRIVATE)
+    }
+    val hasSavedCustomDefault = remember {
+        editorDefaults.getBoolean("use_custom_dimensions", false)
+    }
     var brightness by remember { mutableFloatStateOf(0f) }
     var contrast by remember { mutableFloatStateOf(1f) }
     var saturation by remember { mutableFloatStateOf(1f) }
-    var crop by remember { mutableStateOf("Original") }
+    var crop by remember { mutableStateOf(if (hasSavedCustomDefault) "Custom" else "Original") }
     var perspectiveCorners by remember { mutableStateOf(listOf(Offset(0f, 0f), Offset(1f, 0f), Offset(1f, 1f), Offset(0f, 1f))) }
     var perspectiveEnabled by remember { mutableStateOf(false) }
     var rotation by remember(photoPath) { mutableIntStateOf(0) }
     var flipHorizontal by remember(photoPath) { mutableStateOf(false) }
     var flipVertical by remember(photoPath) { mutableStateOf(false) }
-    var customWidth by remember { mutableStateOf("600") }
-    var customHeight by remember { mutableStateOf("800") }
-    var customUnit by remember { mutableStateOf("px") }
-    var outputDpi by remember { mutableIntStateOf(300) }
+    var customWidth by remember { mutableStateOf(editorDefaults.getString("width", "600") ?: "600") }
+    var customHeight by remember { mutableStateOf(editorDefaults.getString("height", "800") ?: "800") }
+    var customUnit by remember { mutableStateOf(editorDefaults.getString("unit", "px") ?: "px") }
+    var outputDpi by remember { mutableIntStateOf(editorDefaults.getInt("dpi", 300)) }
+    var customDefaultSaved by remember { mutableStateOf(hasSavedCustomDefault) }
     var busy by remember { mutableStateOf(false) }
     var showOriginal by remember { mutableStateOf(false) }
     var undoStack by remember { mutableStateOf(listOf<EditorSnapshot>()) }
@@ -553,6 +560,42 @@ internal fun PhotoEditorScreen(photoPath: String, onRetake: () -> Unit, onSaved:
                     }
                 }
                 Text("Preview follows the width-to-height ratio. Physical units convert to pixels using the selected DPI.", color=Color(0xFF9AA7B8), fontSize=10.sp)
+                Row(
+                    Modifier.fillMaxWidth(),
+                    horizontalArrangement=Arrangement.spacedBy(8.dp),
+                    verticalAlignment=Alignment.CenterVertically
+                ) {
+                    OutlinedButton(
+                        onClick = {
+                            val valid = customWidth.toFloatOrNull()?.let { it > 0f } == true &&
+                                customHeight.toFloatOrNull()?.let { it > 0f } == true
+                            if (valid) {
+                                editorDefaults.edit()
+                                    .putString("width", customWidth)
+                                    .putString("height", customHeight)
+                                    .putString("unit", customUnit)
+                                    .putInt("dpi", outputDpi)
+                                    .putBoolean("use_custom_dimensions", true)
+                                    .apply()
+                                customDefaultSaved = true
+                                status = "Default dimensions saved. They will be applied automatically to future editor photos."
+                            } else {
+                                status = "Enter valid width and height before saving defaults."
+                            }
+                        },
+                        modifier = Modifier.weight(1f)
+                    ) { Text(if (customDefaultSaved) "Update saved default" else "Save as default") }
+                    if (customDefaultSaved) {
+                        TextButton(onClick = {
+                            editorDefaults.edit().putBoolean("use_custom_dimensions", false).apply()
+                            customDefaultSaved = false
+                            status = "Automatic custom dimensions turned off. Saved values are retained."
+                        }) { Text("Turn off") }
+                    }
+                }
+                if (customDefaultSaved) {
+                    Text("Automatic default is ON: " + customWidth + " × " + customHeight + " " + customUnit + (if (customUnit == "px") "" else " • " + outputDpi + " DPI"), color=Color(0xFF64D6A0), fontSize=10.sp)
+                }
             }
             Text("Brightness ${(brightness*100).toInt()}%",color=Color(0xFF9AA7B8),fontSize=10.sp)
             Slider(value=brightness,onValueChange={recordUndo(); brightness=it},valueRange=-.35f.. .35f)
@@ -565,8 +608,12 @@ internal fun PhotoEditorScreen(photoPath: String, onRetake: () -> Unit, onSaved:
                 OutlinedButton(onClick=onRetake,enabled=!busy,modifier=Modifier.weight(1f)) { Text("Retake") }
                 OutlinedButton(onClick={
                     recordUndo(); editedBase=original; brightness=0f; contrast=1f; saturation=1f; crop="Original"; rotation=0; flipHorizontal=false; flipVertical=false; perspectiveEnabled=false; perspectiveCorners=listOf(Offset(0f,0f),Offset(1f,0f),Offset(1f,1f),Offset(0f,1f))
-                    customWidth="600"; customHeight="800"; customUnit="px"; outputDpi=300
-                    showOriginal=false; status="Edits reset."
+                    customWidth=editorDefaults.getString("width", "600") ?: "600"
+                    customHeight=editorDefaults.getString("height", "800") ?: "800"
+                    customUnit=editorDefaults.getString("unit", "px") ?: "px"
+                    outputDpi=editorDefaults.getInt("dpi", 300)
+                    crop=if (editorDefaults.getBoolean("use_custom_dimensions", false)) "Custom" else "Original"
+                    showOriginal=false; status="Edits reset to the saved studio defaults."
                 },enabled=!busy,modifier=Modifier.weight(1f)) { Text("Reset") }
                 Button(
                     onClick={

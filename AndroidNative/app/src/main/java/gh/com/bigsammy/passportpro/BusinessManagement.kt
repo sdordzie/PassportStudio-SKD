@@ -43,10 +43,11 @@ private data class StudioJob(
     val balancePesewas get() = (totalPesewas - paidPesewas).coerceAtLeast(0)
     val paymentStatus get() = when { balancePesewas == 0L -> "PAID"; paidPesewas > 0L -> "PARTIAL"; else -> "UNPAID" }
 }
-private class BusinessDatabase(context: Context) : SQLiteOpenHelper(context, "passportpro_business.db", null, 3) {
+private class BusinessDatabase(context: Context) : SQLiteOpenHelper(context, "passportpro_business.db", null, 4) {
     override fun onCreate(db: SQLiteDatabase) {
         db.execSQL("CREATE TABLE jobs (id INTEGER PRIMARY KEY AUTOINCREMENT, customer TEXT NOT NULL, phone TEXT NOT NULL DEFAULT '', service TEXT NOT NULL, total_pesewas INTEGER NOT NULL, paid_pesewas INTEGER NOT NULL DEFAULT 0, created INTEGER NOT NULL, workflow_status TEXT NOT NULL DEFAULT 'REGISTERED', due_date TEXT NOT NULL DEFAULT '')")
         db.execSQL("CREATE TABLE payments (id INTEGER PRIMARY KEY AUTOINCREMENT, job_id INTEGER NOT NULL, amount_pesewas INTEGER NOT NULL, method TEXT NOT NULL DEFAULT 'Cash', reference TEXT NOT NULL DEFAULT '', created INTEGER NOT NULL)")
+        db.execSQL("CREATE TABLE job_audit (id INTEGER PRIMARY KEY AUTOINCREMENT, job_id INTEGER NOT NULL, action TEXT NOT NULL, details TEXT NOT NULL, created INTEGER NOT NULL)")
     }
     override fun onUpgrade(db: SQLiteDatabase, oldVersion: Int, newVersion: Int) {
         if (oldVersion < 2) {
@@ -54,6 +55,7 @@ private class BusinessDatabase(context: Context) : SQLiteOpenHelper(context, "pa
             db.execSQL("ALTER TABLE jobs ADD COLUMN due_date TEXT NOT NULL DEFAULT ''")
         }
         if (oldVersion < 3) db.execSQL("CREATE TABLE IF NOT EXISTS payments (id INTEGER PRIMARY KEY AUTOINCREMENT, job_id INTEGER NOT NULL, amount_pesewas INTEGER NOT NULL, method TEXT NOT NULL DEFAULT 'Cash', reference TEXT NOT NULL DEFAULT '', created INTEGER NOT NULL)")
+        if (oldVersion < 4) db.execSQL("CREATE TABLE IF NOT EXISTS job_audit (id INTEGER PRIMARY KEY AUTOINCREMENT, job_id INTEGER NOT NULL, action TEXT NOT NULL, details TEXT NOT NULL, created INTEGER NOT NULL)")
     }
     fun add(customer: String, phone: String, service: String, total: Long, paid: Long, due: String) {
         val v = ContentValues().apply {
@@ -87,6 +89,20 @@ private class BusinessDatabase(context: Context) : SQLiteOpenHelper(context, "pa
             while (c.moveToNext()) rows.add(StudioPayment(c.getLong(0), c.getLong(1), c.getString(2), c.getString(3), c.getLong(4)))
         }
         return rows
+    }
+    fun updateJob(job: StudioJob, customer: String, phone: String, service: String, total: Long, due: String): Boolean {
+        if (customer.isBlank() || service.isBlank() || total < job.paidPesewas) return false
+        val values = ContentValues().apply {
+            put("customer", customer.trim()); put("phone", phone.trim()); put("service", service.trim())
+            put("total_pesewas", total); put("due_date", due.trim())
+        }
+        if (writableDatabase.update("jobs", values, "id=?", arrayOf(job.id.toString())) != 1) return false
+        writableDatabase.insert("job_audit", null, ContentValues().apply {
+            put("job_id", job.id); put("action", "JOB UPDATED")
+            put("details", "Job details edited; revised total " + money(total))
+            put("created", System.currentTimeMillis())
+        })
+        return true
     }
     fun updateWorkflow(id: Long, stage: String) {
         writableDatabase.update("jobs", ContentValues().apply { put("workflow_status", stage) }, "id=?", arrayOf(id.toString()))

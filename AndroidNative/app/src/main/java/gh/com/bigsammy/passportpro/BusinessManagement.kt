@@ -211,6 +211,27 @@ internal fun BusinessManagementScreen(modifier: Modifier = Modifier) {
             MetricCard("OUTSTANDING", money(balance), Modifier.weight(1f))
         }
         Button(onClick = {
+            val paymentsCsv = buildString {
+                append("Transaction ID,Job ID,Customer,Phone,Service,Payment Date,Method,Reference,Amount (GHS)\\n")
+                jobs.forEach { job ->
+                    db.payments(job.id).forEach { payment ->
+                        val fields = listOf(payment.id.toString(), job.id.toString(), job.customer, job.phone, job.service,
+                            SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.US).format(Date(payment.created)),
+                            payment.method, payment.reference, String.format(Locale.US, "%.2f", payment.amountPesewas / 100.0))
+                        append(fields.joinToString(",") { "\"" + it.replace("\"", "\"\"") + "\"" }).append("\\n")
+                    }
+                }
+            }
+            val send = Intent(Intent.ACTION_SEND).apply {
+                type = "text/csv"
+                putExtra(Intent.EXTRA_SUBJECT, "PassportPro Studio payment ledger")
+                putExtra(Intent.EXTRA_TEXT, paymentsCsv)
+            }
+            context.startActivity(Intent.createChooser(send, "Export payment ledger"))
+        }, modifier = Modifier.fillMaxWidth(), colors = ButtonDefaults.buttonColors(containerColor = BizPanel, contentColor = BizGold)) {
+            Text("EXPORT PAYMENT LEDGER AS CSV", fontWeight = FontWeight.Bold)
+        }
+        Button(onClick = {
             val csv = buildString {
                 append("Job ID,Customer,Phone,Service,Workflow,Created,Due Date,Total (GHS),Paid (GHS),Balance (GHS),Payment Status\n")
                 jobs.forEach { job ->

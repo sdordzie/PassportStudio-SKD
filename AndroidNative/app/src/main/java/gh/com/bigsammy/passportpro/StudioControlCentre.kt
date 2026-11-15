@@ -128,6 +128,7 @@ private fun ControlField(label: String, value: String, onValue: (String) -> Unit
     OutlinedTextField(value, onValue, modifier = Modifier.fillMaxWidth(), label = { Text(label) }, singleLine = true, keyboardOptions = KeyboardOptions(keyboardType = type), colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = ControlGold, focusedLabelColor = ControlGold, cursorColor = ControlGold))
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun ExposedSetting(label: String, selected: String, options: List<String>, expanded: Boolean, onExpanded: (Boolean) -> Unit, onSelect: (String) -> Unit) {
     ExposedDropdownMenuBox(expanded = expanded, onExpandedChange = onExpanded) {

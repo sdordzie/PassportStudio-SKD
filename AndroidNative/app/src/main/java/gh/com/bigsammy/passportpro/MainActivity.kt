@@ -168,7 +168,10 @@ private fun Dashboard(modifier: Modifier, onCapture: () -> Unit, onNavigate: (St
         StudioTool("Studio Control Centre", "Branding, print, privacy and diagnostics", Icons.Default.Settings, "Control Centre"),
         StudioTool("Hints & User Guide", "Learn the studio workflow step by step", Icons.Default.MenuBook, "Guide")
     )
-    Column(modifier.fillMaxSize().padding(20.dp), verticalArrangement = Arrangement.spacedBy(18.dp)) {
+    Column(
+        modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 20.dp, vertical = 18.dp),
+        verticalArrangement = Arrangement.spacedBy(18.dp)
+    ) {
         Column {
             Text("PASSPORTPRO", color = Gold, fontSize = 12.sp, fontWeight = FontWeight.Bold, letterSpacing = 2.sp)
             Text("Studio", color = Color.White, fontSize = 30.sp, fontWeight = FontWeight.Bold)
@@ -195,17 +198,45 @@ private fun Dashboard(modifier: Modifier, onCapture: () -> Unit, onNavigate: (St
             }
         }
         Text("STUDIO WORKSPACE", color = Muted, fontSize = 11.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.5.sp)
-        LazyVerticalGrid(columns = GridCells.Fixed(2), modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(12.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            items(tools) { tool ->
-                Surface(onClick = { onNavigate(tool.destination) }, color = Panel, shape = RoundedCornerShape(18.dp), modifier = Modifier.fillMaxWidth()) {
-                    Column(Modifier.padding(15.dp), verticalArrangement = Arrangement.spacedBy(9.dp)) {
-                        Icon(tool.icon, null, tint = Gold, modifier = Modifier.size(25.dp))
-                        Text(tool.title, color = Color.White, fontWeight = FontWeight.SemiBold, fontSize = 14.sp)
-                        Text(tool.detail, color = Muted, fontSize = 11.sp)
+        // Full-height workspace tiles inside the dashboard scroll area.
+        // Fixed minimum card height prevents the bottom navigation from clipping tile content.
+        tools.chunked(2).forEach { toolRow ->
+            Row(
+                Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                toolRow.forEach { tool ->
+                    Surface(
+                        onClick = { onNavigate(tool.destination) },
+                        color = Panel,
+                        shape = RoundedCornerShape(18.dp),
+                        modifier = Modifier.weight(1f).heightIn(min = 132.dp)
+                    ) {
+                        Column(
+                            Modifier.fillMaxWidth().padding(14.dp),
+                            verticalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            Icon(tool.icon, contentDescription = null, tint = Gold, modifier = Modifier.size(27.dp))
+                            Text(
+                                tool.title,
+                                color = Color.White,
+                                fontWeight = FontWeight.SemiBold,
+                                fontSize = 13.sp,
+                                lineHeight = 17.sp
+                            )
+                            Text(
+                                tool.detail,
+                                color = Muted,
+                                fontSize = 10.sp,
+                                lineHeight = 14.sp
+                            )
+                        }
                     }
                 }
+                if (toolRow.size == 1) Spacer(Modifier.weight(1f))
             }
         }
+        Spacer(Modifier.height(8.dp))
         Text("PROFESSIONAL CAMERA STUDIO", color = Gold, fontSize = 10.sp, fontWeight = FontWeight.Bold)
     }
 }

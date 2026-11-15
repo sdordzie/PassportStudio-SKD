@@ -81,6 +81,8 @@ private fun PassportProApp() {
             when (tab) {
                 "Home" -> Dashboard(Modifier.padding(padding)) { tab = "Capture" }
                 "Capture" -> CameraStudioScreen(Modifier.padding(padding))
+                "Customers" -> CustomersScreen(Modifier.padding(padding))
+                "Gallery" -> GalleryScreen(Modifier.padding(padding))
                 else -> Workspace(tab, Modifier.padding(padding))
             }
         }

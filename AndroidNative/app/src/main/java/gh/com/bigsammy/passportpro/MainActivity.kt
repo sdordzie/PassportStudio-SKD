@@ -20,6 +20,7 @@ import androidx.camera.view.PreviewView
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
@@ -71,15 +72,15 @@ class MainActivity : ComponentActivity() {
 private fun PassportProApp() {
     var tab by remember { mutableStateOf("Home") }
     MaterialTheme(colorScheme = darkColorScheme(primary = Gold, background = Ink, surface = Panel, onBackground = Color.White, onSurface = Color.White)) {
-        Scaffold(containerColor = Ink, bottomBar = {
+        Scaffold(containerColor = Ink, topBar = {\n            CenterAlignedTopAppBar(\n                title = { Text("PASSPORTPRO STUDIO", color = Gold, fontSize = 13.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.4.sp) },\n                actions = {\n                    IconButton(onClick = { tab = "Print" }) { Icon(Icons.Default.Print, contentDescription = "Open Print Designer", tint = Gold) }\n                },\n                colors = TopAppBarDefaults.centerAlignedTopAppBarColors(containerColor = Ink)\n            )\n        }, bottomBar = {
             NavigationBar(containerColor = Panel) {
-                listOf("Home" to Icons.Default.Home, "Capture" to Icons.Default.CameraAlt, "Customers" to Icons.Default.People, "Gallery" to Icons.Default.PhotoLibrary, "Print" to Icons.Default.Print, "Business" to Icons.Default.AccountBalanceWallet).forEach { (label, icon) ->
+                listOf("Home" to Icons.Default.Home, "Capture" to Icons.Default.CameraAlt, "Customers" to Icons.Default.People, "Gallery" to Icons.Default.PhotoLibrary, "Business" to Icons.Default.AccountBalanceWallet).forEach { (label, icon) ->
                     NavigationBarItem(selected = tab == label, onClick = { tab = label }, icon = { Icon(icon, contentDescription = label) }, label = { Text(label, fontSize = 10.sp) }, colors = NavigationBarItemDefaults.colors(selectedIconColor = Gold, selectedTextColor = Gold, indicatorColor = Gold.copy(alpha = .14f), unselectedIconColor = Muted, unselectedTextColor = Muted))
                 }
             }
         }) { padding ->
             when (tab) {
-                "Home" -> Dashboard(Modifier.padding(padding)) { tab = "Capture" }
+                "Home" -> Dashboard(Modifier.padding(padding), onCapture = { tab = "Capture" }, onNavigate = { tab = it })
                 "Capture" -> CameraStudioScreen(Modifier.padding(padding))
                 "Customers" -> CustomersScreen(Modifier.padding(padding))
                 "Gallery" -> GalleryScreen(Modifier.padding(padding))
@@ -91,17 +92,17 @@ private fun PassportProApp() {
     }
 }
 
-private data class StudioTool(val title: String, val detail: String, val icon: androidx.compose.ui.graphics.vector.ImageVector)
+private data class StudioTool(val title: String, val detail: String, val icon: androidx.compose.ui.graphics.vector.ImageVector, val destination: String)
 
 @Composable
-private fun Dashboard(modifier: Modifier, onCapture: () -> Unit) {
+private fun Dashboard(modifier: Modifier, onCapture: () -> Unit, onNavigate: (String) -> Unit) {
     val tools = listOf(
-        StudioTool("New Session", "Start a customer photo job", Icons.Default.AddAPhoto),
-        StudioTool("Photo Editor", "AI and manual editing", Icons.Default.AutoFixHigh),
-        StudioTool("WhatsApp Delivery", "Individual and group sharing", Icons.Default.Send),
-        StudioTool("Print Designer", "Passport sheets and PDF", Icons.Default.Print),
-        StudioTool("Customers", "Profiles and photo history", Icons.Default.People),
-        StudioTool("Business Reports", "Sales and job summaries", Icons.Default.BarChart)
+        StudioTool("New Session", "Start a customer photo job", Icons.Default.AddAPhoto, "Capture"),
+        StudioTool("Photo Editor", "AI and manual editing", Icons.Default.AutoFixHigh, "Capture"),
+        StudioTool("WhatsApp Delivery", "Individual and group sharing", Icons.Default.Send, "Gallery"),
+        StudioTool("Print Designer", "Passport sheets and PDF", Icons.Default.Print, "Print"),
+        StudioTool("Customers", "Profiles and photo history", Icons.Default.People, "Customers"),
+        StudioTool("Business Reports", "Sales and job summaries", Icons.Default.BarChart, "Business")
     )
     Column(modifier.fillMaxSize().padding(20.dp), verticalArrangement = Arrangement.spacedBy(18.dp)) {
         Column {

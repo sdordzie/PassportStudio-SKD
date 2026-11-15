@@ -66,6 +66,7 @@ private val Ink: Color @Composable get() = if (LocalPassportDark.current) Color(
 private val Panel: Color @Composable get() = if (LocalPassportDark.current) Color(0xFF1B2433) else Color(0xFFFFFFFF)
 private val Gold = Color(0xFFB77B24)
 private val Muted: Color @Composable get() = if (LocalPassportDark.current) Color(0xFF9AA7B8) else Color(0xFF667085)
+private val PrimaryText: Color @Composable get() = if (LocalPassportDark.current) Color(0xFFF7F8FA) else Color(0xFF182230)
 private val Good = Color(0xFF21865A)
 
 class MainActivity : ComponentActivity() {
@@ -85,7 +86,7 @@ private fun PassportProApp() {
     var appearance by remember { mutableStateOf(appearancePrefs.getString("appearance_mode", "System default") ?: "System default") }
     val systemDark = isSystemInDarkTheme()
     val darkMode = when (appearance) { "Light" -> false; "Dark" -> true; else -> systemDark }
-    val palette = if (darkMode) darkColorScheme(primary = Color(0xFFE4B45D), background = Color(0xFF101522), surface = Color(0xFF1B2433), onBackground = Color.White, onSurface = Color.White) else lightColorScheme(primary = Color(0xFF9A6418), background = Color(0xFFF5F6F8), surface = Color.White, onBackground = Color(0xFF182230), onSurface = Color(0xFF182230), secondary = Color(0xFF765016))
+    val palette = if (darkMode) darkColorScheme(primary = Color(0xFFE4B45D), background = Color(0xFF101522), surface = Color(0xFF1B2433), onBackground = Color.White, onSurface = Color.White) else lightColorScheme(primary = Color(0xFF9A6418), background = Color(0xFFF5F6F8), surface = PrimaryText, onBackground = Color(0xFF182230), onSurface = Color(0xFF182230), secondary = Color(0xFF765016))
     var tab by remember { mutableStateOf(if (onboardingPrefs.getBoolean("complete", false)) "Home" else "Welcome") }
     var editorPhotoPath by remember { mutableStateOf<String?>(null) }
     var importError by remember { mutableStateOf<String?>(null) }
@@ -107,7 +108,8 @@ private fun PassportProApp() {
             }
         }
     }
-    MaterialTheme(colorScheme = darkColorScheme(primary = Gold, background = Ink, surface = Panel, onBackground = Color.White, onSurface = Color.White)) {
+    CompositionLocalProvider(LocalPassportDark provides darkMode) {
+    MaterialTheme(colorScheme = palette) {
         Scaffold(containerColor = Ink, topBar = {
             if (tab != "Welcome") CenterAlignedTopAppBar(
                 title = { Text("PASSPORTPRO STUDIO", color = Gold, fontSize = 13.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.4.sp) },
@@ -158,6 +160,7 @@ private fun PassportProApp() {
             }
         }
     }
+    }
 }
 
 private data class StudioTool(val title: String, val detail: String, val icon: androidx.compose.ui.graphics.vector.ImageVector, val destination: String)
@@ -181,13 +184,13 @@ private fun Dashboard(modifier: Modifier, onCapture: () -> Unit, onNavigate: (St
     ) {
         Column {
             Text("PASSPORTPRO", color = Gold, fontSize = 12.sp, fontWeight = FontWeight.Bold, letterSpacing = 2.sp)
-            Text("Studio", color = Color.White, fontSize = 30.sp, fontWeight = FontWeight.Bold)
+            Text("Studio", color = PrimaryText, fontSize = 30.sp, fontWeight = FontWeight.Bold)
             Text("Your photography business, beautifully organised.", color = Muted, fontSize = 12.sp)
         }
         Surface(color = Panel, shape = RoundedCornerShape(24.dp), modifier = Modifier.fillMaxWidth()) {
             Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 Text("READY FOR YOUR NEXT CUSTOMER?", color = Muted, fontSize = 10.sp, fontWeight = FontWeight.Bold)
-                Text("Capture. Create. Deliver.", color = Color.White, fontSize = 23.sp, fontWeight = FontWeight.Bold)
+                Text("Capture. Create. Deliver.", color = PrimaryText, fontSize = 23.sp, fontWeight = FontWeight.Bold)
                 Text("Capture professional ID photos and prepare them for editing, printing and WhatsApp delivery.", color = Muted, fontSize = 13.sp)
                 Button(onClick = onCapture, modifier = Modifier.fillMaxWidth().height(52.dp), colors = ButtonDefaults.buttonColors(containerColor = Gold, contentColor = Ink), shape = RoundedCornerShape(14.dp)) {
                     Icon(Icons.Default.CameraAlt, null); Spacer(Modifier.width(8.dp)); Text("OPEN CAMERA STUDIO", fontWeight = FontWeight.Bold)
@@ -226,7 +229,7 @@ private fun Dashboard(modifier: Modifier, onCapture: () -> Unit, onNavigate: (St
                             Icon(tool.icon, contentDescription = null, tint = Gold, modifier = Modifier.size(27.dp))
                             Text(
                                 tool.title,
-                                color = Color.White,
+                                color = PrimaryText,
                                 fontWeight = FontWeight.SemiBold,
                                 fontSize = 13.sp,
                                 lineHeight = 17.sp
@@ -270,7 +273,7 @@ private fun WelcomeScreen(onContinue: () -> Unit) {
             Box(contentAlignment = Alignment.Center) { Icon(item.third, contentDescription = null, tint = Gold, modifier = Modifier.size(54.dp)) }
         }
         Spacer(Modifier.height(30.dp))
-        Text(item.first, color = Color.White, fontSize = 26.sp, fontWeight = FontWeight.Bold, textAlign = androidx.compose.ui.text.style.TextAlign.Center)
+        Text(item.first, color = PrimaryText, fontSize = 26.sp, fontWeight = FontWeight.Bold, textAlign = androidx.compose.ui.text.style.TextAlign.Center)
         Spacer(Modifier.height(14.dp))
         Text(item.second, color = Muted, fontSize = 15.sp, lineHeight = 23.sp, textAlign = androidx.compose.ui.text.style.TextAlign.Center)
         Spacer(Modifier.height(30.dp))
@@ -306,13 +309,13 @@ private fun UserGuideScreen(modifier: Modifier = Modifier, onBack: () -> Unit) {
             IconButton(onClick = onBack) { Icon(Icons.Default.ArrowBack, contentDescription = "Back", tint = Gold) }
             Column {
                 Text("PASSPORTPRO QUICK GUIDE", color = Gold, fontSize = 11.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.2.sp)
-                Text("Hints, help and getting started", color = Color.White, fontSize = 21.sp, fontWeight = FontWeight.Bold)
+                Text("Hints, help and getting started", color = PrimaryText, fontSize = 21.sp, fontWeight = FontWeight.Bold)
             }
         }
         Surface(color = Gold.copy(alpha = .12f), shape = RoundedCornerShape(15.dp)) {
             Column(Modifier.padding(15.dp), verticalArrangement = Arrangement.spacedBy(5.dp)) {
                 Text("A SIMPLE WORKFLOW", color = Gold, fontWeight = FontWeight.Bold, fontSize = 11.sp)
-                Text("Capture or import  →  Edit  →  Print  →  Deliver  →  Record the job  →  Back up", color = Color.White, fontSize = 13.sp)
+                Text("Capture or import  →  Edit  →  Print  →  Deliver  →  Record the job  →  Back up", color = PrimaryText, fontSize = 13.sp)
             }
         }
         guides.forEach { guide ->
@@ -320,7 +323,7 @@ private fun UserGuideScreen(modifier: Modifier = Modifier, onBack: () -> Unit) {
                 Row(Modifier.padding(16.dp), horizontalArrangement = Arrangement.spacedBy(13.dp), verticalAlignment = Alignment.Top) {
                     Icon(guide.third, contentDescription = null, tint = Gold, modifier = Modifier.size(25.dp))
                     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                        Text(guide.first, color = Color.White, fontWeight = FontWeight.Bold, fontSize = 15.sp)
+                        Text(guide.first, color = PrimaryText, fontWeight = FontWeight.Bold, fontSize = 15.sp)
                         Text(guide.second, color = Muted, fontSize = 13.sp, lineHeight = 19.sp)
                     }
                 }
@@ -354,7 +357,7 @@ private fun PhotoEditorEntryScreen(
         }
         Spacer(Modifier.weight(1f))
         Icon(Icons.Default.AutoFixHigh, contentDescription = null, tint = Gold, modifier = Modifier.size(64.dp))
-        Text("Choose a photograph to edit", color = Color.White, fontSize = 22.sp, fontWeight = FontWeight.Bold)
+        Text("Choose a photograph to edit", color = PrimaryText, fontSize = 22.sp, fontWeight = FontWeight.Bold)
         Text(
             "Select an existing image from your phone, Gallery, Downloads or other available storage. You do not need to take a new picture first.",
             color = Muted, fontSize = 14.sp
@@ -450,7 +453,7 @@ private fun CameraStudioScreen(modifier: Modifier = Modifier) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Column(Modifier.weight(1f)) {
                 Text("CAMERA STUDIO", color = Gold, fontSize = 11.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.5.sp)
-                Text("Passport capture", color = Color.White, fontSize = 23.sp, fontWeight = FontWeight.Bold)
+                Text("Passport capture", color = PrimaryText, fontSize = 23.sp, fontWeight = FontWeight.Bold)
             }
             Surface(color = Panel, shape = RoundedCornerShape(12.dp)) {
                 Text("LIVE CAPTURE", color = Gold, modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp), fontSize = 10.sp, fontWeight = FontWeight.Bold)
@@ -462,7 +465,7 @@ private fun CameraStudioScreen(modifier: Modifier = Modifier) {
         } else if (!hasPermission) {
             Column(Modifier.weight(1f).fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
                 Icon(Icons.Default.NoPhotography, null, tint = Gold, modifier = Modifier.size(52.dp))
-                Text("Camera permission required", color = Color.White, fontSize = 18.sp, fontWeight = FontWeight.Bold)
+                Text("Camera permission required", color = PrimaryText, fontSize = 18.sp, fontWeight = FontWeight.Bold)
                 Text("Allow camera access to use the live passport studio.", color = Muted, fontSize = 13.sp)
                 Button(onClick = { permissionLauncher.launch(Manifest.permission.CAMERA) }, colors = ButtonDefaults.buttonColors(containerColor = Gold, contentColor = Ink)) { Text("Grant camera access") }
             }
@@ -478,7 +481,7 @@ private fun CameraStudioScreen(modifier: Modifier = Modifier) {
                     drawLine(Gold.copy(alpha = .55f), Offset(size.width * .15f, size.height * .78f), Offset(size.width * .85f, size.height * .78f), strokeWidth = 1.dp.toPx())
                 }
                 Surface(color = Ink.copy(alpha = .78f), shape = RoundedCornerShape(20.dp), modifier = Modifier.align(Alignment.TopCenter).padding(10.dp)) {
-                    Text(message, color = if (faceCount == 1) Good else Color.White, modifier = Modifier.padding(horizontal = 14.dp, vertical = 9.dp), fontSize = 12.sp)
+                    Text(message, color = if (faceCount == 1) Good else PrimaryText, modifier = Modifier.padding(horizontal = 14.dp, vertical = 9.dp), fontSize = 12.sp)
                 }
                 Row(Modifier.align(Alignment.BottomCenter).padding(14.dp), horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
                     FilledTonalIconButton(onClick = {
@@ -547,7 +550,7 @@ private fun Workspace(tab: String, modifier: Modifier) {
     Column(modifier.fillMaxSize().padding(28.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
         Icon(Icons.Default.PhotoCamera, null, tint = Gold, modifier = Modifier.size(54.dp))
         Spacer(Modifier.height(16.dp))
-        Text(tab, color = Color.White, fontSize = 25.sp, fontWeight = FontWeight.Bold)
+        Text(tab, color = PrimaryText, fontSize = 25.sp, fontWeight = FontWeight.Bold)
         Spacer(Modifier.height(8.dp))
         Text(detail, color = Muted, fontSize = 14.sp)
         Spacer(Modifier.height(18.dp))

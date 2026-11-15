@@ -33,6 +33,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
@@ -60,11 +61,12 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
-private val Ink = Color(0xFF101522)
-private val Panel = Color(0xFF1B2433)
-private val Gold = Color(0xFFE4B45D)
-private val Muted = Color(0xFF9AA7B8)
-private val Good = Color(0xFF64D6A0)
+internal val LocalPassportDark = compositionLocalOf { true }
+private val Ink: Color @Composable get() = if (LocalPassportDark.current) Color(0xFF101522) else Color(0xFFF5F6F8)
+private val Panel: Color @Composable get() = if (LocalPassportDark.current) Color(0xFF1B2433) else Color(0xFFFFFFFF)
+private val Gold = Color(0xFFB77B24)
+private val Muted: Color @Composable get() = if (LocalPassportDark.current) Color(0xFF9AA7B8) else Color(0xFF667085)
+private val Good = Color(0xFF21865A)
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -79,6 +81,11 @@ private fun PassportProApp() {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val onboardingPrefs = remember { context.getSharedPreferences("passportpro_onboarding", android.content.Context.MODE_PRIVATE) }
+    val appearancePrefs = remember { context.getSharedPreferences("passportpro_studio_settings", android.content.Context.MODE_PRIVATE) }
+    var appearance by remember { mutableStateOf(appearancePrefs.getString("appearance_mode", "System default") ?: "System default") }
+    val systemDark = isSystemInDarkTheme()
+    val darkMode = when (appearance) { "Light" -> false; "Dark" -> true; else -> systemDark }
+    val palette = if (darkMode) darkColorScheme(primary = Color(0xFFE4B45D), background = Color(0xFF101522), surface = Color(0xFF1B2433), onBackground = Color.White, onSurface = Color.White) else lightColorScheme(primary = Color(0xFF9A6418), background = Color(0xFFF5F6F8), surface = Color.White, onBackground = Color(0xFF182230), onSurface = Color(0xFF182230), secondary = Color(0xFF765016))
     var tab by remember { mutableStateOf(if (onboardingPrefs.getBoolean("complete", false)) "Home" else "Welcome") }
     var editorPhotoPath by remember { mutableStateOf<String?>(null) }
     var importError by remember { mutableStateOf<String?>(null) }
@@ -108,7 +115,7 @@ private fun PassportProApp() {
                     IconButton(onClick = { tab = "Guide" }) { Icon(Icons.Default.MenuBook, contentDescription = "Open user guide", tint = Gold) }
                     IconButton(onClick = { tab = "Print" }) { Icon(Icons.Default.Print, contentDescription = "Open Print Designer", tint = Gold) }
                 },
-                colors = TopAppBarDefaults.centerAlignedTopAppBarColors(containerColor = Ink)
+                colors = TopAppBarDefaults.centerAlignedTopAppBarColors(containerColor = Panel, titleContentColor = palette.onSurface)
             )
         }, bottomBar = {
             if (tab != "Welcome" && tab != "Guide") NavigationBar(containerColor = Panel) {
@@ -146,7 +153,7 @@ private fun PassportProApp() {
                 "Print" -> PrintDesignerScreen(Modifier.padding(padding))
                 "Business" -> BusinessManagementScreen(Modifier.padding(padding))
                 "Backup" -> BackupRestoreScreen(Modifier.padding(padding))
-                "Control Centre" -> StudioControlCentreScreen(Modifier.padding(padding))
+                "Control Centre" -> StudioControlCentreScreen(Modifier.padding(padding), appearance = appearance, onAppearanceChange = { appearance = it; appearancePrefs.edit().putString("appearance_mode", it).apply() })
                 else -> Workspace(tab, Modifier.padding(padding))
             }
         }

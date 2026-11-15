@@ -96,6 +96,7 @@ private fun PassportProApp() {
                 "Print" -> PrintDesignerScreen(Modifier.padding(padding))
                 "Business" -> BusinessManagementScreen(Modifier.padding(padding))
                 "Backup" -> BackupRestoreScreen(Modifier.padding(padding))
+                "Control Centre" -> StudioControlCentreScreen(Modifier.padding(padding))
                 else -> Workspace(tab, Modifier.padding(padding))
             }
         }
@@ -113,7 +114,8 @@ private fun Dashboard(modifier: Modifier, onCapture: () -> Unit, onNavigate: (St
         StudioTool("Print Designer", "Passport sheets and PDF", Icons.Default.Print, "Print"),
         StudioTool("Customers", "Profiles and photo history", Icons.Default.People, "Customers"),
         StudioTool("Business Reports", "Sales and job summaries", Icons.Default.BarChart, "Business"),
-        StudioTool("Backup & Restore", "Protect photos and business records", Icons.Default.Security, "Backup")
+        StudioTool("Backup & Restore", "Protect photos and business records", Icons.Default.Security, "Backup"),
+        StudioTool("Studio Control Centre", "Branding, print, privacy and diagnostics", Icons.Default.Settings, "Control Centre")
     )
     Column(modifier.fillMaxSize().padding(20.dp), verticalArrangement = Arrangement.spacedBy(18.dp)) {
         Column {

@@ -205,8 +205,12 @@ private fun refineSegmentationMask(raw: FloatArray, width: Int, height: Int, rad
         }
         val original = raw[y * width + x]
         val blurred = sum / total
-        val edge = kotlin.math.abs(original - 0.5f) * 2f
-        smooth[y * width + x] = (original * edgeBias + blurred * (1f - edgeBias)).coerceIn(0f, 1f)
+        // Preserve high-frequency mask detail (hair strands and narrow edges) while
+        // allowing flat regions to benefit from smoothing.
+        val localDetail = (kotlin.math.abs(original - blurred) * 5f).coerceIn(0f, 1f)
+        val edgeConfidence = (kotlin.math.abs(original - 0.5f) * 2f).coerceIn(0f, 1f)
+        val preserve = (edgeBias * (0.35f + 0.65f * edgeConfidence) * localDetail).coerceIn(0f, 1f)
+        smooth[y * width + x] = (blurred * (1f - preserve) + original * preserve).coerceIn(0f, 1f)
     }
     return smooth
 }
@@ -489,8 +493,10 @@ internal fun PhotoEditorScreen(photoPath: String, onRetake: () -> Unit, onSaved:
                                         for (y in 0 until source.height) {
                                             val my = (y.toLong() * mh / source.height).toInt().coerceAtMost(mh - 1)
                                             for (x in 0 until source.width) {
-                                                val mx = (x.toLong() * mw / source.width).toInt().coerceAtMost(mw - 1)
-                                                val sampled = sampleMaskBilinear(confidence,mw,mh,(x.toFloat() * mw / source.width),(y.toFloat() * mh / source.height))
+                                                // Sample at pixel centres to avoid a half-pixel mask shift around the silhouette.
+                                                val maskX = ((x + 0.5f) * mw / source.width) - 0.5f
+                                                val maskY = ((y + 0.5f) * mh / source.height) - 0.5f
+                                                val sampled = sampleMaskBilinear(confidence,mw,mh,maskX,maskY)
                                                 val alpha = smoothAlpha(sampled,selectedSoftness)
                                                 val p = input[y * source.width + x]
                                                 output[y * source.width + x] = Pixel.rgb(

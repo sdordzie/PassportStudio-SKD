@@ -33,6 +33,8 @@ private val BizPanel = Color(0xFF1B2433)
 private val BizMuted = Color(0xFF9AA7B8)
 private val workflowStages = listOf("REGISTERED", "EDITING", "READY TO PRINT", "PRINTED", "DELIVERED")
 
+private data class StudioPayment(val id: Long, val amountPesewas: Long, val method: String, val reference: String, val created: Long)
+
 private data class StudioJob(
     val id: Long, val customer: String, val phone: String, val service: String,
     val totalPesewas: Long, val paidPesewas: Long, val created: Long,
@@ -41,15 +43,17 @@ private data class StudioJob(
     val balancePesewas get() = (totalPesewas - paidPesewas).coerceAtLeast(0)
     val paymentStatus get() = when { balancePesewas == 0L -> "PAID"; paidPesewas > 0L -> "PARTIAL"; else -> "UNPAID" }
 }
-private class BusinessDatabase(context: Context) : SQLiteOpenHelper(context, "passportpro_business.db", null, 2) {
+private class BusinessDatabase(context: Context) : SQLiteOpenHelper(context, "passportpro_business.db", null, 3) {
     override fun onCreate(db: SQLiteDatabase) {
         db.execSQL("CREATE TABLE jobs (id INTEGER PRIMARY KEY AUTOINCREMENT, customer TEXT NOT NULL, phone TEXT NOT NULL DEFAULT '', service TEXT NOT NULL, total_pesewas INTEGER NOT NULL, paid_pesewas INTEGER NOT NULL DEFAULT 0, created INTEGER NOT NULL, workflow_status TEXT NOT NULL DEFAULT 'REGISTERED', due_date TEXT NOT NULL DEFAULT '')")
+        db.execSQL("CREATE TABLE payments (id INTEGER PRIMARY KEY AUTOINCREMENT, job_id INTEGER NOT NULL, amount_pesewas INTEGER NOT NULL, method TEXT NOT NULL DEFAULT 'Cash', reference TEXT NOT NULL DEFAULT '', created INTEGER NOT NULL)")
     }
     override fun onUpgrade(db: SQLiteDatabase, oldVersion: Int, newVersion: Int) {
         if (oldVersion < 2) {
             db.execSQL("ALTER TABLE jobs ADD COLUMN workflow_status TEXT NOT NULL DEFAULT 'REGISTERED'")
             db.execSQL("ALTER TABLE jobs ADD COLUMN due_date TEXT NOT NULL DEFAULT ''")
         }
+        if (oldVersion < 3) db.execSQL("CREATE TABLE IF NOT EXISTS payments (id INTEGER PRIMARY KEY AUTOINCREMENT, job_id INTEGER NOT NULL, amount_pesewas INTEGER NOT NULL, method TEXT NOT NULL DEFAULT 'Cash', reference TEXT NOT NULL DEFAULT '', created INTEGER NOT NULL)")
     }
     fun add(customer: String, phone: String, service: String, total: Long, paid: Long, due: String) {
         val v = ContentValues().apply {
@@ -57,7 +61,32 @@ private class BusinessDatabase(context: Context) : SQLiteOpenHelper(context, "pa
             put("total_pesewas", total); put("paid_pesewas", paid.coerceIn(0, total))
             put("created", System.currentTimeMillis()); put("workflow_status", "REGISTERED"); put("due_date", due.trim())
         }
-        writableDatabase.insert("jobs", null, v)
+        val id = writableDatabase.insert("jobs", null, v)
+        if (id > 0L && paid > 0L) addPayment(id, paid, "Initial payment", "Recorded when job was created")
+    }
+    fun addPayment(jobId: Long, amount: Long, method: String, reference: String): Boolean {
+        val db = writableDatabase
+        db.beginTransaction()
+        try {
+            val c = db.rawQuery("SELECT total_pesewas,paid_pesewas FROM jobs WHERE id=?", arrayOf(jobId.toString()))
+            val remaining = c.use { if (it.moveToFirst()) (it.getLong(0) - it.getLong(1)).coerceAtLeast(0) else -1L }
+            if (remaining <= 0L || amount <= 0L || amount > remaining) return false
+            val values = ContentValues().apply {
+                put("job_id", jobId); put("amount_pesewas", amount); put("method", method)
+                put("reference", reference.trim()); put("created", System.currentTimeMillis())
+            }
+            if (db.insert("payments", null, values) < 0L) return false
+            db.execSQL("UPDATE jobs SET paid_pesewas=paid_pesewas+? WHERE id=?", arrayOf(amount, jobId))
+            db.setTransactionSuccessful()
+            return true
+        } finally { db.endTransaction() }
+    }
+    fun payments(jobId: Long): List<StudioPayment> {
+        val rows = mutableListOf<StudioPayment>()
+        readableDatabase.rawQuery("SELECT id,amount_pesewas,method,reference,created FROM payments WHERE job_id=? ORDER BY created DESC", arrayOf(jobId.toString())).use { c ->
+            while (c.moveToNext()) rows.add(StudioPayment(c.getLong(0), c.getLong(1), c.getString(2), c.getString(3), c.getLong(4)))
+        }
+        return rows
     }
     fun updateWorkflow(id: Long, stage: String) {
         writableDatabase.update("jobs", ContentValues().apply { put("workflow_status", stage) }, "id=?", arrayOf(id.toString()))
@@ -65,7 +94,14 @@ private class BusinessDatabase(context: Context) : SQLiteOpenHelper(context, "pa
     fun delete(ids: Set<Long>): Int {
         if (ids.isEmpty()) return 0
         val marks = ids.joinToString(",") { "?" }
-        return writableDatabase.delete("jobs", "id IN ($marks)", ids.map { it.toString() }.toTypedArray())
+        val db = writableDatabase
+        db.beginTransaction()
+        try {
+            db.delete("payments", "job_id IN ($marks)", ids.map { it.toString() }.toTypedArray())
+            val count = db.delete("jobs", "id IN ($marks)", ids.map { it.toString() }.toTypedArray())
+            db.setTransactionSuccessful()
+            return count
+        } finally { db.endTransaction() }
     }
     fun all(): List<StudioJob> {
         val rows = mutableListOf<StudioJob>()
@@ -94,6 +130,11 @@ internal fun BusinessManagementScreen(modifier: Modifier = Modifier) {
     var selectionMode by remember { mutableStateOf(false) }
     var selectedIds by remember { mutableStateOf(setOf<Long>()) }
     var confirmDelete by remember { mutableStateOf(false) }
+    var paymentJob by remember { mutableStateOf<StudioJob?>(null) }
+    var paymentAmount by remember { mutableStateOf("") }
+    var paymentMethod by remember { mutableStateOf("Cash") }
+    var paymentReference by remember { mutableStateOf("") }
+    var paymentMessage by remember { mutableStateOf("") }
     val totalPesewas = ((total.toDoubleOrNull() ?: 0.0) * 100).toLong().coerceAtLeast(0)
     val paidPesewas = ((paid.toDoubleOrNull() ?: 0.0) * 100).toLong().coerceAtLeast(0)
     val now = Calendar.getInstance()
@@ -223,6 +264,13 @@ internal fun BusinessManagementScreen(modifier: Modifier = Modifier) {
                     Text("Total ${money(job.totalPesewas)} • Paid ${money(job.paidPesewas)} • Balance ${money(job.balancePesewas)}", color = Color.White, fontSize = 11.sp)
                     Text(SimpleDateFormat("dd MMM yyyy, HH:mm", Locale.getDefault()).format(Date(job.created)), color = BizMuted, fontSize = 10.sp)
                     if (!selectionMode) {
+                        if (job.balancePesewas > 0L) TextButton(onClick = { paymentJob = job; paymentAmount = ""; paymentReference = ""; paymentMethod = "Cash"; paymentMessage = "" }) { Text("RECORD PAYMENT", color = BizGold, fontSize = 11.sp) }
+                        val ledger = db.payments(job.id)
+                        Text("PAYMENT LEDGER • ${ledger.size} transaction(s)", color = BizMuted, fontSize = 9.sp, fontWeight = FontWeight.Bold)
+                        ledger.take(3).forEach { payment ->
+                            val paymentDate = SimpleDateFormat("dd MMM yyyy, HH:mm", Locale.getDefault()).format(Date(payment.created))
+                            Text("${money(payment.amountPesewas)} • ${payment.method} • $paymentDate" + if (payment.reference.isNotBlank()) " • ${payment.reference}" else "", color = Color.White, fontSize = 10.sp)
+                        }
                         Box {
                             TextButton(onClick = { menuOpen = true }) { Text("UPDATE JOB STAGE ▾", color = BizGold, fontSize = 10.sp) }
                             DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
@@ -240,6 +288,34 @@ internal fun BusinessManagementScreen(modifier: Modifier = Modifier) {
                     }
                 }
             }
+        }
+        if (paymentJob != null) {
+            val target = paymentJob!!
+            AlertDialog(
+                onDismissRequest = { paymentJob = null },
+                title = { Text("Record customer payment") },
+                text = { Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text("${target.customer} • Outstanding: ${money(target.balancePesewas)}")
+                    OutlinedTextField(paymentAmount, { paymentAmount = it.filter { ch -> ch.isDigit() || ch == '.' } }, label = { Text("Amount received (GH₵)") }, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal), singleLine = true)
+                    Text("Payment method", color = BizMuted, fontSize = 11.sp)
+                    Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                        listOf("Cash", "Mobile Money", "Bank", "Other").forEach { method ->
+                            FilterChip(selected = paymentMethod == method, onClick = { paymentMethod = method }, label = { Text(method, fontSize = 9.sp) })
+                        }
+                    }
+                    OutlinedTextField(paymentReference, { paymentReference = it }, label = { Text("Reference / note (optional)") }, singleLine = true)
+                    if (paymentMessage.isNotBlank()) Text(paymentMessage, color = BizGold, fontSize = 11.sp)
+                } },
+                confirmButton = { TextButton(onClick = {
+                    val amount = ((paymentAmount.toDoubleOrNull() ?: 0.0) * 100).toLong()
+                    if (amount <= 0L) paymentMessage = "Enter a valid payment amount."
+                    else if (amount > target.balancePesewas) paymentMessage = "Payment exceeds the outstanding balance."
+                    else if (db.addPayment(target.id, amount, paymentMethod, paymentReference)) {
+                        jobs = db.all(); paymentJob = null; message = "Payment recorded successfully."
+                    } else paymentMessage = "Payment could not be saved. Refresh and try again."
+                }) { Text("Save payment", color = BizGold) } },
+                dismissButton = { TextButton(onClick = { paymentJob = null }) { Text("Cancel") } }
+            )
         }
         if (confirmDelete) AlertDialog(
             onDismissRequest = { confirmDelete = false },

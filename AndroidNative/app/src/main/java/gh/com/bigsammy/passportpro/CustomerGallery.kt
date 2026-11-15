@@ -153,29 +153,29 @@ internal fun GalleryScreen(modifier: Modifier = Modifier) {
         selectedPaths = if (path in selectedPaths) selectedPaths - path else selectedPaths + path
     }
     Column(modifier.fillMaxSize().padding(horizontal = 14.dp, vertical = 12.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-        Text("PHOTO LIBRARY • STUDIO", color = Color(0xFFE4B45D), fontSize = 11.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.2.sp)
+        Text("PHOTO LIBRARY • STUDIO", color = Gold, fontSize = 11.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.2.sp)
         Row(verticalAlignment = Alignment.CenterVertically) {
             Column(Modifier.weight(1f)) {
-                Text("Studio gallery", color = Color.White, fontSize = 25.sp, fontWeight = FontWeight.Bold)
-                Text("${files.size} photographs • Stored securely on this device", color = Color(0xFF9AA7B8), fontSize = 11.sp)
+                Text("Studio gallery", color = PrimaryText, fontSize = 25.sp, fontWeight = FontWeight.Bold)
+                Text("${files.size} photographs • Stored securely on this device", color = Muted, fontSize = 11.sp)
             }
-            TextButton(onClick = { refresh++ }) { Text("Refresh", color = Color(0xFFE4B45D)) }
+            TextButton(onClick = { refresh++ }) { Text("Refresh", color = Gold) }
         }
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            Surface(color = Color(0xFF1B2433), shape = RoundedCornerShape(12.dp)) { Text("CAPTURED  ${files.count { it.parentFile?.name != "Edited" }}", color = Color.White, modifier = Modifier.padding(10.dp), fontSize = 10.sp) }
-            Surface(color = Color(0xFF1B2433), shape = RoundedCornerShape(12.dp)) { Text("EDITED  ${files.count { it.parentFile?.name == "Edited" }}", color = Color(0xFFE4B45D), modifier = Modifier.padding(10.dp), fontSize = 10.sp) }
+            Surface(color = Panel, shape = RoundedCornerShape(12.dp)) { Text("CAPTURED  ${files.count { it.parentFile?.name != "Edited" }}", color = PrimaryText, modifier = Modifier.padding(10.dp), fontSize = 10.sp) }
+            Surface(color = Panel, shape = RoundedCornerShape(12.dp)) { Text("EDITED  ${files.count { it.parentFile?.name == "Edited" }}", color = Gold, modifier = Modifier.padding(10.dp), fontSize = 10.sp) }
         }
         if (files.isNotEmpty()) {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                 TextButton(onClick = {
                     selectionMode = !selectionMode
                     selectedPaths = emptySet()
-                }) { Text(if (selectionMode) "Cancel selection" else "Select photos", color = Color(0xFFE4B45D)) }
+                }) { Text(if (selectionMode) "Cancel selection" else "Select photos", color = Gold) }
                 if (selectionMode) {
                     TextButton(onClick = {
                         selectedPaths = if (selectedPaths.size == files.size) emptySet() else files.map { it.absolutePath }.toSet()
-                    }) { Text(if (selectedPaths.size == files.size) "Deselect all" else "Select all", color = Color.White) }
-                    Text("${selectedPaths.size} selected", color = Color(0xFF9AA7B8), fontSize = 11.sp)
+                    }) { Text(if (selectedPaths.size == files.size) "Deselect all" else "Select all", color = PrimaryText) }
+                    Text("${selectedPaths.size} selected", color = Muted, fontSize = 11.sp)
                     Spacer(Modifier.weight(1f))
                     Button(onClick = { confirmDelete = true }, enabled = selectedPaths.isNotEmpty(),
                         colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFB93838))) {
@@ -187,8 +187,8 @@ internal fun GalleryScreen(modifier: Modifier = Modifier) {
         if (files.isEmpty()) {
             Column(Modifier.weight(1f).fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
                 Icon(Icons.Default.Photo, null, tint = Color(0xFFE4B45D), modifier = Modifier.size(56.dp))
-                Text("Your studio is waiting for its first photo", color = Color.White, fontSize = 17.sp, fontWeight = FontWeight.Bold)
-                Text("Captured and edited photographs will appear here automatically.", color = Color(0xFF9AA7B8), fontSize = 12.sp)
+                Text("Your studio is waiting for its first photo", color = PrimaryText, fontSize = 17.sp, fontWeight = FontWeight.Bold)
+                Text("Captured and edited photographs will appear here automatically.", color = Muted, fontSize = 12.sp)
             }
         } else {
             LazyVerticalGrid(columns = GridCells.Adaptive(minSize = 104.dp), modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(10.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -197,7 +197,7 @@ internal fun GalleryScreen(modifier: Modifier = Modifier) {
                     val thumb = remember(file.absolutePath, file.lastModified()) {
                         BitmapFactory.decodeFile(file.absolutePath, BitmapFactory.Options().apply { inSampleSize = 4 })
                     }
-                    Surface(color = if (isSelected) Color(0xFF34445C) else Color(0xFF1B2433), shape = RoundedCornerShape(13.dp),
+                    Surface(color = if (isSelected) Color(0xFF34445C) else Panel, shape = RoundedCornerShape(13.dp),
                         onClick = {
                             if (selectionMode) toggleSelection(file) else selectedFile = file
                         }) {
@@ -205,12 +205,12 @@ internal fun GalleryScreen(modifier: Modifier = Modifier) {
                             Box {
                                 if (thumb != null) Image(thumb.asImageBitmap(), "Photo thumbnail", Modifier.fillMaxWidth().height(142.dp), contentScale = ContentScale.Crop)
                                 else Box(Modifier.fillMaxWidth().height(142.dp), contentAlignment = Alignment.Center) { Icon(Icons.Default.Photo, null, tint = Color(0xFF9AA7B8)) }
-                                if (selectionMode) Surface(color = if (isSelected) Color(0xFFE4B45D) else Color(0xCC101522), shape = RoundedCornerShape(50), modifier = Modifier.align(Alignment.TopEnd).padding(5.dp)) {
+                                if (selectionMode) Surface(color = if (isSelected) Color(0xFFE4B45D) else Ink.copy(alpha = .78f), shape = RoundedCornerShape(50), modifier = Modifier.align(Alignment.TopEnd).padding(5.dp)) {
                                     Text(if (isSelected) "✓" else " ", color = Color(0xFF101522), modifier = Modifier.padding(horizontal = 9.dp, vertical = 3.dp), fontWeight = FontWeight.Bold)
                                 }
                             }
-                            Text(if (file.parentFile?.name == "Edited") "EDITED PHOTO" else "ORIGINAL CAPTURE", color = Color(0xFFE4B45D), fontSize = 9.sp, fontWeight = FontWeight.Bold)
-                            Text(SimpleDateFormat("dd MMM yyyy • HH:mm", Locale.getDefault()).format(Date(file.lastModified())), color = Color(0xFF9AA7B8), fontSize = 9.sp)
+                            Text(if (file.parentFile?.name == "Edited") "EDITED PHOTO" else "ORIGINAL CAPTURE", color = Gold, fontSize = 9.sp, fontWeight = FontWeight.Bold)
+                            Text(SimpleDateFormat("dd MMM yyyy • HH:mm", Locale.getDefault()).format(Date(file.lastModified())), color = Muted, fontSize = 9.sp)
                         }
                     }
                 }
@@ -238,17 +238,17 @@ internal fun GalleryScreen(modifier: Modifier = Modifier) {
     }
     if (selectedFile != null) {
         Dialog(onDismissRequest = { selectedFile = null }) {
-            Surface(color=Color(0xFF101522),shape=RoundedCornerShape(20.dp),modifier=Modifier.fillMaxWidth()) {
+            Surface(color=Ink,shape=RoundedCornerShape(20.dp),modifier=Modifier.fillMaxWidth()) {
                 Column(Modifier.padding(12.dp),verticalArrangement=Arrangement.spacedBy(9.dp)) {
                     Row(verticalAlignment=Alignment.CenterVertically) {
                         Column(Modifier.weight(1f)) {
-                            Text(if(selectedFile?.parentFile?.name=="Edited") "EDITED PHOTOGRAPH" else "ORIGINAL CAPTURE",color=Color(0xFFE4B45D),fontSize=10.sp,fontWeight=FontWeight.Bold)
-                            Text(selectedFile?.name ?: "",color=Color.White,fontSize=13.sp,fontWeight=FontWeight.SemiBold,maxLines=1)
+                            Text(if(selectedFile?.parentFile?.name=="Edited") "EDITED PHOTOGRAPH" else "ORIGINAL CAPTURE",color=Gold,fontSize=10.sp,fontWeight=FontWeight.Bold)
+                            Text(selectedFile?.name ?: "",color=PrimaryText,fontSize=13.sp,fontWeight=FontWeight.SemiBold,maxLines=1)
                         }
-                        IconButton(onClick={selectedFile=null}) { Icon(Icons.Default.Close,"Close",tint=Color.White) }
+                        IconButton(onClick={selectedFile=null}) { Icon(Icons.Default.Close,"Close",tint=PrimaryText) }
                     }
                     if(selectedBitmap!=null) Image(selectedBitmap.asImageBitmap(),"Full photograph preview",Modifier.fillMaxWidth().heightIn(max=480.dp),contentScale=ContentScale.Fit)
-                    Text(selectedFile?.let { SimpleDateFormat("dd MMMM yyyy, HH:mm",Locale.getDefault()).format(Date(it.lastModified())) } ?: "",color=Color(0xFF9AA7B8),fontSize=11.sp)
+                    Text(selectedFile?.let { SimpleDateFormat("dd MMMM yyyy, HH:mm",Locale.getDefault()).format(Date(it.lastModified())) } ?: "",color=Muted,fontSize=11.sp)
                     Row(horizontalArrangement=Arrangement.spacedBy(8.dp)) {
                         Button(onClick={
                             selectedFile?.let { file ->
@@ -258,7 +258,7 @@ internal fun GalleryScreen(modifier: Modifier = Modifier) {
                                     context.startActivity(Intent.createChooser(intent,"Share photograph"))
                                 } catch(e:Exception) { android.widget.Toast.makeText(context,"Unable to share photo: ${e.localizedMessage}",android.widget.Toast.LENGTH_LONG).show() }
                             }
-                        },modifier=Modifier.weight(1f),colors=ButtonDefaults.buttonColors(containerColor=Color(0xFFE4B45D),contentColor=Color(0xFF101522))) {
+                        },modifier=Modifier.weight(1f),colors=ButtonDefaults.buttonColors(containerColor=Color(0xFFE4B45D),contentColor=Ink)) {
                             Icon(Icons.Default.Share,null); Spacer(Modifier.width(5.dp)); Text("Share")
                         }
                         OutlinedButton(onClick={

@@ -28,11 +28,11 @@ import java.io.File
 import java.security.MessageDigest
 
 private val ControlGold = Color(0xFFE4B45D)
-private val ControlPanel = Color(0xFF1B2433)
-private val ControlMuted = Color(0xFF9AA7B8)
+private val ControlPanel: Color @Composable get() = if (LocalPassportDark.current) Color(0xFF1B2433) else Color.White
+private val ControlMuted: Color @Composable get() = if (LocalPassportDark.current) Color(0xFF9AA7B8) else Color(0xFF667085)
 
 @Composable
-internal fun StudioControlCentreScreen(modifier: Modifier = Modifier) {
+internal fun StudioControlCentreScreen(modifier: Modifier = Modifier, appearance: String = "System default", onAppearanceChange: (String) -> Unit = {}) {
     val context = LocalContext.current
     val prefs = remember { context.getSharedPreferences("passportpro_studio_settings", Context.MODE_PRIVATE) }
     var studioName by remember { mutableStateOf(prefs.getString("studio_name", "PassportPro Studio") ?: "PassportPro Studio") }
@@ -53,8 +53,17 @@ internal fun StudioControlCentreScreen(modifier: Modifier = Modifier) {
 
     Column(modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(18.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
         Text("STUDIO CONTROL CENTRE", color = ControlGold, fontSize = 11.sp, fontWeight = FontWeight.Bold)
-        Text("Studio Control Centre", color = Color.White, fontSize = 26.sp, fontWeight = FontWeight.Bold)
+        Text("Studio Control Centre", color = MaterialTheme.colorScheme.onBackground, fontSize = 26.sp, fontWeight = FontWeight.Bold)
         Text("Set your studio identity, preferred photo workflow, print access and data-care settings in one place.", color = ControlMuted, fontSize = 13.sp)
+
+        ControlCard("APP APPEARANCE", "Choose the look that feels most comfortable. System default automatically follows your phone's light or dark setting.") {
+            ExposedSetting("Appearance", appearance, listOf("System default", "Light", "Dark"), false, {}) { onAppearanceChange(it) }
+            Text(when (appearance) {
+                "Light" -> "Light appearance is active."
+                "Dark" -> "Dark appearance is active."
+                else -> "PassportPro follows your Android system appearance."
+            }, color = ControlMuted, fontSize = 11.sp)
+        }
 
         ControlCard("BUSINESS IDENTITY", "These details are saved on this device for studio reference and future branded document integration.") {
             ControlField("Studio / business name", studioName, { studioName = it; save("studio_name", it) })
@@ -116,7 +125,7 @@ internal fun StudioControlCentreScreen(modifier: Modifier = Modifier) {
 private fun ControlCard(title: String, detail: String, content: @Composable ColumnScope.() -> Unit) {
     Surface(color = ControlPanel, shape = RoundedCornerShape(18.dp), modifier = Modifier.fillMaxWidth()) {
         Column(Modifier.padding(15.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            Text(title, color = ControlGold, fontWeight = FontWeight.Bold, fontSize = 12.sp)
+            Text(title, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold, fontSize = 12.sp)
             Text(detail, color = ControlMuted, fontSize = 11.sp)
             content()
         }

@@ -189,7 +189,7 @@ internal fun BusinessManagementScreen(modifier: Modifier = Modifier) {
     }
 
     Column(modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        Text("PHASE 13 • JOB EDITING & AUDIT TRAIL", color = BizGold, fontSize = 10.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.sp)
+        Text("PHASE 14 • JOB DATA EXPORT", color = BizGold, fontSize = 10.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.sp)
         Text("Studio operations", color = Color.White, fontSize = 25.sp, fontWeight = FontWeight.Bold)
         Text("Track each job from registration to delivery, review customer history and monitor business performance.", color = BizMuted, fontSize = 12.sp)
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -209,6 +209,27 @@ internal fun BusinessManagementScreen(modifier: Modifier = Modifier) {
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             MetricCard("RECEIVED", money(collected), Modifier.weight(1f))
             MetricCard("OUTSTANDING", money(balance), Modifier.weight(1f))
+        }
+        Button(onClick = {
+            val csv = buildString {
+                append("Job ID,Customer,Phone,Service,Workflow,Created,Due Date,Total (GHS),Paid (GHS),Balance (GHS),Payment Status\n")
+                jobs.forEach { job ->
+                    val fields = listOf(job.id.toString(), job.customer, job.phone, job.service, job.workflow,
+                        SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.US).format(Date(job.created)), job.dueDate,
+                        String.format(Locale.US, "%.2f", job.totalPesewas / 100.0),
+                        String.format(Locale.US, "%.2f", job.paidPesewas),
+                        String.format(Locale.US, "%.2f", job.balancePesewas), job.paymentStatus)
+                    append(fields.joinToString(",") { "\"" + it.replace("\"", "\"\"") + "\"" }).append("\n")
+                }
+            }
+            val send = Intent(Intent.ACTION_SEND).apply {
+                type = "text/csv"
+                putExtra(Intent.EXTRA_SUBJECT, "PassportPro Studio jobs export")
+                putExtra(Intent.EXTRA_TEXT, csv)
+            }
+            context.startActivity(Intent.createChooser(send, "Export job records"))
+        }, modifier = Modifier.fillMaxWidth(), colors = ButtonDefaults.buttonColors(containerColor = BizPanel, contentColor = BizGold)) {
+            Text("EXPORT ALL JOBS AS CSV", fontWeight = FontWeight.Bold)
         }
         Button(onClick = {
             val send = Intent(Intent.ACTION_SEND).apply { type = "text/plain"; putExtra(Intent.EXTRA_SUBJECT, "PassportPro $period business report"); putExtra(Intent.EXTRA_TEXT, reportText) }

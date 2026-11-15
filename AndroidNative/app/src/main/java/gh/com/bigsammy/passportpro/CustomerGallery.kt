@@ -75,15 +75,15 @@ internal fun CustomersScreen(modifier: Modifier = Modifier) {
     var selectedCustomerIds by remember { mutableStateOf(setOf<Long>()) }
     var confirmDeleteCustomers by remember { mutableStateOf(false) }
     Column(modifier.fillMaxSize().padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-        Text("CUSTOMER MANAGEMENT", color=Color(0xFFE4B45D), fontSize=11.sp, fontWeight=FontWeight.Bold)
-        Text("Customer records", color=Color.White, fontSize=24.sp, fontWeight=FontWeight.Bold)
-        Text("Save customer contacts and notes locally on this device.", color=Color(0xFF9AA7B8), fontSize=12.sp)
+        Text("CUSTOMER MANAGEMENT", color=if (LocalPassportDark.current) Color(0xFFE4B45D) else Color(0xFF9A6418), fontSize=11.sp, fontWeight=FontWeight.Bold)
+        Text("Customer records", color=PrimaryText, fontSize=24.sp, fontWeight=FontWeight.Bold)
+        Text("Save customer contacts and notes locally on this device.", color=Muted, fontSize=12.sp)
         OutlinedTextField(value=name,onValueChange={name=it},label={Text("Customer name")},singleLine=true,modifier=Modifier.fillMaxWidth())
         OutlinedTextField(value=phone,onValueChange={phone=it},label={Text("Phone / WhatsApp number")},singleLine=true,modifier=Modifier.fillMaxWidth())
         OutlinedTextField(value=notes,onValueChange={notes=it},label={Text("Notes (optional)")},modifier=Modifier.fillMaxWidth(),minLines=2)
         Button(onClick={
             if(name.isNotBlank()) { db.add(name,phone,notes); name=""; phone=""; notes=""; customers=db.all() }
-        },enabled=name.isNotBlank(),modifier=Modifier.fillMaxWidth(),colors=ButtonDefaults.buttonColors(containerColor=Color(0xFFE4B45D),contentColor=Color(0xFF101522))) {
+        },enabled=name.isNotBlank(),modifier=Modifier.fillMaxWidth(),colors=ButtonDefaults.buttonColors(containerColor=Color(0xFFE4B45D),contentColor=Ink)) {
             Icon(Icons.Default.PersonAdd,null); Spacer(Modifier.width(8.dp)); Text("SAVE CUSTOMER",fontWeight=FontWeight.Bold)
         }
         Row(verticalAlignment=Alignment.CenterVertically) {
@@ -101,18 +101,18 @@ internal fun CustomersScreen(modifier: Modifier = Modifier) {
             }
         }
         if(customers.isEmpty()) {
-            Surface(color=Color(0xFF1B2433),shape=RoundedCornerShape(16.dp),modifier=Modifier.fillMaxWidth()) {
+            Surface(color=Panel,shape=RoundedCornerShape(16.dp),modifier=Modifier.fillMaxWidth()) {
                 Text("No customers yet. Add your first customer above.",color=Color(0xFF9AA7B8),modifier=Modifier.padding(18.dp),fontSize=13.sp)
             }
         } else LazyColumn(verticalArrangement=Arrangement.spacedBy(8.dp),modifier=Modifier.weight(1f)) {
             items(customers,key={it.id}) { customer ->
-                Surface(color=if(customer.id in selectedCustomerIds) Color(0xFF34445C) else Color(0xFF1B2433),shape=RoundedCornerShape(14.dp),modifier=Modifier.fillMaxWidth()) {
+                Surface(color=if(customer.id in selectedCustomerIds) if (LocalPassportDark.current) Color(0xFF34445C) else Color(0xFFE8D8B8) else Color(0xFF1B2433),shape=RoundedCornerShape(14.dp),modifier=Modifier.fillMaxWidth()) {
                     Column(Modifier.padding(14.dp),verticalArrangement=Arrangement.spacedBy(4.dp)) {
                         if(selectionMode) TextButton(onClick={selectedCustomerIds=if(customer.id in selectedCustomerIds) selectedCustomerIds-customer.id else selectedCustomerIds+customer.id}) { Text(if(customer.id in selectedCustomerIds) "✓ Selected" else "Select customer",color=Color(0xFFE4B45D)) }
                         Text(customer.name,color=Color.White,fontWeight=FontWeight.SemiBold,fontSize=16.sp)
                         if(customer.phone.isNotBlank()) Text(customer.phone,color=Color(0xFFE4B45D),fontSize=13.sp)
                         if(customer.notes.isNotBlank()) Text(customer.notes,color=Color(0xFF9AA7B8),fontSize=12.sp)
-                        Text(SimpleDateFormat("dd MMM yyyy, HH:mm",Locale.getDefault()).format(Date(customer.created)),color=Color(0xFF718096),fontSize=10.sp)
+                        Text(SimpleDateFormat("dd MMM yyyy, HH:mm",Locale.getDefault()).format(Date(customer.created)),color=Muted,fontSize=10.sp)
                     }
                 }
             }

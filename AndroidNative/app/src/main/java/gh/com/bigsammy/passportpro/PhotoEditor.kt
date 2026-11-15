@@ -43,6 +43,18 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
+private data class EditorSnapshot(
+    val brightness: Float,
+    val contrast: Float,
+    val saturation: Float,
+    val crop: String,
+    val rotation: Int,
+    val flipHorizontal: Boolean,
+    val flipVertical: Boolean,
+    val perspectiveEnabled: Boolean,
+    val perspectiveCorners: List<Offset>
+)
+
 private fun fitPreview(source: Bitmap, maxEdge: Int = 1100): Bitmap {
     val largest = maxOf(source.width, source.height)
     if (largest <= maxEdge) return source
@@ -189,7 +201,28 @@ internal fun PhotoEditorScreen(photoPath: String, onRetake: () -> Unit, onSaved:
     var customUnit by remember { mutableStateOf("px") }
     var outputDpi by remember { mutableIntStateOf(300) }
     var busy by remember { mutableStateOf(false) }
+    var showOriginal by remember { mutableStateOf(false) }
+    var undoStack by remember { mutableStateOf(listOf<EditorSnapshot>()) }
+    var redoStack by remember { mutableStateOf(listOf<EditorSnapshot>()) }
     var status by remember { mutableStateOf("Your photograph is ready. Changes appear in the preview.") }
+
+    fun currentSnapshot() = EditorSnapshot(brightness, contrast, saturation, crop, rotation, flipHorizontal, flipVertical, perspectiveEnabled, perspectiveCorners)
+    fun recordUndo() {
+        val state = currentSnapshot()
+        if (undoStack.lastOrNull() != state) undoStack = (undoStack + state).takeLast(40)
+        redoStack = emptyList()
+    }
+    fun restoreSnapshot(state: EditorSnapshot) {
+        brightness = state.brightness
+        contrast = state.contrast
+        saturation = state.saturation
+        crop = state.crop
+        rotation = state.rotation
+        flipHorizontal = state.flipHorizontal
+        flipVertical = state.flipVertical
+        perspectiveEnabled = state.perspectiveEnabled
+        perspectiveCorners = state.perspectiveCorners
+    }
 
     val customRatio = remember(customWidth, customHeight) {
         val w = customWidth.toFloatOrNull()?.takeIf { it > 0f }
@@ -237,7 +270,7 @@ internal fun PhotoEditorScreen(photoPath: String, onRetake: () -> Unit, onSaved:
                 .background(Color(0xFF090D14), RoundedCornerShape(14.dp)),
             contentAlignment=Alignment.Center
         ) {
-            val displayPhoto = if (perspectiveEnabled) perspectiveGuide ?: preview else preview
+            val displayPhoto = if (showOriginal) original else if (perspectiveEnabled) perspectiveGuide ?: preview else preview
             if (displayPhoto != null) {
                 Image(displayPhoto.asImageBitmap(), if (perspectiveEnabled) "Uncorrected photograph for perspective adjustment" else "Live passport photo editing preview",
                     Modifier.fillMaxSize().padding(5.dp), contentScale=ContentScale.Fit)
@@ -265,7 +298,7 @@ internal fun PhotoEditorScreen(photoPath: String, onRetake: () -> Unit, onSaved:
                                 if (activeCorner >= 0) {
                                     val w = size.width.toFloat()
                                     val h = size.height.toFloat()
-                                    val ratio = preview!!.width.toFloat() / preview!!.height
+                                    val ratio = displayPhoto.width.toFloat() / displayPhoto.height
                                     val boxRatio = w / h
                                     val dw = if (ratio > boxRatio) w else h * ratio
                                     val dh = if (ratio > boxRatio) w / ratio else h
@@ -315,25 +348,42 @@ internal fun PhotoEditorScreen(photoPath: String, onRetake: () -> Unit, onSaved:
             Modifier.weight(1.25f).fillMaxWidth().verticalScroll(rememberScrollState()),
             verticalArrangement=Arrangement.spacedBy(6.dp)
         ) {
+            Row(horizontalArrangement=Arrangement.spacedBy(7.dp), verticalAlignment=Alignment.CenterVertically) {
+                OutlinedButton(onClick={
+                    if (undoStack.isNotEmpty()) {
+                        redoStack = (redoStack + currentSnapshot()).takeLast(40)
+                        restoreSnapshot(undoStack.last())
+                        undoStack = undoStack.dropLast(1)
+                    }
+                }, enabled=undoStack.isNotEmpty() && !busy, modifier=Modifier.weight(1f)) { Text("↶ Undo") }
+                OutlinedButton(onClick={
+                    if (redoStack.isNotEmpty()) {
+                        undoStack = (undoStack + currentSnapshot()).takeLast(40)
+                        restoreSnapshot(redoStack.last())
+                        redoStack = redoStack.dropLast(1)
+                    }
+                }, enabled=redoStack.isNotEmpty() && !busy, modifier=Modifier.weight(1f)) { Text("Redo ↷") }
+                FilterChip(selected=showOriginal, onClick={showOriginal=!showOriginal}, label={Text(if(showOriginal) "Show edited" else "Before / after")})
+            }
             Text("MANUAL PERSPECTIVE", color=Color(0xFF9AA7B8), fontSize=10.sp, fontWeight=FontWeight.Bold)
             Row(verticalAlignment=Alignment.CenterVertically, horizontalArrangement=Arrangement.spacedBy(8.dp)) {
-                FilterChip(selected=perspectiveEnabled, onClick={perspectiveEnabled = !perspectiveEnabled}, label={Text(if (perspectiveEnabled) "Adjust corners: ON" else "Adjust corners: OFF")})
+                FilterChip(selected=perspectiveEnabled, onClick={recordUndo(); perspectiveEnabled = !perspectiveEnabled}, label={Text(if (perspectiveEnabled) "Adjust corners: ON" else "Adjust corners: OFF")})
                 Text("Drag the four gold corner handles to straighten a tilted photo.", color=Color(0xFF9AA7B8), fontSize=10.sp, modifier=Modifier.weight(1f))
             }
             if (perspectiveEnabled) {
                 Row(horizontalArrangement=Arrangement.spacedBy(8.dp)) {
-                    OutlinedButton(onClick={perspectiveCorners=listOf(Offset(0f,0f),Offset(1f,0f),Offset(1f,1f),Offset(0f,1f))}) { Text("Reset corners") }
+                    OutlinedButton(onClick={recordUndo(); perspectiveCorners=listOf(Offset(0f,0f),Offset(1f,0f),Offset(1f,1f),Offset(0f,1f))}) { Text("Reset corners") }
                     Text("The selected area is corrected to a straight rectangle.", color=Color(0xFF9AA7B8), fontSize=10.sp, modifier=Modifier.weight(1f))
                 }
             }
             Text("TRANSFORM", color=Color(0xFF9AA7B8), fontSize=10.sp, fontWeight=FontWeight.Bold)
             Row(horizontalArrangement=Arrangement.spacedBy(6.dp), modifier=Modifier.fillMaxWidth()) {
-                OutlinedButton(onClick={ rotation=(rotation+270)%360 }, modifier=Modifier.weight(1f)) { Text("↶ 90°") }
-                OutlinedButton(onClick={ rotation=(rotation+90)%360 }, modifier=Modifier.weight(1f)) { Text("90° ↷") }
+                OutlinedButton(onClick={ recordUndo(); rotation=(rotation+270)%360 }, modifier=Modifier.weight(1f)) { Text("↶ 90°") }
+                OutlinedButton(onClick={ recordUndo(); rotation=(rotation+90)%360 }, modifier=Modifier.weight(1f)) { Text("90° ↷") }
             }
             Row(horizontalArrangement=Arrangement.spacedBy(6.dp), modifier=Modifier.fillMaxWidth()) {
-                FilterChip(selected=flipHorizontal, onClick={flipHorizontal=!flipHorizontal}, label={Text("Mirror ↔")})
-                FilterChip(selected=flipVertical, onClick={flipVertical=!flipVertical}, label={Text("Flip ↕")})
+                FilterChip(selected=flipHorizontal, onClick={recordUndo(); flipHorizontal=!flipHorizontal}, label={Text("Mirror ↔")})
+                FilterChip(selected=flipVertical, onClick={recordUndo(); flipVertical=!flipVertical}, label={Text("Flip ↕")})
                 Text("Rotation: $rotation°", color=Color(0xFF9AA7B8), fontSize=10.sp, modifier=Modifier.align(Alignment.CenterVertically))
             }
             Text("AI BACKGROUND", color=Color(0xFF9AA7B8), fontSize=10.sp, fontWeight=FontWeight.Bold)
@@ -408,7 +458,7 @@ internal fun PhotoEditorScreen(photoPath: String, onRetake: () -> Unit, onSaved:
             Text("CROP FORMAT", color=Color(0xFF9AA7B8), fontSize=10.sp, fontWeight=FontWeight.Bold)
             Row(Modifier.horizontalScroll(androidx.compose.foundation.rememberScrollState()), horizontalArrangement=Arrangement.spacedBy(5.dp)) {
                 listOf("Original","Portrait","Landscape","35 × 45 mm","Square","4 × 6","Custom").forEach { value ->
-                    FilterChip(selected=crop==value,onClick={crop=value},label={Text(value,fontSize=10.sp)})
+                    FilterChip(selected=crop==value,onClick={recordUndo(); crop=value},label={Text(value,fontSize=10.sp)})
                 }
             }
             if (crop == "Custom") {
@@ -429,18 +479,18 @@ internal fun PhotoEditorScreen(photoPath: String, onRetake: () -> Unit, onSaved:
                 Text("Preview follows the width-to-height ratio. Physical units convert to pixels using the selected DPI.", color=Color(0xFF9AA7B8), fontSize=10.sp)
             }
             Text("Brightness ${(brightness*100).toInt()}%",color=Color(0xFF9AA7B8),fontSize=10.sp)
-            Slider(value=brightness,onValueChange={brightness=it},valueRange=-.35f.. .35f)
+            Slider(value=brightness,onValueChange={recordUndo(); brightness=it},valueRange=-.35f.. .35f)
             Text("Contrast ${(contrast*100).toInt()}%",color=Color(0xFF9AA7B8),fontSize=10.sp)
-            Slider(value=contrast,onValueChange={contrast=it},valueRange=.5f..1.8f)
+            Slider(value=contrast,onValueChange={recordUndo(); contrast=it},valueRange=.5f..1.8f)
             Text("Saturation ${(saturation*100).toInt()}%",color=Color(0xFF9AA7B8),fontSize=10.sp)
-            Slider(value=saturation,onValueChange={saturation=it},valueRange=0f..2f)
+            Slider(value=saturation,onValueChange={recordUndo(); saturation=it},valueRange=0f..2f)
             Text(status,color=Color(0xFF9AA7B8),fontSize=10.sp)
             Row(horizontalArrangement=Arrangement.spacedBy(7.dp)) {
                 OutlinedButton(onClick=onRetake,enabled=!busy,modifier=Modifier.weight(1f)) { Text("Retake") }
                 OutlinedButton(onClick={
-                    editedBase=original; brightness=0f; contrast=1f; saturation=1f; crop="Original"; rotation=0; flipHorizontal=false; flipVertical=false; perspectiveEnabled=false; perspectiveCorners=listOf(Offset(0f,0f),Offset(1f,0f),Offset(1f,1f),Offset(0f,1f))
+                    recordUndo(); editedBase=original; brightness=0f; contrast=1f; saturation=1f; crop="Original"; rotation=0; flipHorizontal=false; flipVertical=false; perspectiveEnabled=false; perspectiveCorners=listOf(Offset(0f,0f),Offset(1f,0f),Offset(1f,1f),Offset(0f,1f))
                     customWidth="600"; customHeight="800"; customUnit="px"; outputDpi=300
-                    status="Edits reset."
+                    showOriginal=false; status="Edits reset."
                 },enabled=!busy,modifier=Modifier.weight(1f)) { Text("Reset") }
                 Button(
                     onClick={

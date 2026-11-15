@@ -11,6 +11,10 @@ import androidx.compose.ui.text.input.KeyboardType
 import com.google.mlkit.vision.common.InputImage
 import com.google.mlkit.vision.segmentation.Segmentation
 import com.google.mlkit.vision.segmentation.selfie.SelfieSegmenterOptions
+import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.gestures.detectDragGestures
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.horizontalScroll
@@ -113,6 +117,22 @@ private fun decodeUprightPhoto(path: String): Bitmap? {
     } catch (_: Exception) { bitmap }
 }
 
+
+private fun perspectiveCorrect(source: Bitmap, corners: List<Offset>): Bitmap {
+    if (corners.size != 4) return source
+    val src = FloatArray(8)
+    val dst = floatArrayOf(0f, 0f, source.width.toFloat(), 0f, source.width.toFloat(), source.height.toFloat(), 0f, source.height.toFloat())
+    corners.forEachIndexed { index, point ->
+        src[index * 2] = point.x.coerceIn(0f, 1f) * source.width
+        src[index * 2 + 1] = point.y.coerceIn(0f, 1f) * source.height
+    }
+    val matrix = Matrix()
+    if (!matrix.setPolyToPoly(src, 0, dst, 0, 4)) return source
+    val output = Bitmap.createBitmap(source.width, source.height, Bitmap.Config.ARGB_8888)
+    android.graphics.Canvas(output).drawBitmap(source, matrix, android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG or android.graphics.Paint.FILTER_BITMAP_FLAG))
+    return output
+}
+
 @Composable
 internal fun PhotoEditorScreen(photoPath: String, onRetake: () -> Unit, onSaved: () -> Unit) {
     val context = LocalContext.current
@@ -127,6 +147,8 @@ internal fun PhotoEditorScreen(photoPath: String, onRetake: () -> Unit, onSaved:
     var contrast by remember { mutableFloatStateOf(1f) }
     var saturation by remember { mutableFloatStateOf(1f) }
     var crop by remember { mutableStateOf("Original") }
+    var perspectiveCorners by remember { mutableStateOf(listOf(Offset(0f, 0f), Offset(1f, 0f), Offset(1f, 1f), Offset(0f, 1f))) }
+    var perspectiveEnabled by remember { mutableStateOf(false) }
     var customWidth by remember { mutableStateOf("600") }
     var customHeight by remember { mutableStateOf("800") }
     var customUnit by remember { mutableStateOf("px") }
@@ -140,12 +162,12 @@ internal fun PhotoEditorScreen(photoPath: String, onRetake: () -> Unit, onSaved:
         if (w == null || h == null) null else w / h
     }
     // Keep the preview visible and responsive; all pixel work runs away from the UI thread.
-    LaunchedEffect(editedBase, brightness, contrast, saturation, crop, customRatio) {
+    LaunchedEffect(editedBase, brightness, contrast, saturation, crop, customRatio, perspectiveEnabled, perspectiveCorners) {
         val base = editedBase
         if (base != null) {
             preview = withContext(Dispatchers.Default) {
                 val small = fitPreview(base, 1000)
-                val cropped = cropForPreset(small, crop, if (crop == "Custom") customRatio else null)
+                val perspective = if (perspectiveEnabled) perspectiveCorrect(small, perspectiveCorners) else small\n                val cropped = cropForPreset(perspective, crop, if (crop == "Custom") customRatio else null)
                 adjustPhoto(cropped, brightness, contrast, saturation)
             }
         }
@@ -171,6 +193,61 @@ internal fun PhotoEditorScreen(photoPath: String, onRetake: () -> Unit, onSaved:
             if (preview != null) {
                 Image(preview!!.asImageBitmap(), "Live passport photo editing preview",
                     Modifier.fillMaxSize().padding(5.dp), contentScale=ContentScale.Fit)
+                if (perspectiveEnabled) {
+                    Canvas(Modifier.fillMaxSize().pointerInput(preview, perspectiveCorners) {
+                        var activeCorner = -1
+                        detectDragGestures(
+                            onDragStart = { point ->
+                                val w = size.width.toFloat()
+                                val h = size.height.toFloat()
+                                val ratio = preview!!.width.toFloat() / preview!!.height
+                                val boxRatio = w / h
+                                val dw = if (ratio > boxRatio) w else h * ratio
+                                val dh = if (ratio > boxRatio) w / ratio else h
+                                val left = (w - dw) / 2f
+                                val top = (h - dh) / 2f
+                                activeCorner = perspectiveCorners.indices.minByOrNull { i ->
+                                    val px = left + perspectiveCorners[i].x * dw
+                                    val py = top + perspectiveCorners[i].y * dh
+                                    (px - point.x) * (px - point.x) + (py - point.y) * (py - point.y)
+                                } ?: -1
+                            },
+                            onDrag = { change, drag ->
+                                change.consume()
+                                if (activeCorner >= 0) {
+                                    val w = size.width.toFloat()
+                                    val h = size.height.toFloat()
+                                    val ratio = preview!!.width.toFloat() / preview!!.height
+                                    val boxRatio = w / h
+                                    val dw = if (ratio > boxRatio) w else h * ratio
+                                    val dh = if (ratio > boxRatio) w / ratio else h
+                                    val left = (w - dw) / 2f
+                                    val top = (h - dh) / 2f
+                                    val updated = perspectiveCorners.toMutableList()
+                                    val old = updated[activeCorner]
+                                    updated[activeCorner] = Offset(
+                                        (old.x + drag.x / dw).coerceIn(0f, 1f),
+                                        (old.y + drag.y / dh).coerceIn(0f, 1f)
+                                    )
+                                    perspectiveCorners = updated
+                                }
+                            }
+                        )
+                    }) {
+                        val ratio = preview!!.width.toFloat() / preview!!.height
+                        val boxRatio = size.width / size.height
+                        val dw = if (ratio > boxRatio) size.width else size.height * ratio
+                        val dh = if (ratio > boxRatio) size.width / ratio else size.height
+                        val left = (size.width - dw) / 2f
+                        val top = (size.height - dh) / 2f
+                        val pts = perspectiveCorners.map { Offset(left + it.x * dw, top + it.y * dh) }
+                        for (i in pts.indices) {
+                            drawLine(Color(0xFFE4B45D), pts[i], pts[(i + 1) % pts.size], strokeWidth = 3.dp.toPx())
+                            drawCircle(Color(0xFF101522), 11.dp.toPx(), pts[i])
+                            drawCircle(Color(0xFFE4B45D), 7.dp.toPx(), pts[i])
+                        }
+                    }
+                }
             } else {
                 Text("Unable to load photograph", color=Color.White)
             }
@@ -189,6 +266,17 @@ internal fun PhotoEditorScreen(photoPath: String, onRetake: () -> Unit, onSaved:
             Modifier.weight(1.25f).fillMaxWidth().verticalScroll(rememberScrollState()),
             verticalArrangement=Arrangement.spacedBy(6.dp)
         ) {
+            Text("MANUAL PERSPECTIVE", color=Color(0xFF9AA7B8), fontSize=10.sp, fontWeight=FontWeight.Bold)
+            Row(verticalAlignment=Alignment.CenterVertically, horizontalArrangement=Arrangement.spacedBy(8.dp)) {
+                FilterChip(selected=perspectiveEnabled, onClick={perspectiveEnabled = !perspectiveEnabled}, label={Text(if (perspectiveEnabled) "Adjust corners: ON" else "Adjust corners: OFF")})
+                Text("Drag the four gold corner handles to straighten a tilted photo.", color=Color(0xFF9AA7B8), fontSize=10.sp, modifier=Modifier.weight(1f))
+            }
+            if (perspectiveEnabled) {
+                Row(horizontalArrangement=Arrangement.spacedBy(8.dp)) {
+                    OutlinedButton(onClick={perspectiveCorners=listOf(Offset(0f,0f),Offset(1f,0f),Offset(1f,1f),Offset(0f,1f))}) { Text("Reset corners") }
+                    Text("The selected area is corrected to a straight rectangle.", color=Color(0xFF9AA7B8), fontSize=10.sp, modifier=Modifier.weight(1f))
+                }
+            }
             Text("AI BACKGROUND", color=Color(0xFF9AA7B8), fontSize=10.sp, fontWeight=FontWeight.Bold)
             Row(Modifier.horizontalScroll(androidx.compose.foundation.rememberScrollState()), horizontalArrangement=Arrangement.spacedBy(6.dp)) {
                 listOf("White" to Pixel.WHITE, "Blue" to Pixel.rgb(35,91,170), "Red" to Pixel.rgb(190,35,48), "Grey" to Pixel.LTGRAY).forEach { (label, color) ->
@@ -291,7 +379,7 @@ internal fun PhotoEditorScreen(photoPath: String, onRetake: () -> Unit, onSaved:
             Row(horizontalArrangement=Arrangement.spacedBy(7.dp)) {
                 OutlinedButton(onClick=onRetake,enabled=!busy,modifier=Modifier.weight(1f)) { Text("Retake") }
                 OutlinedButton(onClick={
-                    editedBase=original; brightness=0f; contrast=1f; saturation=1f; crop="Original"
+                    editedBase=original; brightness=0f; contrast=1f; saturation=1f; crop="Original"; perspectiveEnabled=false; perspectiveCorners=listOf(Offset(0f,0f),Offset(1f,0f),Offset(1f,1f),Offset(0f,1f))
                     customWidth="600"; customHeight="800"; customUnit="px"; outputDpi=300
                     status="Edits reset."
                 },enabled=!busy,modifier=Modifier.weight(1f)) { Text("Reset") }
@@ -303,7 +391,7 @@ internal fun PhotoEditorScreen(photoPath: String, onRetake: () -> Unit, onSaved:
                         scope.launch {
                             try {
                                 val finalBitmap=withContext(Dispatchers.Default) {
-                                    val cropped=cropForPreset(base,crop, if(crop=="Custom") customRatio else null)
+                                    val perspective=if(perspectiveEnabled) perspectiveCorrect(base,perspectiveCorners) else base\n                                    val cropped=cropForPreset(perspective,crop, if(crop=="Custom") customRatio else null)
                                     val adjusted=adjustPhoto(cropped,brightness,contrast,saturation)
                                     if (crop=="Custom" && customRatio!=null) {
                                         val factor=if(customUnit=="mm") outputDpi/25.4f else if(customUnit=="cm") outputDpi/2.54f else if(customUnit=="in") outputDpi.toFloat() else 1f

@@ -292,9 +292,9 @@ internal fun BusinessManagementScreen(modifier: Modifier = Modifier) {
         Surface(color=BizPanel,shape=RoundedCornerShape(16.dp),modifier=Modifier.fillMaxWidth()) {
             Column(Modifier.padding(14.dp),verticalArrangement=Arrangement.spacedBy(7.dp)) {
                 Text("TODAY'S CASHBOOK",color=BizGold,fontSize=11.sp,fontWeight=FontWeight.Bold)
-                Text(money(cashbookTotal),color=Color.White,fontSize=24.sp,fontWeight=FontWeight.Bold)
+                Text(money(cashbookTotal),color=PrimaryText,fontSize=24.sp,fontWeight=FontWeight.Bold)
                 Text("${cashbookLines.sumOf{it.count}} payment transaction(s)",color=BizMuted,fontSize=10.sp)
-                cashbookLines.forEach { Text("${it.method}: ${it.count} transaction(s) • ${money(it.amountPesewas)}",color=Color.White,fontSize=11.sp) }
+                cashbookLines.forEach { Text("${it.method}: ${it.count} transaction(s) • ${money(it.amountPesewas)}",color=PrimaryText,fontSize=11.sp) }
                 if(cashbookLines.isEmpty()) Text("No payments have been recorded today.",color=BizMuted,fontSize=11.sp)
                 OutlinedButton(onClick={
                     val rows=db.paymentsInRange(todayStart,System.currentTimeMillis()+1)
@@ -338,7 +338,7 @@ internal fun BusinessManagementScreen(modifier: Modifier = Modifier) {
             MetricCard("NET CASH MOVEMENT", money(operatingCashflow), Modifier.weight(1f))
         }
         Text("EXPENSE BREAKDOWN • " + period, color = BizGold, fontSize = 11.sp, fontWeight = FontWeight.Bold)
-        expenseBreakdown.forEach { Text(it.method + " • " + it.count + " item(s) • " + money(it.amountPesewas), color = Color.White, fontSize = 11.sp) }
+        expenseBreakdown.forEach { Text(it.method + " • " + it.count + " item(s) • " + money(it.amountPesewas), color = PrimaryText, fontSize = 11.sp) }
         periodExpenses.take(10).forEach { e -> Text(e.category + " • " + e.description + " • " + money(e.amountPesewas), color = BizMuted, fontSize = 11.sp) }
         Text("Net cash movement is recorded customer payments less recorded expenses, not accounting profit.", color = BizMuted, fontSize = 10.sp)
         Text("BUSINESS ANALYTICS", color = BizGold, fontSize = 11.sp, fontWeight = FontWeight.Bold)
@@ -437,9 +437,9 @@ internal fun BusinessManagementScreen(modifier: Modifier = Modifier) {
             history.forEach { job ->
                 Surface(color = BizPanel, shape = RoundedCornerShape(12.dp), modifier = Modifier.fillMaxWidth()) {
                     Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(3.dp)) {
-                        Text(job.customer, color = Color.White, fontWeight = FontWeight.SemiBold)
+                        Text(job.customer, color = PrimaryText, fontWeight = FontWeight.SemiBold)
                         Text("${job.service} • ${job.workflow}", color = BizMuted, fontSize = 11.sp)
-                        Text("Paid ${money(job.paidPesewas)} • Balance ${money(job.balancePesewas)}", color = Color.White, fontSize = 11.sp)
+                        Text("Paid ${money(job.paidPesewas)} • Balance ${money(job.balancePesewas)}", color = PrimaryText, fontSize = 11.sp)
                     }
                 }
             }
@@ -453,7 +453,7 @@ internal fun BusinessManagementScreen(modifier: Modifier = Modifier) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 TextButton(onClick = { selectionMode = !selectionMode; selectedIds = emptySet() }) { Text(if (selectionMode) "Cancel selection" else "Select jobs", color = BizGold) }
                 if (selectionMode) {
-                    TextButton(onClick = { selectedIds = if (selectedIds.size == jobs.size) emptySet() else jobs.map { it.id }.toSet() }) { Text(if (selectedIds.size == jobs.size) "Deselect all" else "Select all", color = Color.White) }
+                    TextButton(onClick = { selectedIds = if (selectedIds.size == jobs.size) emptySet() else jobs.map { it.id }.toSet() }) { Text(if (selectedIds.size == jobs.size) "Deselect all" else "Select all", color = PrimaryText) }
                     Text("${selectedIds.size} selected", color = BizMuted, fontSize = 10.sp, modifier = Modifier.weight(1f))
                     Button(onClick = { confirmDelete = true }, enabled = selectedIds.isNotEmpty(), colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFB93838))) { Text("Delete") }
                 }
@@ -465,13 +465,13 @@ internal fun BusinessManagementScreen(modifier: Modifier = Modifier) {
                 Column(Modifier.padding(13.dp), verticalArrangement = Arrangement.spacedBy(5.dp)) {
                     if (selectionMode) TextButton(onClick = { selectedIds = if (job.id in selectedIds) selectedIds - job.id else selectedIds + job.id }) { Text(if (job.id in selectedIds) "✓ Selected" else "Select job", color = BizGold) }
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text(job.customer, color = Color.White, fontWeight = FontWeight.SemiBold, fontSize = 15.sp, modifier = Modifier.weight(1f))
+                        Text(job.customer, color = PrimaryText, fontWeight = FontWeight.SemiBold, fontSize = 15.sp, modifier = Modifier.weight(1f))
                         AssistChip(onClick = {}, label = { Text(job.paymentStatus, fontSize = 9.sp) })
                     }
                     Text(job.service, color = BizMuted, fontSize = 12.sp)
                     Text("Workflow: ${job.workflow}", color = BizGold, fontSize = 11.sp)
                     if (job.dueDate.isNotBlank()) Text("Expected delivery: ${job.dueDate}", color = BizMuted, fontSize = 10.sp)
-                    Text("Total ${money(job.totalPesewas)} • Paid ${money(job.paidPesewas)} • Balance ${money(job.balancePesewas)}", color = Color.White, fontSize = 11.sp)
+                    Text("Total ${money(job.totalPesewas)} • Paid ${money(job.paidPesewas)} • Balance ${money(job.balancePesewas)}", color = PrimaryText, fontSize = 11.sp)
                     Text(SimpleDateFormat("dd MMM yyyy, HH:mm", Locale.getDefault()).format(Date(job.created)), color = BizMuted, fontSize = 10.sp)
                     if (!selectionMode) {
                         if (job.balancePesewas > 0L) TextButton(onClick = { paymentJob = job; paymentAmount = ""; paymentReference = ""; paymentMethod = "Cash"; paymentMessage = "" }) { Text("RECORD PAYMENT", color = BizGold, fontSize = 11.sp) }
@@ -479,7 +479,7 @@ internal fun BusinessManagementScreen(modifier: Modifier = Modifier) {
                         Text("PAYMENT LEDGER • ${ledger.size} transaction(s)", color = BizMuted, fontSize = 9.sp, fontWeight = FontWeight.Bold)
                         ledger.take(3).forEach { payment ->
                             val paymentDate = SimpleDateFormat("dd MMM yyyy, HH:mm", Locale.getDefault()).format(Date(payment.created))
-                            Text("${money(payment.amountPesewas)} • ${payment.method} • $paymentDate" + if (payment.reference.isNotBlank()) " • ${payment.reference}" else "", color = Color.White, fontSize = 10.sp)
+                            Text("${money(payment.amountPesewas)} • ${payment.method} • $paymentDate" + if (payment.reference.isNotBlank()) " • ${payment.reference}" else "", color = PrimaryText, fontSize = 10.sp)
                         }
                         TextButton(onClick = {
                             editJob = job

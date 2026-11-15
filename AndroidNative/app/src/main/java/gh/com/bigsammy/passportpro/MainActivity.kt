@@ -189,7 +189,7 @@ private fun Dashboard(modifier: Modifier, onCapture: () -> Unit, onNavigate: (St
                 }
             }
         }
-        Text("PHASE 2 • CAMERA STUDIO", color = Gold, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+        Text("PROFESSIONAL CAMERA STUDIO", color = Gold, fontSize = 10.sp, fontWeight = FontWeight.Bold)
     }
 }
 
@@ -310,7 +310,7 @@ private fun CameraStudioScreen(modifier: Modifier = Modifier) {
                 Text("Passport capture", color = Color.White, fontSize = 23.sp, fontWeight = FontWeight.Bold)
             }
             Surface(color = Panel, shape = RoundedCornerShape(12.dp)) {
-                Text("PHASE 2", color = Gold, modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp), fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                Text("LIVE CAPTURE", color = Gold, modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp), fontSize = 10.sp, fontWeight = FontWeight.Bold)
             }
         }
 
@@ -397,9 +397,9 @@ private fun analyseFace(proxy: ImageProxy, detector: FaceDetector, onResult: (In
 @Composable
 private fun Workspace(tab: String, modifier: Modifier) {
     val detail = when (tab) {
-        "Customers" -> "Customer profiles, contacts and job history will be delivered in the business management phase."
-        "Gallery" -> "Captured photographs are saved in the app's private PassportPro/Captures folder. A browsable gallery is planned for a later phase."
-        else -> "Studio settings, editing, printing, reports and backup tools will be added in later phases."
+        "Customers" -> "Manage customer profiles, contact details and photo job history."
+        "Gallery" -> "Browse, review, select and share photographs saved in your studio."
+        else -> "Manage your photography workflow, editing, printing, business records and studio settings."
     }
     Column(modifier.fillMaxSize().padding(28.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
         Icon(Icons.Default.PhotoCamera, null, tint = Gold, modifier = Modifier.size(54.dp))
@@ -408,6 +408,6 @@ private fun Workspace(tab: String, modifier: Modifier) {
         Spacer(Modifier.height(8.dp))
         Text(detail, color = Muted, fontSize = 14.sp)
         Spacer(Modifier.height(18.dp))
-        Text("PassportPro Studio • Phase 2 camera", color = Gold, fontSize = 12.sp)
+        Text("PassportPro Studio • Professional camera", color = Gold, fontSize = 12.sp)
     }
 }

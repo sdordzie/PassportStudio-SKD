@@ -280,7 +280,7 @@ internal fun BusinessManagementScreen(modifier: Modifier = Modifier) {
     }
 
     Column(modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        Text("PHASE 17 • EXPENSES & FINANCIAL CONTROL", color = BizGold, fontSize = 10.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.sp)
+        Text("BUSINESS • EXPENSES & FINANCIAL CONTROL", color = BizGold, fontSize = 10.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.sp)
         Text("Studio operations", color = Color.White, fontSize = 25.sp, fontWeight = FontWeight.Bold)
         Text("Track each job from registration to delivery, review customer history and monitor business performance.", color = BizMuted, fontSize = 12.sp)
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {

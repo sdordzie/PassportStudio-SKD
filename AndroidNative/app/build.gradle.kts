@@ -34,6 +34,7 @@ dependencies {
 
     // On-device face detection; no image upload required
     implementation("com.google.mlkit:face-detection:16.1.7")
+    implementation("com.google.mlkit:segmentation-selfie:16.0.0-beta6")
 
     implementation("androidx.core:core-ktx:1.15.0")
     implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.8.7")

@@ -40,6 +40,7 @@ private val BizPanel = Color(0xFF1B2433)
 private val BizMuted = Color(0xFF9AA7B8)
 private val workflowStages = listOf("REGISTERED", "EDITING", "READY TO PRINT", "PRINTED", "DELIVERED")
 
+private data class StudioExpense(val id: Long, val category: String, val description: String, val amountPesewas: Long, val method: String, val created: Long)
 private data class CashbookLine(val method: String, val count: Int, val amountPesewas: Long)
 private data class StudioPayment(val id: Long, val amountPesewas: Long, val method: String, val reference: String, val created: Long)
 
@@ -51,11 +52,12 @@ private data class StudioJob(
     val balancePesewas get() = (totalPesewas - paidPesewas).coerceAtLeast(0)
     val paymentStatus get() = when { balancePesewas == 0L -> "PAID"; paidPesewas > 0L -> "PARTIAL"; else -> "UNPAID" }
 }
-private class BusinessDatabase(context: Context) : SQLiteOpenHelper(context, "passportpro_business.db", null, 4) {
+private class BusinessDatabase(context: Context) : SQLiteOpenHelper(context, "passportpro_business.db", null, 5) {
     override fun onCreate(db: SQLiteDatabase) {
         db.execSQL("CREATE TABLE jobs (id INTEGER PRIMARY KEY AUTOINCREMENT, customer TEXT NOT NULL, phone TEXT NOT NULL DEFAULT '', service TEXT NOT NULL, total_pesewas INTEGER NOT NULL, paid_pesewas INTEGER NOT NULL DEFAULT 0, created INTEGER NOT NULL, workflow_status TEXT NOT NULL DEFAULT 'REGISTERED', due_date TEXT NOT NULL DEFAULT '')")
         db.execSQL("CREATE TABLE payments (id INTEGER PRIMARY KEY AUTOINCREMENT, job_id INTEGER NOT NULL, amount_pesewas INTEGER NOT NULL, method TEXT NOT NULL DEFAULT 'Cash', reference TEXT NOT NULL DEFAULT '', created INTEGER NOT NULL)")
         db.execSQL("CREATE TABLE job_audit (id INTEGER PRIMARY KEY AUTOINCREMENT, job_id INTEGER NOT NULL, action TEXT NOT NULL, details TEXT NOT NULL, created INTEGER NOT NULL)")
+        db.execSQL("CREATE TABLE expenses (id INTEGER PRIMARY KEY AUTOINCREMENT, category TEXT NOT NULL, description TEXT NOT NULL, amount_pesewas INTEGER NOT NULL, method TEXT NOT NULL, created INTEGER NOT NULL)")
     }
     override fun onUpgrade(db: SQLiteDatabase, oldVersion: Int, newVersion: Int) {
         if (oldVersion < 2) {
@@ -64,6 +66,7 @@ private class BusinessDatabase(context: Context) : SQLiteOpenHelper(context, "pa
         }
         if (oldVersion < 3) db.execSQL("CREATE TABLE IF NOT EXISTS payments (id INTEGER PRIMARY KEY AUTOINCREMENT, job_id INTEGER NOT NULL, amount_pesewas INTEGER NOT NULL, method TEXT NOT NULL DEFAULT 'Cash', reference TEXT NOT NULL DEFAULT '', created INTEGER NOT NULL)")
         if (oldVersion < 4) db.execSQL("CREATE TABLE IF NOT EXISTS job_audit (id INTEGER PRIMARY KEY AUTOINCREMENT, job_id INTEGER NOT NULL, action TEXT NOT NULL, details TEXT NOT NULL, created INTEGER NOT NULL)")
+        if (oldVersion < 5) db.execSQL("CREATE TABLE IF NOT EXISTS expenses (id INTEGER PRIMARY KEY AUTOINCREMENT, category TEXT NOT NULL, description TEXT NOT NULL, amount_pesewas INTEGER NOT NULL, method TEXT NOT NULL, created INTEGER NOT NULL)")
     }
     fun add(customer: String, phone: String, service: String, total: Long, paid: Long, due: String) {
         val v = ContentValues().apply {
@@ -126,6 +129,25 @@ private class BusinessDatabase(context: Context) : SQLiteOpenHelper(context, "pa
             db.setTransactionSuccessful()
             return count
         } finally { db.endTransaction() }
+    }
+    fun addExpense(category: String, description: String, amount: Long, method: String): Boolean {
+        if (category.isBlank() || amount <= 0L) return false
+        val v = ContentValues().apply { put("category", category); put("description", description); put("amount_pesewas", amount); put("method", method); put("created", System.currentTimeMillis()) }
+        return writableDatabase.insert("expenses", null, v) > 0L
+    }
+    fun expenses(start: Long, end: Long): List<StudioExpense> {
+        val rows = mutableListOf<StudioExpense>()
+        readableDatabase.rawQuery("SELECT id,category,description,amount_pesewas,method,created FROM expenses WHERE created>=? AND created<? ORDER BY created DESC", arrayOf(start.toString(), end.toString())).use { c ->
+            while (c.moveToNext()) rows.add(StudioExpense(c.getLong(0), c.getString(1), c.getString(2), c.getLong(3), c.getString(4), c.getLong(5)))
+        }
+        return rows
+    }
+    fun expenseTotals(start: Long, end: Long): List<CashbookLine> {
+        val rows = mutableListOf<CashbookLine>()
+        readableDatabase.rawQuery("SELECT category,COUNT(*),SUM(amount_pesewas) FROM expenses WHERE created>=? AND created<? GROUP BY category", arrayOf(start.toString(), end.toString())).use { c ->
+            while (c.moveToNext()) rows.add(CashbookLine(c.getString(0), c.getInt(1), c.getLong(2)))
+        }
+        return rows
     }
     fun cashbook(start: Long, end: Long): List<CashbookLine> {
         val rows = mutableListOf<CashbookLine>()
@@ -218,6 +240,11 @@ internal fun BusinessManagementScreen(modifier: Modifier = Modifier) {
     var editTotal by remember { mutableStateOf("") }
     var editDue by remember { mutableStateOf("") }
     var editMessage by remember { mutableStateOf("") }
+    var expenseCategory by remember { mutableStateOf("Supplies") }
+    var expenseDescription by remember { mutableStateOf("") }
+    var expenseAmount by remember { mutableStateOf("") }
+    var expenseMethod by remember { mutableStateOf("Cash") }
+    var expenseMessage by remember { mutableStateOf("") }
     val totalPesewas = ((total.toDoubleOrNull() ?: 0.0) * 100).toLong().coerceAtLeast(0)
     val paidPesewas = ((paid.toDoubleOrNull() ?: 0.0) * 100).toLong().coerceAtLeast(0)
     val now = Calendar.getInstance()
@@ -235,6 +262,10 @@ internal fun BusinessManagementScreen(modifier: Modifier = Modifier) {
     val collected = periodJobs.sumOf { it.paidPesewas }
     val sales = periodJobs.sumOf { it.totalPesewas }
     val balance = periodJobs.sumOf { it.balancePesewas }
+    val periodExpenses = db.expenses(start, now.timeInMillis + 1)
+    val expenseTotal = periodExpenses.sumOf { it.amountPesewas }
+    val operatingCashflow = collected - expenseTotal
+    val expenseBreakdown = db.expenseTotals(start, now.timeInMillis + 1)
     val history = jobs.filter {
         searchHistory.isNotBlank() && (it.customer.contains(searchHistory, true) || it.phone.contains(searchHistory, true))
     }
@@ -249,7 +280,7 @@ internal fun BusinessManagementScreen(modifier: Modifier = Modifier) {
     }
 
     Column(modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        Text("PHASE 16 • RECEIPTS & CASHBOOK", color = BizGold, fontSize = 10.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.sp)
+        Text("PHASE 17 • EXPENSES & FINANCIAL CONTROL", color = BizGold, fontSize = 10.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.sp)
         Text("Studio operations", color = Color.White, fontSize = 25.sp, fontWeight = FontWeight.Bold)
         Text("Track each job from registration to delivery, review customer history and monitor business performance.", color = BizMuted, fontSize = 12.sp)
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -279,6 +310,37 @@ internal fun BusinessManagementScreen(modifier: Modifier = Modifier) {
                 }) { Text("SHARE DAILY CASHBOOK") }
             }
         }
+        Surface(color = BizPanel, shape = RoundedCornerShape(16.dp), modifier = Modifier.fillMaxWidth()) {
+            Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(7.dp)) {
+                Text("EXPENSE MANAGEMENT", color = BizGold, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                    listOf("Supplies", "Transport", "Rent", "Utilities").forEach { c -> FilterChip(selected = expenseCategory == c, onClick = { expenseCategory = c }, label = { Text(c, fontSize = 9.sp) }) }
+                }
+                Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                    listOf("Equipment", "Maintenance", "Marketing", "Other").forEach { c -> FilterChip(selected = expenseCategory == c, onClick = { expenseCategory = c }, label = { Text(c, fontSize = 9.sp) }) }
+                }
+                OutlinedTextField(expenseDescription, { expenseDescription = it }, label = { Text("Description / supplier") }, singleLine = true, modifier = Modifier.fillMaxWidth())
+                OutlinedTextField(expenseAmount, { expenseAmount = it.filter { ch -> ch.isDigit() || ch == '.' } }, label = { Text("Amount (GH₵)") }, singleLine = true, modifier = Modifier.fillMaxWidth(), keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal))
+                Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                    listOf("Cash", "Mobile Money", "Bank", "Other").forEach { m -> FilterChip(selected = expenseMethod == m, onClick = { expenseMethod = m }, label = { Text(m, fontSize = 9.sp) }) }
+                }
+                Button(onClick = {
+                    val amount = ((expenseAmount.toDoubleOrNull() ?: 0.0) * 100).toLong()
+                    if (amount <= 0L) expenseMessage = "Enter a valid amount."
+                    else if (db.addExpense(expenseCategory, expenseDescription, amount, expenseMethod)) { expenseAmount = ""; expenseDescription = ""; expenseMessage = "Expense recorded." }
+                    else expenseMessage = "Could not save expense."
+                }, modifier = Modifier.fillMaxWidth(), colors = ButtonDefaults.buttonColors(containerColor = BizGold, contentColor = Color(0xFF101522))) { Text("SAVE EXPENSE") }
+                if (expenseMessage.isNotBlank()) Text(expenseMessage, color = BizGold, fontSize = 11.sp)
+            }
+        }
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            MetricCard("PERIOD EXPENSES", money(expenseTotal), Modifier.weight(1f))
+            MetricCard("NET CASH MOVEMENT", money(operatingCashflow), Modifier.weight(1f))
+        }
+        Text("EXPENSE BREAKDOWN • " + period, color = BizGold, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+        expenseBreakdown.forEach { Text(it.method + " • " + it.count + " item(s) • " + money(it.amountPesewas), color = Color.White, fontSize = 11.sp) }
+        periodExpenses.take(10).forEach { e -> Text(e.category + " • " + e.description + " • " + money(e.amountPesewas), color = BizMuted, fontSize = 11.sp) }
+        Text("Net cash movement is recorded customer payments less recorded expenses, not accounting profit.", color = BizMuted, fontSize = 10.sp)
         Text("BUSINESS ANALYTICS", color = BizGold, fontSize = 11.sp, fontWeight = FontWeight.Bold)
         Row(horizontalArrangement = Arrangement.spacedBy(5.dp)) {
             listOf("Today", "This week", "This month", "All time").forEach { option ->

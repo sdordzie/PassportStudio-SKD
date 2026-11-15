@@ -13,6 +13,9 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
@@ -21,6 +24,8 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AddPhotoAlternate
 import androidx.compose.material.icons.filled.PictureAsPdf
+import androidx.compose.material.icons.filled.PhotoLibrary
+import androidx.compose.ui.window.Dialog
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -59,6 +64,9 @@ internal fun PrintDesignerScreen(modifier: Modifier = Modifier) {
     var photo by remember { mutableStateOf<Bitmap?>(null) }
     var photoName by remember { mutableStateOf("No photograph selected") }
     var status by remember { mutableStateOf("Choose a photo to prepare your print sheet.") }
+    var showStudioPicker by remember { mutableStateOf(false) }
+    var libraryRefresh by remember { mutableIntStateOf(0) }
+    val studioPhotos = remember(libraryRefresh) { listOf(File(context.filesDir, "PassportPro/Captures"), File(context.getExternalFilesDir(null), "PassportPro/Edited")).flatMap { root -> if (root.exists()) root.walkTopDown().filter { it.isFile && it.extension.lowercase() in listOf("jpg", "jpeg", "png") }.toList() else emptyList() }.sortedByDescending { it.lastModified() } }
     var busy by remember { mutableStateOf(false) }
 
     val picker = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri: Uri? ->
@@ -137,6 +145,38 @@ internal fun PrintDesignerScreen(modifier: Modifier = Modifier) {
         FileOutputStream(file).use { pdf.writeTo(it) }
         pdf.close()
         return file
+    }
+
+    if (showStudioPicker) {
+        Dialog(onDismissRequest = { showStudioPicker = false }) {
+            Surface(color = Color(0xFF101522), shape = RoundedCornerShape(22.dp), modifier = Modifier.fillMaxWidth().fillMaxHeight(.88f)) {
+                Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Text("STUDIO PHOTO LIBRARY", color = Color(0xFFE4B45D), fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                    Text("Select a captured or edited photo", color = Color.White, fontSize = 18.sp, fontWeight = FontWeight.Bold)
+                    if (studioPhotos.isEmpty()) {
+                        Box(Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) { Text("No saved photos found. Capture or edit a photo first.", color = Color(0xFF9AA7B8)) }
+                    } else {
+                        LazyVerticalGrid(columns = GridCells.Fixed(3), modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            items(studioPhotos, key = { it.absolutePath }) { file ->
+                                val thumb = remember(file.absolutePath, file.lastModified()) { BitmapFactory.decodeFile(file.absolutePath, BitmapFactory.Options().apply { inSampleSize = 4 }) }
+                                Surface(color = Color(0xFF1B2433), shape = RoundedCornerShape(10.dp), onClick = {
+                                    val decoded = BitmapFactory.decodeFile(file.absolutePath)
+                                    if (decoded != null) { photo = decoded.copy(Bitmap.Config.ARGB_8888, false); photoName = file.name; status = "Studio photo selected."; showStudioPicker = false }
+                                    else status = "Unable to open selected photo."
+                                }) {
+                                    Column(Modifier.padding(5.dp)) {
+                                        if (thumb != null) Image(thumb.asImageBitmap(), null, Modifier.fillMaxWidth().height(112.dp), contentScale = ContentScale.Crop)
+                                        Text(if (file.parentFile?.name == "Edited") "EDITED" else "CAPTURED", color = Color(0xFFE4B45D), fontSize = 9.sp, fontWeight = FontWeight.Bold)
+                                        Text(file.name, color = Color.White, fontSize = 9.sp, maxLines = 1)
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    OutlinedButton(onClick = { showStudioPicker = false }, modifier = Modifier.fillMaxWidth()) { Text("CLOSE") }
+                }
+            }
+        }
     }
 
     Column(modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {

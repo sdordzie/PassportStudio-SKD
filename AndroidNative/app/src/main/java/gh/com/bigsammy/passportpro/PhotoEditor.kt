@@ -4,6 +4,10 @@ import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.graphics.Color as Pixel
 import android.graphics.Bitmap.CompressFormat
+import android.graphics.Matrix
+import android.media.ExifInterface
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.ui.text.input.KeyboardType
 import com.google.mlkit.vision.common.InputImage
 import com.google.mlkit.vision.segmentation.Segmentation
 import com.google.mlkit.vision.segmentation.selfie.SelfieSegmenterOptions
@@ -43,11 +47,13 @@ private fun fitPreview(source: Bitmap, maxEdge: Int = 1100): Bitmap {
         (source.height * scale).toInt().coerceAtLeast(1), true)
 }
 
-private fun cropForPreset(source: Bitmap, preset: String): Bitmap {
-    val ratio = when (preset) {
+private fun cropForPreset(source: Bitmap, preset: String, customRatio: Float? = null): Bitmap {
+    val ratio = customRatio ?: when (preset) {
         "35 × 45 mm" -> 35f / 45f
         "Square" -> 1f
         "4 × 6" -> 2f / 3f
+        "Portrait" -> minOf(source.width.toFloat() / source.height, 0.75f)
+        "Landscape" -> maxOf(source.width.toFloat() / source.height, 1.3333333f)
         else -> source.width.toFloat() / source.height
     }
     val sourceRatio = source.width.toFloat() / source.height
@@ -87,12 +93,32 @@ private fun adjustPhoto(source: Bitmap, brightness: Float, contrast: Float, satu
     }
 }
 
+private fun decodeUprightPhoto(path: String): Bitmap? {
+    val bitmap = BitmapFactory.decodeFile(path) ?: return null
+    return try {
+        val exif = ExifInterface(path)
+        val orientation = exif.getAttributeInt(ExifInterface.TAG_ORIENTATION, ExifInterface.ORIENTATION_NORMAL)
+        val matrix = Matrix()
+        when (orientation) {
+            ExifInterface.ORIENTATION_ROTATE_90 -> matrix.postRotate(90f)
+            ExifInterface.ORIENTATION_ROTATE_180 -> matrix.postRotate(180f)
+            ExifInterface.ORIENTATION_ROTATE_270 -> matrix.postRotate(270f)
+            ExifInterface.ORIENTATION_FLIP_HORIZONTAL -> matrix.preScale(-1f, 1f)
+            ExifInterface.ORIENTATION_FLIP_VERTICAL -> matrix.preScale(1f, -1f)
+            ExifInterface.ORIENTATION_TRANSPOSE -> { matrix.preScale(-1f, 1f); matrix.postRotate(90f) }
+            ExifInterface.ORIENTATION_TRANSVERSE -> { matrix.preScale(-1f, 1f); matrix.postRotate(270f) }
+        }
+        if (orientation == ExifInterface.ORIENTATION_NORMAL || orientation == ExifInterface.ORIENTATION_UNDEFINED) bitmap
+        else Bitmap.createBitmap(bitmap, 0, 0, bitmap.width, bitmap.height, matrix, true).also { if (it !== bitmap) bitmap.recycle() }
+    } catch (_: Exception) { bitmap }
+}
+
 @Composable
 internal fun PhotoEditorScreen(photoPath: String, onRetake: () -> Unit, onSaved: () -> Unit) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val original = remember(photoPath) {
-        BitmapFactory.decodeFile(photoPath)?.copy(Bitmap.Config.ARGB_8888, false)?.let { fitPreview(it, 2200) }
+        decodeUprightPhoto(photoPath)?.copy(Bitmap.Config.ARGB_8888, false)?.let { fitPreview(it, 2200) }
     }
     var editedBase by remember(photoPath) { mutableStateOf(original) }
     var preview by remember(photoPath) { mutableStateOf(original?.let { fitPreview(it, 1000) }) }
@@ -101,16 +127,25 @@ internal fun PhotoEditorScreen(photoPath: String, onRetake: () -> Unit, onSaved:
     var contrast by remember { mutableFloatStateOf(1f) }
     var saturation by remember { mutableFloatStateOf(1f) }
     var crop by remember { mutableStateOf("Original") }
+    var customWidth by remember { mutableStateOf("600") }
+    var customHeight by remember { mutableStateOf("800") }
+    var customUnit by remember { mutableStateOf("px") }
+    var outputDpi by remember { mutableIntStateOf(300) }
     var busy by remember { mutableStateOf(false) }
     var status by remember { mutableStateOf("Your photograph is ready. Changes appear in the preview.") }
 
+    val customRatio = remember(customWidth, customHeight) {
+        val w = customWidth.toFloatOrNull()?.takeIf { it > 0f }
+        val h = customHeight.toFloatOrNull()?.takeIf { it > 0f }
+        if (w == null || h == null) null else w / h
+    }
     // Keep the preview visible and responsive; all pixel work runs away from the UI thread.
-    LaunchedEffect(editedBase, brightness, contrast, saturation, crop) {
+    LaunchedEffect(editedBase, brightness, contrast, saturation, crop, customRatio) {
         val base = editedBase
         if (base != null) {
             preview = withContext(Dispatchers.Default) {
                 val small = fitPreview(base, 1000)
-                val cropped = cropForPreset(small, crop)
+                val cropped = cropForPreset(small, crop, if (crop == "Custom") customRatio else null)
                 adjustPhoto(cropped, brightness, contrast, saturation)
             }
         }
@@ -225,9 +260,26 @@ internal fun PhotoEditorScreen(photoPath: String, onRetake: () -> Unit, onSaved:
 
             Text("CROP FORMAT", color=Color(0xFF9AA7B8), fontSize=10.sp, fontWeight=FontWeight.Bold)
             Row(Modifier.horizontalScroll(androidx.compose.foundation.rememberScrollState()), horizontalArrangement=Arrangement.spacedBy(5.dp)) {
-                listOf("Original","35 × 45 mm","Square","4 × 6").forEach { value ->
+                listOf("Original","Portrait","Landscape","35 × 45 mm","Square","4 × 6","Custom").forEach { value ->
                     FilterChip(selected=crop==value,onClick={crop=value},label={Text(value,fontSize=10.sp)})
                 }
+            }
+            if (crop == "Custom") {
+                Text("CUSTOM CROP DIMENSIONS", color=Color(0xFF9AA7B8), fontSize=10.sp, fontWeight=FontWeight.Bold)
+                Row(horizontalArrangement=Arrangement.spacedBy(8.dp), verticalAlignment=Alignment.CenterVertically) {
+                    OutlinedTextField(value=customWidth, onValueChange={ customWidth=it.filter(Char::isDigit).take(6) }, label={Text("Width")}, modifier=Modifier.weight(1f), singleLine=true, keyboardOptions=KeyboardOptions(keyboardType=KeyboardType.Number))
+                    OutlinedTextField(value=customHeight, onValueChange={ customHeight=it.filter(Char::isDigit).take(6) }, label={Text("Height")}, modifier=Modifier.weight(1f), singleLine=true, keyboardOptions=KeyboardOptions(keyboardType=KeyboardType.Number))
+                }
+                Row(horizontalArrangement=Arrangement.spacedBy(5.dp)) {
+                    listOf("px","mm","cm","in").forEach { unit -> FilterChip(selected=customUnit==unit,onClick={customUnit=unit},label={Text(unit)}) }
+                }
+                if (customUnit != "px") {
+                    Text("Output resolution: " + outputDpi + " DPI", color=Color(0xFF9AA7B8), fontSize=10.sp)
+                    Row(horizontalArrangement=Arrangement.spacedBy(5.dp)) {
+                        listOf(150,300,600).forEach { dpi -> FilterChip(selected=outputDpi==dpi,onClick={outputDpi=dpi},label={Text("$dpi DPI")}) }
+                    }
+                }
+                Text("Preview follows the width-to-height ratio. Physical units convert to pixels using the selected DPI.", color=Color(0xFF9AA7B8), fontSize=10.sp)
             }
             Text("Brightness ${(brightness*100).toInt()}%",color=Color(0xFF9AA7B8),fontSize=10.sp)
             Slider(value=brightness,onValueChange={brightness=it},valueRange=-.35f.. .35f)
@@ -240,6 +292,7 @@ internal fun PhotoEditorScreen(photoPath: String, onRetake: () -> Unit, onSaved:
                 OutlinedButton(onClick=onRetake,enabled=!busy,modifier=Modifier.weight(1f)) { Text("Retake") }
                 OutlinedButton(onClick={
                     editedBase=original; brightness=0f; contrast=1f; saturation=1f; crop="Original"
+                    customWidth="600"; customHeight="800"; customUnit="px"; outputDpi=300
                     status="Edits reset."
                 },enabled=!busy,modifier=Modifier.weight(1f)) { Text("Reset") }
                 Button(
@@ -250,8 +303,14 @@ internal fun PhotoEditorScreen(photoPath: String, onRetake: () -> Unit, onSaved:
                         scope.launch {
                             try {
                                 val finalBitmap=withContext(Dispatchers.Default) {
-                                    val cropped=cropForPreset(base,crop)
-                                    adjustPhoto(cropped,brightness,contrast,saturation)
+                                    val cropped=cropForPreset(base,crop, if(crop=="Custom") customRatio else null)
+                                    val adjusted=adjustPhoto(cropped,brightness,contrast,saturation)
+                                    if (crop=="Custom" && customRatio!=null) {
+                                        val factor=if(customUnit=="mm") outputDpi/25.4f else if(customUnit=="cm") outputDpi/2.54f else if(customUnit=="in") outputDpi.toFloat() else 1f
+                                        val targetW=(customWidth.toFloat()*factor).toInt().coerceIn(1,12000)
+                                        val targetH=(customHeight.toFloat()*factor).toInt().coerceIn(1,12000)
+                                        Bitmap.createScaledBitmap(adjusted,targetW,targetH,true)
+                                    } else adjusted
                                 }
                                 val file=withContext(Dispatchers.IO) {
                                     val dir=File(context.getExternalFilesDir(null),"PassportPro/Edited").apply { mkdirs() }

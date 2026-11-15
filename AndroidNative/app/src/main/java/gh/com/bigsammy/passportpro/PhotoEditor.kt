@@ -128,6 +128,27 @@ private fun decodeUprightPhoto(path: String): Bitmap? {
 }
 
 
+private fun isValidPerspectiveQuad(points: List<Offset>): Boolean {
+    if (points.size != 4) return false
+    var sign = 0f
+    for (i in 0..3) {
+        val a = points[i]
+        val b = points[(i + 1) % 4]
+        val c = points[(i + 2) % 4]
+        val cross = (b.x - a.x) * (c.y - b.y) - (b.y - a.y) * (c.x - b.x)
+        if (kotlin.math.abs(cross) < 0.0005f) return false
+        if (sign == 0f) sign = kotlin.math.sign(cross)
+        else if (cross * sign <= 0f) return false
+    }
+    var twiceArea = 0f
+    for (i in 0..3) {
+        val a = points[i]
+        val b = points[(i + 1) % 4]
+        twiceArea += a.x * b.y - b.x * a.y
+    }
+    return kotlin.math.abs(twiceArea) > 0.02f
+}
+
 private fun perspectiveCorrect(source: Bitmap, corners: List<Offset>): Bitmap {
     if (corners.size != 4) return source
     val src = FloatArray(8)
@@ -152,6 +173,7 @@ internal fun PhotoEditorScreen(photoPath: String, onRetake: () -> Unit, onSaved:
     }
     var editedBase by remember(photoPath) { mutableStateOf(original) }
     var preview by remember(photoPath) { mutableStateOf(original?.let { fitPreview(it, 1000) }) }
+    var perspectiveGuide by remember(photoPath) { mutableStateOf(original?.let { fitPreview(it, 1000) }) }
     var background by remember { mutableIntStateOf(Pixel.WHITE) }
     var brightness by remember { mutableFloatStateOf(0f) }
     var contrast by remember { mutableFloatStateOf(1f) }
@@ -174,6 +196,16 @@ internal fun PhotoEditorScreen(photoPath: String, onRetake: () -> Unit, onSaved:
         val h = customHeight.toFloatOrNull()?.takeIf { it > 0f }
         if (w == null || h == null) null else w / h
     }
+    // Draw perspective handles over the uncorrected oriented source so their positions stay stable.
+    LaunchedEffect(editedBase, rotation, flipHorizontal, flipVertical) {
+        val base = editedBase
+        if (base != null) {
+            perspectiveGuide = withContext(Dispatchers.Default) {
+                fitPreview(transformPhoto(base, rotation, flipHorizontal, flipVertical), 1000)
+            }
+        }
+    }
+
     // Keep the preview visible and responsive; all pixel work runs away from the UI thread.
     LaunchedEffect(editedBase, brightness, contrast, saturation, crop, customRatio, perspectiveEnabled, perspectiveCorners, rotation, flipHorizontal, flipVertical) {
         val base = editedBase
@@ -205,17 +237,18 @@ internal fun PhotoEditorScreen(photoPath: String, onRetake: () -> Unit, onSaved:
                 .background(Color(0xFF090D14), RoundedCornerShape(14.dp)),
             contentAlignment=Alignment.Center
         ) {
-            if (preview != null) {
-                Image(preview!!.asImageBitmap(), "Live passport photo editing preview",
+            val displayPhoto = if (perspectiveEnabled) perspectiveGuide ?: preview else preview
+            if (displayPhoto != null) {
+                Image(displayPhoto.asImageBitmap(), if (perspectiveEnabled) "Uncorrected photograph for perspective adjustment" else "Live passport photo editing preview",
                     Modifier.fillMaxSize().padding(5.dp), contentScale=ContentScale.Fit)
                 if (perspectiveEnabled) {
-                    Canvas(Modifier.fillMaxSize().pointerInput(preview, perspectiveCorners) {
+                    Canvas(Modifier.fillMaxSize().pointerInput(displayPhoto, perspectiveCorners) {
                         var activeCorner = -1
                         detectDragGestures(
                             onDragStart = { point ->
                                 val w = size.width.toFloat()
                                 val h = size.height.toFloat()
-                                val ratio = preview!!.width.toFloat() / preview!!.height
+                                val ratio = displayPhoto.width.toFloat() / displayPhoto.height
                                 val boxRatio = w / h
                                 val dw = if (ratio > boxRatio) w else h * ratio
                                 val dh = if (ratio > boxRatio) w / ratio else h
@@ -244,7 +277,8 @@ internal fun PhotoEditorScreen(photoPath: String, onRetake: () -> Unit, onSaved:
                                         (old.x + drag.x / dw).coerceIn(0f, 1f),
                                         (old.y + drag.y / dh).coerceIn(0f, 1f)
                                     )
-                                    perspectiveCorners = updated
+                                    // Prevent crossed, concave or collapsed corner selections.
+                                    if (isValidPerspectiveQuad(updated)) perspectiveCorners = updated
                                 }
                             }
                         )

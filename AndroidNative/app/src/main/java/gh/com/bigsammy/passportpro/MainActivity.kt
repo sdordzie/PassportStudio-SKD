@@ -54,6 +54,9 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 import java.util.concurrent.Executors
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 private val Ink = Color(0xFF101522)
 private val Panel = Color(0xFF1B2433)
@@ -71,7 +74,29 @@ class MainActivity : ComponentActivity() {
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun PassportProApp() {
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
     var tab by remember { mutableStateOf("Home") }
+    var editorPhotoPath by remember { mutableStateOf<String?>(null) }
+    var importError by remember { mutableStateOf<String?>(null) }
+    val imagePicker = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
+        if (uri != null) {
+            importError = null
+            scope.launch {
+                val importedPath = withContext(Dispatchers.IO) {
+                    runCatching {
+                        val destination = File(context.cacheDir, "PassportPro_Import_${System.currentTimeMillis()}.jpg")
+                        context.contentResolver.openInputStream(uri)?.use { input ->
+                            destination.outputStream().use { output -> input.copyTo(output) }
+                        } ?: error("The selected image could not be opened.")
+                        destination.absolutePath
+                    }
+                }
+                importedPath.onSuccess { editorPhotoPath = it }
+                    .onFailure { importError = it.localizedMessage ?: "Unable to import this image." }
+            }
+        }
+    }
     MaterialTheme(colorScheme = darkColorScheme(primary = Gold, background = Ink, surface = Panel, onBackground = Color.White, onSurface = Color.White)) {
         Scaffold(containerColor = Ink, topBar = {
             CenterAlignedTopAppBar(
@@ -91,6 +116,23 @@ private fun PassportProApp() {
             when (tab) {
                 "Home" -> Dashboard(Modifier.padding(padding), onCapture = { tab = "Capture" }, onNavigate = { tab = it })
                 "Capture" -> CameraStudioScreen(Modifier.padding(padding))
+                "Editor" -> {
+                    val selectedPath = editorPhotoPath
+                    if (selectedPath != null) {
+                        PhotoEditorScreen(
+                            photoPath = selectedPath,
+                            onRetake = { editorPhotoPath = null },
+                            onSaved = { editorPhotoPath = null; tab = "Home" }
+                        )
+                    } else {
+                        PhotoEditorEntryScreen(
+                            modifier = Modifier.padding(padding),
+                            error = importError,
+                            onPickImage = { imagePicker.launch("image/*") },
+                            onBack = { tab = "Home" }
+                        )
+                    }
+                }
                 "Customers" -> CustomersScreen(Modifier.padding(padding))
                 "Gallery" -> GalleryScreen(Modifier.padding(padding))
                 "Print" -> PrintDesignerScreen(Modifier.padding(padding))
@@ -109,7 +151,7 @@ private data class StudioTool(val title: String, val detail: String, val icon: a
 private fun Dashboard(modifier: Modifier, onCapture: () -> Unit, onNavigate: (String) -> Unit) {
     val tools = listOf(
         StudioTool("New Session", "Start a customer photo job", Icons.Default.AddAPhoto, "Capture"),
-        StudioTool("Photo Editor", "AI and manual editing", Icons.Default.AutoFixHigh, "Capture"),
+        StudioTool("Photo Editor", "Edit a photo from your device or studio", Icons.Default.AutoFixHigh, "Editor"),
         StudioTool("WhatsApp Delivery", "Individual and group sharing", Icons.Default.Send, "Gallery"),
         StudioTool("Print Designer", "Passport sheets and PDF", Icons.Default.Print, "Print"),
         StudioTool("Customers", "Profiles and photo history", Icons.Default.People, "Customers"),
@@ -146,6 +188,44 @@ private fun Dashboard(modifier: Modifier, onCapture: () -> Unit, onNavigate: (St
             }
         }
         Text("PHASE 2 • CAMERA STUDIO", color = Gold, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+    }
+}
+
+@Composable
+private fun PhotoEditorEntryScreen(
+    modifier: Modifier = Modifier,
+    error: String?,
+    onPickImage: () -> Unit,
+    onBack: () -> Unit
+) {
+    Column(
+        modifier.fillMaxSize().padding(24.dp),
+        verticalArrangement = Arrangement.spacedBy(18.dp),
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            IconButton(onClick = onBack) { Icon(Icons.Default.ArrowBack, contentDescription = "Back", tint = Gold) }
+            Text("PHOTO EDITOR", color = Gold, fontWeight = FontWeight.Bold, letterSpacing = 1.4.sp)
+        }
+        Spacer(Modifier.weight(1f))
+        Icon(Icons.Default.AutoFixHigh, contentDescription = null, tint = Gold, modifier = Modifier.size(64.dp))
+        Text("Choose a photograph to edit", color = Color.White, fontSize = 22.sp, fontWeight = FontWeight.Bold)
+        Text(
+            "Select an existing image from your phone, Gallery, Downloads or other available storage. You do not need to take a new picture first.",
+            color = Muted, fontSize = 14.sp
+        )
+        Button(
+            onClick = onPickImage,
+            modifier = Modifier.fillMaxWidth().height(54.dp),
+            colors = ButtonDefaults.buttonColors(containerColor = Gold, contentColor = Ink),
+            shape = RoundedCornerShape(14.dp)
+        ) {
+            Icon(Icons.Default.PhotoLibrary, contentDescription = null)
+            Spacer(Modifier.width(8.dp))
+            Text("CHOOSE PHOTO FROM DEVICE", fontWeight = FontWeight.Bold)
+        }
+        if (!error.isNullOrBlank()) Text(error, color = Color(0xFFFF8A80), fontSize = 12.sp)
+        Spacer(Modifier.weight(1f))
     }
 }
 

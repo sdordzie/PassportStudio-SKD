@@ -35,9 +35,9 @@ import java.util.Calendar
 import java.util.Date
 import java.util.Locale
 
-private val BizGold = Color(0xFFE4B45D)
-private val BizPanel = Color(0xFF1B2433)
-private val BizMuted = Color(0xFF9AA7B8)
+private val BizGold: Color @Composable get() = if (LocalPassportDark.current) Color(0xFFE4B45D) else Color(0xFF9A6418)
+private val BizPanel: Color @Composable get() = Panel
+private val BizMuted: Color @Composable get() = Muted
 private val workflowStages = listOf("REGISTERED", "EDITING", "READY TO PRINT", "PRINTED", "DELIVERED")
 
 private data class StudioExpense(val id: Long, val category: String, val description: String, val amountPesewas: Long, val method: String, val created: Long)
@@ -281,7 +281,7 @@ internal fun BusinessManagementScreen(modifier: Modifier = Modifier) {
 
     Column(modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         Text("BUSINESS • EXPENSES & FINANCIAL CONTROL", color = BizGold, fontSize = 10.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.sp)
-        Text("Studio operations", color = Color.White, fontSize = 25.sp, fontWeight = FontWeight.Bold)
+        Text("Studio operations", color = PrimaryText, fontSize = 25.sp, fontWeight = FontWeight.Bold)
         Text("Track each job from registration to delivery, review customer history and monitor business performance.", color = BizMuted, fontSize = 12.sp)
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             MetricCard("TODAY'S JOBS", todayJobs.size.toString(), Modifier.weight(1f))
@@ -461,7 +461,7 @@ internal fun BusinessManagementScreen(modifier: Modifier = Modifier) {
         }
         jobs.forEach { job ->
             var menuOpen by remember(job.id) { mutableStateOf(false) }
-            Surface(color = if (job.id in selectedIds) Color(0xFF34445C) else BizPanel, shape = RoundedCornerShape(14.dp), modifier = Modifier.fillMaxWidth()) {
+            Surface(color = if (job.id in selectedIds) if (LocalPassportDark.current) Color(0xFF34445C) else Color(0xFFE8D8B8) else BizPanel, shape = RoundedCornerShape(14.dp), modifier = Modifier.fillMaxWidth()) {
                 Column(Modifier.padding(13.dp), verticalArrangement = Arrangement.spacedBy(5.dp)) {
                     if (selectionMode) TextButton(onClick = { selectedIds = if (job.id in selectedIds) selectedIds - job.id else selectedIds + job.id }) { Text(if (job.id in selectedIds) "✓ Selected" else "Select job", color = BizGold) }
                     Row(verticalAlignment = Alignment.CenterVertically) {

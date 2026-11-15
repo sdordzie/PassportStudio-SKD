@@ -146,9 +146,10 @@ internal fun PrintDesignerScreen(modifier: Modifier = Modifier) {
 
         Surface(color=Color(0xFF1B2433), shape=RoundedCornerShape(16.dp), modifier=Modifier.fillMaxWidth()) {
             Column(Modifier.padding(14.dp), verticalArrangement=Arrangement.spacedBy(10.dp)) {
-                Button(onClick={picker.launch("image/*")}, modifier=Modifier.fillMaxWidth(), colors=ButtonDefaults.buttonColors(containerColor=Color(0xFFE4B45D),contentColor=Color(0xFF101522))) {
-                    Icon(Icons.Default.AddPhotoAlternate,null); Spacer(Modifier.width(8.dp)); Text("CHOOSE PHOTOGRAPH",fontWeight=FontWeight.Bold)
+                Button(onClick={libraryRefresh++; showStudioPicker=true}, modifier=Modifier.fillMaxWidth(), colors=ButtonDefaults.buttonColors(containerColor=Color(0xFFE4B45D),contentColor=Color(0xFF101522))) {
+                    Icon(Icons.Default.PhotoLibrary,null); Spacer(Modifier.width(8.dp)); Text("CHOOSE FROM STUDIO GALLERY",fontWeight=FontWeight.Bold)
                 }
+                OutlinedButton(onClick={picker.launch("image/*")}, modifier=Modifier.fillMaxWidth()) { Text("IMPORT FROM PHONE") }
                 Text(photoName,color=Color(0xFF9AA7B8),fontSize=12.sp)
                 photo?.let { Image(it.asImageBitmap(),null,Modifier.fillMaxWidth().height(190.dp),contentScale=ContentScale.Fit) }
             }

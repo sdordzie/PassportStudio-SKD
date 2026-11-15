@@ -119,11 +119,13 @@ private fun PassportProApp() {
                 "Editor" -> {
                     val selectedPath = editorPhotoPath
                     if (selectedPath != null) {
-                        PhotoEditorScreen(
-                            photoPath = selectedPath,
-                            onRetake = { editorPhotoPath = null },
-                            onSaved = { editorPhotoPath = null; tab = "Home" }
-                        )
+                        Box(Modifier.padding(padding).fillMaxSize()) {
+                            PhotoEditorScreen(
+                                photoPath = selectedPath,
+                                onRetake = { editorPhotoPath = null },
+                                onSaved = { editorPhotoPath = null; tab = "Home" }
+                            )
+                        }
                     } else {
                         PhotoEditorEntryScreen(
                             modifier = Modifier.padding(padding),

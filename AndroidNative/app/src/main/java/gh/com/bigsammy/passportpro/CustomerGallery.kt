@@ -153,24 +153,24 @@ internal fun GalleryScreen(modifier: Modifier = Modifier) {
         selectedPaths = if (path in selectedPaths) selectedPaths - path else selectedPaths + path
     }
     Column(modifier.fillMaxSize().padding(horizontal = 14.dp, vertical = 12.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-        Text("PHOTO LIBRARY • STUDIO", color = Gold, fontSize = 11.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.2.sp)
+        Text("PHOTO LIBRARY • STUDIO", color = if (LocalPassportDark.current) Color(0xFFE4B45D) else Color(0xFF9A6418), fontSize = 11.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.2.sp)
         Row(verticalAlignment = Alignment.CenterVertically) {
             Column(Modifier.weight(1f)) {
                 Text("Studio gallery", color = PrimaryText, fontSize = 25.sp, fontWeight = FontWeight.Bold)
                 Text("${files.size} photographs • Stored securely on this device", color = Muted, fontSize = 11.sp)
             }
-            TextButton(onClick = { refresh++ }) { Text("Refresh", color = Gold) }
+            TextButton(onClick = { refresh++ }) { Text("Refresh", color = if (LocalPassportDark.current) Color(0xFFE4B45D) else Color(0xFF9A6418)) }
         }
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             Surface(color = Panel, shape = RoundedCornerShape(12.dp)) { Text("CAPTURED  ${files.count { it.parentFile?.name != "Edited" }}", color = PrimaryText, modifier = Modifier.padding(10.dp), fontSize = 10.sp) }
-            Surface(color = Panel, shape = RoundedCornerShape(12.dp)) { Text("EDITED  ${files.count { it.parentFile?.name == "Edited" }}", color = Gold, modifier = Modifier.padding(10.dp), fontSize = 10.sp) }
+            Surface(color = Panel, shape = RoundedCornerShape(12.dp)) { Text("EDITED  ${files.count { it.parentFile?.name == "Edited" }}", color = if (LocalPassportDark.current) Color(0xFFE4B45D) else Color(0xFF9A6418), modifier = Modifier.padding(10.dp), fontSize = 10.sp) }
         }
         if (files.isNotEmpty()) {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                 TextButton(onClick = {
                     selectionMode = !selectionMode
                     selectedPaths = emptySet()
-                }) { Text(if (selectionMode) "Cancel selection" else "Select photos", color = Gold) }
+                }) { Text(if (selectionMode) "Cancel selection" else "Select photos", color = if (LocalPassportDark.current) Color(0xFFE4B45D) else Color(0xFF9A6418)) }
                 if (selectionMode) {
                     TextButton(onClick = {
                         selectedPaths = if (selectedPaths.size == files.size) emptySet() else files.map { it.absolutePath }.toSet()
@@ -209,7 +209,7 @@ internal fun GalleryScreen(modifier: Modifier = Modifier) {
                                     Text(if (isSelected) "✓" else " ", color = Color(0xFF101522), modifier = Modifier.padding(horizontal = 9.dp, vertical = 3.dp), fontWeight = FontWeight.Bold)
                                 }
                             }
-                            Text(if (file.parentFile?.name == "Edited") "EDITED PHOTO" else "ORIGINAL CAPTURE", color = Gold, fontSize = 9.sp, fontWeight = FontWeight.Bold)
+                            Text(if (file.parentFile?.name == "Edited") "EDITED PHOTO" else "ORIGINAL CAPTURE", color = if (LocalPassportDark.current) Color(0xFFE4B45D) else Color(0xFF9A6418), fontSize = 9.sp, fontWeight = FontWeight.Bold)
                             Text(SimpleDateFormat("dd MMM yyyy • HH:mm", Locale.getDefault()).format(Date(file.lastModified())), color = Muted, fontSize = 9.sp)
                         }
                     }
@@ -242,7 +242,7 @@ internal fun GalleryScreen(modifier: Modifier = Modifier) {
                 Column(Modifier.padding(12.dp),verticalArrangement=Arrangement.spacedBy(9.dp)) {
                     Row(verticalAlignment=Alignment.CenterVertically) {
                         Column(Modifier.weight(1f)) {
-                            Text(if(selectedFile?.parentFile?.name=="Edited") "EDITED PHOTOGRAPH" else "ORIGINAL CAPTURE",color=Gold,fontSize=10.sp,fontWeight=FontWeight.Bold)
+                            Text(if(selectedFile?.parentFile?.name=="Edited") "EDITED PHOTOGRAPH" else "ORIGINAL CAPTURE",color=if (LocalPassportDark.current) Color(0xFFE4B45D) else Color(0xFF9A6418),fontSize=10.sp,fontWeight=FontWeight.Bold)
                             Text(selectedFile?.name ?: "",color=PrimaryText,fontSize=13.sp,fontWeight=FontWeight.SemiBold,maxLines=1)
                         }
                         IconButton(onClick={selectedFile=null}) { Icon(Icons.Default.Close,"Close",tint=PrimaryText) }

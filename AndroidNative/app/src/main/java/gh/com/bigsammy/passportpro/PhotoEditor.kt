@@ -31,6 +31,9 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 import kotlin.math.min
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 @Composable
 internal fun PhotoEditorScreen(photoPath: String, onRetake: () -> Unit, onSaved: () -> Unit) {
@@ -44,6 +47,7 @@ internal fun PhotoEditorScreen(photoPath: String, onRetake: () -> Unit, onSaved:
     var crop by remember { mutableStateOf("Original") }
     var busy by remember { mutableStateOf(false) }
     var status by remember { mutableStateOf("Original photo preserved • Editing is on-device") }
+    val scope = rememberCoroutineScope()
 
     fun adjust(source: Bitmap): Bitmap {
         val w = source.width; val h = source.height
@@ -85,28 +89,57 @@ internal fun PhotoEditorScreen(photoPath: String, onRetake: () -> Unit, onSaved:
         Button(onClick={
             val src=original
             if(src!=null) {
-                busy=true; status="AI background removal running locally…"
+                busy=true
+                status="AI is analysing the photo…"
+                val selectedBackground=background
                 val detector=Segmentation.getClient(SelfieSegmenterOptions.Builder().setDetectorMode(SelfieSegmenterOptions.SINGLE_IMAGE_MODE).build())
                 detector.process(InputImage.fromBitmap(src,0))
                     .addOnSuccessListener { mask ->
-                        try {
-                            val buf=mask.buffer.order(ByteOrder.nativeOrder()); buf.rewind()
-                            val mw=mask.width; val mh=mask.height
-                            val input=IntArray(src.width*src.height); src.getPixels(input,0,src.width,0,0,src.width,src.height)
-                            val output=IntArray(input.size)
-                            for(y in 0 until src.height) for(x in 0 until src.width) {
-                                val confidence=buf.getFloat((min(mh-1,y*mh/src.height)*mw+min(mw-1,x*mw/src.width))*4).coerceIn(0f,1f)
-                                val p=input[y*src.width+x]
-                                val r=(Pixel.red(p)*confidence+Pixel.red(background)*(1-confidence)).toInt()
-                                val g=(Pixel.green(p)*confidence+Pixel.green(background)*(1-confidence)).toInt()
-                                val b=(Pixel.blue(p)*confidence+Pixel.blue(background)*(1-confidence)).toInt()
-                                output[y*src.width+x]=Pixel.rgb(r,g,b)
+                        scope.launch {
+                            try {
+                                status="Applying new background…"
+                                val result=withContext(Dispatchers.Default) {
+                                    val mw=mask.width
+                                    val mh=mask.height
+                                    val maskBuffer=mask.buffer.order(ByteOrder.nativeOrder()).apply { rewind() }
+                                    val confidenceMap=FloatArray(mw*mh) { maskBuffer.getFloat() .coerceIn(0f,1f) }
+                                    val input=IntArray(src.width*src.height)
+                                    src.getPixels(input,0,src.width,0,0,src.width,src.height)
+                                    val output=IntArray(input.size)
+                                    val bgR=Pixel.red(selectedBackground)
+                                    val bgG=Pixel.green(selectedBackground)
+                                    val bgB=Pixel.blue(selectedBackground)
+                                    for(y in 0 until src.height) {
+                                        val my=(y.toLong()*mh/src.height).toInt().coerceAtMost(mh-1)
+                                        for(x in 0 until src.width) {
+                                            val mx=(x.toLong()*mw/src.width).toInt().coerceAtMost(mw-1)
+                                            val confidence=confidenceMap[my*mw+mx]
+                                            val p=input[y*src.width+x]
+                                            val inverse=1f-confidence
+                                            val r=(Pixel.red(p)*confidence+bgR*inverse).toInt().coerceIn(0,255)
+                                            val g=(Pixel.green(p)*confidence+bgG*inverse).toInt().coerceIn(0,255)
+                                            val b=(Pixel.blue(p)*confidence+bgB*inverse).toInt().coerceIn(0,255)
+                                            output[y*src.width+x]=Pixel.rgb(r,g,b)
+                                        }
+                                    }
+                                    Bitmap.createBitmap(src.width,src.height,Bitmap.Config.ARGB_8888).also {
+                                        it.setPixels(output,0,src.width,0,0,src.width,src.height)
+                                    }
+                                }
+                                image=result
+                                status="Background replaced successfully."
+                            } catch(e:Exception) {
+                                status="Could not process image: ${e.localizedMessage ?: "unknown error"}"
+                            } finally {
+                                busy=false
+                                detector.close()
                             }
-                            image=Bitmap.createBitmap(src.width,src.height,Bitmap.Config.ARGB_8888).also { it.setPixels(output,0,src.width,0,0,src.width,src.height) }
-                            status="Background replaced with selected colour."
-                        } catch(e:Exception) { status="Could not process image: ${e.localizedMessage}" }
-                        finally { busy=false; detector.close() }
-                    }.addOnFailureListener { e -> status="AI segmentation failed: ${e.localizedMessage}"; busy=false; detector.close() }
+                        }
+                    }.addOnFailureListener { e ->
+                        status="AI segmentation failed: ${e.localizedMessage ?: "please try again"}"
+                        busy=false
+                        detector.close()
+                    }
             }
         }, enabled=!busy && original!=null, modifier=Modifier.fillMaxWidth(), colors=ButtonDefaults.buttonColors(containerColor=Color(0xFFE4B45D),contentColor=Color(0xFF101522))) {
             if(busy) CircularProgressIndicator(Modifier.size(18.dp),strokeWidth=2.dp) else Text("REMOVE BACKGROUND WITH AI",fontWeight=FontWeight.Bold)

@@ -3,6 +3,13 @@ package gh.com.bigsammy.passportpro
 import android.content.ContentValues
 import android.content.Context
 import android.content.Intent
+import android.graphics.Canvas
+import android.graphics.Paint
+import android.graphics.Typeface
+import android.graphics.pdf.PdfDocument
+import androidx.core.content.FileProvider
+import java.io.File
+import java.io.FileOutputStream
 import android.database.sqlite.SQLiteDatabase
 import android.database.sqlite.SQLiteOpenHelper
 import androidx.compose.foundation.layout.*
@@ -33,6 +40,7 @@ private val BizPanel = Color(0xFF1B2433)
 private val BizMuted = Color(0xFF9AA7B8)
 private val workflowStages = listOf("REGISTERED", "EDITING", "READY TO PRINT", "PRINTED", "DELIVERED")
 
+private data class CashbookLine(val method: String, val count: Int, val amountPesewas: Long)
 private data class StudioPayment(val id: Long, val amountPesewas: Long, val method: String, val reference: String, val created: Long)
 
 private data class StudioJob(
@@ -119,6 +127,20 @@ private class BusinessDatabase(context: Context) : SQLiteOpenHelper(context, "pa
             return count
         } finally { db.endTransaction() }
     }
+    fun cashbook(start: Long, end: Long): List<CashbookLine> {
+        val rows = mutableListOf<CashbookLine>()
+        readableDatabase.rawQuery("SELECT method,COUNT(*),SUM(amount_pesewas) FROM payments WHERE created>=? AND created<? GROUP BY method ORDER BY method", arrayOf(start.toString(), end.toString())).use { c ->
+            while (c.moveToNext()) rows.add(CashbookLine(c.getString(0), c.getInt(1), c.getLong(2)))
+        }
+        return rows
+    }
+    fun paymentsInRange(start: Long, end: Long): List<StudioPayment> {
+        val rows = mutableListOf<StudioPayment>()
+        readableDatabase.rawQuery("SELECT id,amount_pesewas,method,reference,created FROM payments WHERE created>=? AND created<? ORDER BY created", arrayOf(start.toString(), end.toString())).use { c ->
+            while (c.moveToNext()) rows.add(StudioPayment(c.getLong(0), c.getLong(1), c.getString(2), c.getString(3), c.getLong(4)))
+        }
+        return rows
+    }
     fun all(): List<StudioJob> {
         val rows = mutableListOf<StudioJob>()
         readableDatabase.rawQuery("SELECT id,customer,phone,service,total_pesewas,paid_pesewas,created,workflow_status,due_date FROM jobs ORDER BY created DESC", null).use { c ->
@@ -127,6 +149,44 @@ private class BusinessDatabase(context: Context) : SQLiteOpenHelper(context, "pa
         return rows
     }
 }
+
+private fun createProfessionalReceipt(context: Context, job: StudioJob, payments: List<StudioPayment>): File {
+    val pdf = PdfDocument()
+    val page = pdf.startPage(PdfDocument.PageInfo.Builder(595, 842, 1).create())
+    val canvas = page.canvas
+    val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = android.graphics.Color.rgb(28,38,55); textSize = 22f; typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD) }
+    canvas.drawText("PASSPORTPRO STUDIO", 42f, 58f, paint)
+    paint.textSize = 12f; paint.typeface = Typeface.DEFAULT
+    canvas.drawText("CUSTOMER PAYMENT RECEIPT", 42f, 82f, paint)
+    paint.color = android.graphics.Color.rgb(190,135,45); canvas.drawRect(42f,98f,553f,101f,paint)
+    paint.color = android.graphics.Color.DKGRAY
+    var y = 135f
+    val fmt = SimpleDateFormat("dd MMM yyyy, HH:mm", Locale.getDefault())
+    val fields = listOf("Receipt number" to "PP-${job.id}", "Issued" to fmt.format(Date()), "Customer" to job.customer,
+        "Phone" to job.phone.ifBlank { "Not provided" }, "Service" to job.service, "Workflow" to job.workflow,
+        "Total amount" to money(job.totalPesewas), "Total received" to money(job.paidPesewas),
+        "Outstanding balance" to money(job.balancePesewas), "Payment status" to job.paymentStatus)
+    fields.forEach { (label,value) ->
+        paint.typeface=Typeface.create(Typeface.DEFAULT,Typeface.BOLD); canvas.drawText(label,48f,y,paint)
+        paint.typeface=Typeface.DEFAULT; canvas.drawText(value.take(55),245f,y,paint); y+=27f
+    }
+    y+=14f; paint.typeface=Typeface.create(Typeface.DEFAULT,Typeface.BOLD); canvas.drawText("PAYMENT HISTORY",48f,y,paint); y+=24f
+    paint.typeface=Typeface.DEFAULT
+    if (payments.isEmpty()) { canvas.drawText("No payment transactions recorded.",48f,y,paint); y+=20f }
+    payments.take(18).forEach { payment ->
+        canvas.drawText("${fmt.format(Date(payment.created))} • ${payment.method} • ${money(payment.amountPesewas)}".take(78),48f,y,paint); y+=20f
+        if(payment.reference.isNotBlank()){canvas.drawText("Reference: ${payment.reference}".take(78),60f,y,paint);y+=18f}
+    }
+    paint.color=android.graphics.Color.rgb(28,38,55)
+    canvas.drawText("Thank you for your patronage.",48f,790f,paint)
+    pdf.finishPage(page)
+    val dir=File(context.cacheDir,"receipts").apply{mkdirs()}
+    val file=File(dir,"PassportPro_Receipt_PP-${job.id}.pdf")
+    FileOutputStream(file).use{pdf.writeTo(it)}
+    pdf.close()
+    return file
+}
+
 private fun money(p: Long) = "GH₵ " + String.format(Locale.US, "%.2f", p / 100.0)
 
 @Composable
@@ -189,12 +249,35 @@ internal fun BusinessManagementScreen(modifier: Modifier = Modifier) {
     }
 
     Column(modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        Text("PHASE 14 • JOB DATA EXPORT", color = BizGold, fontSize = 10.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.sp)
+        Text("PHASE 16 • RECEIPTS & CASHBOOK", color = BizGold, fontSize = 10.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.sp)
         Text("Studio operations", color = Color.White, fontSize = 25.sp, fontWeight = FontWeight.Bold)
         Text("Track each job from registration to delivery, review customer history and monitor business performance.", color = BizMuted, fontSize = 12.sp)
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             MetricCard("TODAY'S JOBS", todayJobs.size.toString(), Modifier.weight(1f))
             MetricCard("TODAY'S SALES", money(todayJobs.sumOf { it.totalPesewas }), Modifier.weight(1f))
+        }
+        val cashbookLines = db.cashbook(todayStart, System.currentTimeMillis()+1)
+        val cashbookTotal = cashbookLines.sumOf { it.amountPesewas }
+        Surface(color=BizPanel,shape=RoundedCornerShape(16.dp),modifier=Modifier.fillMaxWidth()) {
+            Column(Modifier.padding(14.dp),verticalArrangement=Arrangement.spacedBy(7.dp)) {
+                Text("TODAY'S CASHBOOK",color=BizGold,fontSize=11.sp,fontWeight=FontWeight.Bold)
+                Text(money(cashbookTotal),color=Color.White,fontSize=24.sp,fontWeight=FontWeight.Bold)
+                Text("${cashbookLines.sumOf{it.count}} payment transaction(s)",color=BizMuted,fontSize=10.sp)
+                cashbookLines.forEach { Text("${it.method}: ${it.count} transaction(s) • ${money(it.amountPesewas)}",color=Color.White,fontSize=11.sp) }
+                if(cashbookLines.isEmpty()) Text("No payments have been recorded today.",color=BizMuted,fontSize=11.sp)
+                OutlinedButton(onClick={
+                    val rows=db.paymentsInRange(todayStart,System.currentTimeMillis()+1)
+                    val report=buildString {
+                        append("PASSPORTPRO STUDIO — DAILY CASHBOOK\n")
+                        append(SimpleDateFormat("dd MMM yyyy",Locale.getDefault()).format(Date())).append("\n\n")
+                        cashbookLines.forEach { append(it.method).append(": ").append(it.count).append(" payment(s), ").append(money(it.amountPesewas)).append("\n") }
+                        append("\nTOTAL RECEIVED: ").append(money(cashbookTotal)).append("\n\nTRANSACTIONS\n")
+                        rows.forEach { append("#").append(it.id).append(" • ").append(it.method).append(" • ").append(money(it.amountPesewas)).append(" • ").append(SimpleDateFormat("HH:mm",Locale.getDefault()).format(Date(it.created))).append("\n") }
+                    }
+                    val send=Intent(Intent.ACTION_SEND).apply{type="text/plain";putExtra(Intent.EXTRA_SUBJECT,"Daily cashbook");putExtra(Intent.EXTRA_TEXT,report)}
+                    context.startActivity(Intent.createChooser(send,"Share daily cashbook"))
+                }) { Text("SHARE DAILY CASHBOOK") }
+            }
         }
         Text("BUSINESS ANALYTICS", color = BizGold, fontSize = 11.sp, fontWeight = FontWeight.Bold)
         Row(horizontalArrangement = Arrangement.spacedBy(5.dp)) {
@@ -354,11 +437,13 @@ internal fun BusinessManagementScreen(modifier: Modifier = Modifier) {
                             }
                         }
                         TextButton(onClick = {
-                            val date = SimpleDateFormat("dd MMM yyyy, HH:mm", Locale.getDefault()).format(Date(job.created))
-                            val receipt = "PASSPORTPRO STUDIO\nCUSTOMER RECEIPT\n\nReceipt No: PP-${job.id}\nDate: $date\nCustomer: ${job.customer}\nPhone: ${job.phone}\nService: ${job.service}\nWorkflow: ${job.workflow}\nTotal: ${money(job.totalPesewas)}\nAmount paid: ${money(job.paidPesewas)}\nBalance: ${money(job.balancePesewas)}\nPayment status: ${job.paymentStatus}\n\nThank you for your patronage."
-                            val send = Intent(Intent.ACTION_SEND).apply { type = "text/plain"; putExtra(Intent.EXTRA_SUBJECT, "PassportPro receipt PP-${job.id}"); putExtra(Intent.EXTRA_TEXT, receipt) }
-                            context.startActivity(Intent.createChooser(send, "Share customer receipt"))
-                        }) { Icon(Icons.Default.ReceiptLong, null, tint = BizGold); Spacer(Modifier.width(5.dp)); Text("SHARE RECEIPT", color = BizGold, fontSize = 11.sp) }
+                            try {
+                                val file=createProfessionalReceipt(context,job,db.payments(job.id).reversed())
+                                val uri=FileProvider.getUriForFile(context,context.packageName+".fileprovider",file)
+                                val send=Intent(Intent.ACTION_SEND).apply{type="application/pdf";putExtra(Intent.EXTRA_SUBJECT,"PassportPro receipt PP-${job.id}");putExtra(Intent.EXTRA_STREAM,uri);addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)}
+                                context.startActivity(Intent.createChooser(send,"Share PDF customer receipt"))
+                            } catch(e:Exception) { message="Could not create receipt PDF: ${e.localizedMessage ?: "Please try again."}" }
+                        }) { Icon(Icons.Default.ReceiptLong,null,tint=BizGold);Spacer(Modifier.width(5.dp));Text("CREATE / SHARE PDF RECEIPT",color=BizGold,fontSize=11.sp) }
                     }
                 }
             }

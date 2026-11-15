@@ -62,11 +62,11 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
 internal val LocalPassportDark = compositionLocalOf { true }
-private val Ink: Color @Composable get() = if (LocalPassportDark.current) Color(0xFF101522) else Color(0xFFF5F6F8)
-private val Panel: Color @Composable get() = if (LocalPassportDark.current) Color(0xFF1B2433) else Color(0xFFFFFFFF)
+internal val Ink: Color @Composable get() = if (LocalPassportDark.current) Color(0xFF101522) else Color(0xFFF5F6F8)
+internal val Panel: Color @Composable get() = if (LocalPassportDark.current) Color(0xFF1B2433) else Color(0xFFFFFFFF)
 private val Gold = Color(0xFFB77B24)
-private val Muted: Color @Composable get() = if (LocalPassportDark.current) Color(0xFF9AA7B8) else Color(0xFF667085)
-private val PrimaryText: Color @Composable get() = if (LocalPassportDark.current) Color(0xFFF7F8FA) else Color(0xFF182230)
+internal val Muted: Color @Composable get() = if (LocalPassportDark.current) Color(0xFF9AA7B8) else Color(0xFF667085)
+internal val PrimaryText: Color @Composable get() = if (LocalPassportDark.current) Color(0xFFF7F8FA) else Color(0xFF182230)
 private val Good = Color(0xFF21865A)
 
 class MainActivity : ComponentActivity() {

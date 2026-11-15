@@ -167,7 +167,8 @@ internal fun PhotoEditorScreen(photoPath: String, onRetake: () -> Unit, onSaved:
         if (base != null) {
             preview = withContext(Dispatchers.Default) {
                 val small = fitPreview(base, 1000)
-                val perspective = if (perspectiveEnabled) perspectiveCorrect(small, perspectiveCorners) else small\n                val cropped = cropForPreset(perspective, crop, if (crop == "Custom") customRatio else null)
+                val perspective = if (perspectiveEnabled) perspectiveCorrect(small, perspectiveCorners) else small
+                val cropped = cropForPreset(perspective, crop, if (crop == "Custom") customRatio else null)
                 adjustPhoto(cropped, brightness, contrast, saturation)
             }
         }
@@ -391,7 +392,8 @@ internal fun PhotoEditorScreen(photoPath: String, onRetake: () -> Unit, onSaved:
                         scope.launch {
                             try {
                                 val finalBitmap=withContext(Dispatchers.Default) {
-                                    val perspective=if(perspectiveEnabled) perspectiveCorrect(base,perspectiveCorners) else base\n                                    val cropped=cropForPreset(perspective,crop, if(crop=="Custom") customRatio else null)
+                                    val perspective=if(perspectiveEnabled) perspectiveCorrect(base,perspectiveCorners) else base
+                                    val cropped=cropForPreset(perspective,crop, if(crop=="Custom") customRatio else null)
                                     val adjusted=adjustPhoto(cropped,brightness,contrast,saturation)
                                     if (crop=="Custom" && customRatio!=null) {
                                         val factor=if(customUnit=="mm") outputDpi/25.4f else if(customUnit=="cm") outputDpi/2.54f else if(customUnit=="in") outputDpi.toFloat() else 1f

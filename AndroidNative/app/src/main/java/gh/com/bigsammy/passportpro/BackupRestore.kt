@@ -164,8 +164,8 @@ private fun digest(file: File): String {
     }
     return md.digest().joinToString("") { "%02x".format(it) }
 }
-private fun exportBackup(c: Context, uri: Uri): Int {
-    val files = backupSources(c)
+private fun exportBackup(c: Context, uri: Uri, scope: String): Int {
+    val files = selectBackupSources(c, scope)
     c.contentResolver.openOutputStream(uri, "wt")?.use { stream ->
         ZipOutputStream(stream.buffered()).use { zip ->
             val manifest = StringBuilder("PASSPORTPRO_BACKUP_V1\n")

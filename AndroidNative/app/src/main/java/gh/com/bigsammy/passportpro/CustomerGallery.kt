@@ -254,29 +254,65 @@ internal fun GalleryScreen(modifier: Modifier = Modifier, onEdit: (String) -> Un
                     }
                     if(selectedBitmap!=null) Image(selectedBitmap.asImageBitmap(),"Full photograph preview",Modifier.fillMaxWidth().heightIn(max=480.dp),contentScale=ContentScale.Fit)
                     Text(selectedFile?.let { SimpleDateFormat("dd MMMM yyyy, HH:mm",Locale.getDefault()).format(Date(it.lastModified())) } ?: "",color=Muted,fontSize=11.sp)
-                    Row(horizontalArrangement=Arrangement.spacedBy(8.dp)) {
-                        Button(onClick={ selectedFile?.let { onEdit(it.absolutePath) } }, modifier=Modifier.weight(1f), colors=ButtonDefaults.buttonColors(containerColor=Color(0xFFE4B45D),contentColor=Ink)) {
-                            Icon(Icons.Default.AutoFixHigh,null); Spacer(Modifier.width(5.dp)); Text("Re-edit")
+                    // Compact, single-line actions: keep all three controls usable on narrow phones.
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Button(
+                            onClick = { selectedFile?.let { onEdit(it.absolutePath) } },
+                            modifier = Modifier.weight(1f).heightIn(min = 40.dp),
+                            contentPadding = PaddingValues(horizontal = 7.dp, vertical = 8.dp),
+                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFE4B45D), contentColor = Ink)
+                        ) {
+                            Icon(Icons.Default.AutoFixHigh, null, modifier = Modifier.size(16.dp))
+                            Spacer(Modifier.width(4.dp))
+                            Text("Re-edit", fontSize = 11.sp, maxLines = 1, softWrap = false)
                         }
-                        Button(onClick={
-                            selectedFile?.let { file ->
-                                try {
-                                    val uri=FileProvider.getUriForFile(context,context.packageName+".fileprovider",file)
-                                    val intent=Intent(Intent.ACTION_SEND).apply { type="image/*"; putExtra(Intent.EXTRA_STREAM,uri); addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION) }
-                                    context.startActivity(Intent.createChooser(intent,"Share photograph"))
-                                } catch(e:Exception) { android.widget.Toast.makeText(context,"Unable to share photo: ${e.localizedMessage}",android.widget.Toast.LENGTH_LONG).show() }
-                            }
-                        },modifier=Modifier.weight(1f),colors=ButtonDefaults.buttonColors(containerColor=Color(0xFFE4B45D),contentColor=Ink)) {
-                            Icon(Icons.Default.Share,null); Spacer(Modifier.width(5.dp)); Text("Share")
+                        Button(
+                            onClick = {
+                                selectedFile?.let { file ->
+                                    try {
+                                        val uri = FileProvider.getUriForFile(context, context.packageName + ".fileprovider", file)
+                                        val intent = Intent(Intent.ACTION_SEND).apply {
+                                            type = "image/*"
+                                            putExtra(Intent.EXTRA_STREAM, uri)
+                                            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                                        }
+                                        context.startActivity(Intent.createChooser(intent, "Share photograph"))
+                                    } catch (e: Exception) {
+                                        android.widget.Toast.makeText(context, "Unable to share photo: ${e.localizedMessage}", android.widget.Toast.LENGTH_LONG).show()
+                                    }
+                                }
+                            },
+                            modifier = Modifier.weight(1f).heightIn(min = 40.dp),
+                            contentPadding = PaddingValues(horizontal = 7.dp, vertical = 8.dp),
+                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFE4B45D), contentColor = Ink)
+                        ) {
+                            Icon(Icons.Default.Share, null, modifier = Modifier.size(16.dp))
+                            Spacer(Modifier.width(4.dp))
+                            Text("Share", fontSize = 11.sp, maxLines = 1, softWrap = false)
                         }
-                        OutlinedButton(onClick={
-                            selectedFile?.let { file ->
-                                if (file.exists() && file.delete()) {
-                                    selectedFile=null; refresh++
-                                    android.widget.Toast.makeText(context,"Photograph deleted",android.widget.Toast.LENGTH_SHORT).show()
-                                } else android.widget.Toast.makeText(context,"Unable to delete photograph",android.widget.Toast.LENGTH_LONG).show()
-                            }
-                        },modifier=Modifier.weight(1f)) { Icon(Icons.Default.Delete,null); Text("Delete") }
+                        OutlinedButton(
+                            onClick = {
+                                selectedFile?.let { file ->
+                                    if (file.exists() && file.delete()) {
+                                        selectedFile = null
+                                        refresh++
+                                        android.widget.Toast.makeText(context, "Photograph deleted", android.widget.Toast.LENGTH_SHORT).show()
+                                    } else {
+                                        android.widget.Toast.makeText(context, "Unable to delete photograph", android.widget.Toast.LENGTH_LONG).show()
+                                    }
+                                }
+                            },
+                            modifier = Modifier.weight(1f).heightIn(min = 40.dp),
+                            contentPadding = PaddingValues(horizontal = 7.dp, vertical = 8.dp)
+                        ) {
+                            Icon(Icons.Default.Delete, null, modifier = Modifier.size(16.dp))
+                            Spacer(Modifier.width(4.dp))
+                            Text("Delete", fontSize = 11.sp, maxLines = 1, softWrap = false)
+                        }
                     }
                 }
             }

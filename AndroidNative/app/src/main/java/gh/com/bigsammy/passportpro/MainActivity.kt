@@ -168,7 +168,7 @@ private fun PassportProApp() {
                     }
                 }
                 "Customers" -> CustomersScreen(Modifier.padding(padding))
-                "Gallery" -> GalleryScreen(Modifier.padding(padding), onEdit = { path -> editorPhotoPath = path; tab = "Editor" })
+                "Gallery" -> GalleryScreen(Modifier.padding(padding), onEdit = { path -> editorPhotoPath = path; tab = "Editor" }, onPickDevice = { imagePicker.launch("image/*") })
                 "Print" -> PrintDesignerScreen(Modifier.padding(padding))
                 "Business" -> BusinessManagementScreen(Modifier.padding(padding))
                 "Backup" -> BackupRestoreScreen(Modifier.padding(padding))

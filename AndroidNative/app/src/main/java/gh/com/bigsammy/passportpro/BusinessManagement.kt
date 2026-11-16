@@ -41,9 +41,9 @@ private val BizMuted: Color @Composable get() = Muted
 @Composable
 private fun businessPrimaryButtonColors() = ButtonDefaults.buttonColors(
     containerColor = if (LocalPassportDark.current) Color(0xFFE4B45D) else Color(0xFF9A6418),
-    contentColor = Color(0xFF101522),
+    contentColor = Color.White,
     disabledContainerColor = if (LocalPassportDark.current) Color(0xFF51432D) else Color(0xFFE8D5B5),
-    disabledContentColor = if (LocalPassportDark.current) Color(0xFFDED4C2) else Color(0xFF604A2B)
+    disabledContentColor = Color(0xFFECECEC)
 )
 @Composable
 private fun businessOutlinedButtonColors() = ButtonDefaults.outlinedButtonColors(

@@ -548,8 +548,8 @@ internal fun PhotoEditorScreen(photoPath: String, onRetake: () -> Unit, onSaved:
             if (crop == "Custom") {
                 Text("CUSTOM CROP DIMENSIONS", color=Muted, fontSize=10.sp, fontWeight=FontWeight.Bold)
                 Row(horizontalArrangement=Arrangement.spacedBy(8.dp), verticalAlignment=Alignment.CenterVertically) {
-                    OutlinedTextField(value=customWidth, onValueChange={ customWidth=it.filter(Char::isDigit).take(6) }, label={Text("Width")}, modifier=Modifier.weight(1f), singleLine=true, keyboardOptions=KeyboardOptions(keyboardType=KeyboardType.Number))
-                    OutlinedTextField(value=customHeight, onValueChange={ customHeight=it.filter(Char::isDigit).take(6) }, label={Text("Height")}, modifier=Modifier.weight(1f), singleLine=true, keyboardOptions=KeyboardOptions(keyboardType=KeyboardType.Number))
+                    OutlinedTextField(value=customWidth, onValueChange={ customWidth=it.filter(Char::isDigit).take(6) }, label={Text("Width")}, modifier=Modifier.weight(1f), singleLine=true, keyboardOptions=KeyboardOptions(keyboardType=KeyboardType.Number), colors = studioOutlinedTextFieldColors())
+                    OutlinedTextField(value=customHeight, onValueChange={ customHeight=it.filter(Char::isDigit).take(6) }, label={Text("Height")}, modifier=Modifier.weight(1f), singleLine=true, keyboardOptions=KeyboardOptions(keyboardType=KeyboardType.Number), colors = studioOutlinedTextFieldColors())
                 }
                 Row(horizontalArrangement=Arrangement.spacedBy(5.dp)) {
                     listOf("px","mm","cm","in").forEach { unit -> FilterChip(selected=customUnit==unit,onClick={customUnit=unit},label={Text(unit)}) }

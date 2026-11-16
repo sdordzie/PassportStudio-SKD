@@ -134,14 +134,14 @@ private fun ControlCard(title: String, detail: String, content: @Composable Colu
 
 @Composable
 private fun ControlField(label: String, value: String, onValue: (String) -> Unit, type: KeyboardType = KeyboardType.Text) {
-    OutlinedTextField(value, onValue, modifier = Modifier.fillMaxWidth(), label = { Text(label) }, singleLine = true, keyboardOptions = KeyboardOptions(keyboardType = type), colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = ControlGold, focusedLabelColor = ControlGold, cursorColor = ControlGold))
+    OutlinedTextField(value, onValue, modifier = Modifier.fillMaxWidth(), label = { Text(label) }, singleLine = true, keyboardOptions = KeyboardOptions(keyboardType = type), colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = ControlGold, focusedLabelColor = ControlGold, cursorColor = ControlGold), colors = studioOutlinedTextFieldColors())
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun ExposedSetting(label: String, selected: String, options: List<String>, expanded: Boolean, onExpanded: (Boolean) -> Unit, onSelect: (String) -> Unit) {
     ExposedDropdownMenuBox(expanded = expanded, onExpandedChange = onExpanded) {
-        OutlinedTextField(value = selected, onValueChange = {}, readOnly = true, label = { Text(label) }, trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded) }, modifier = Modifier.menuAnchor().fillMaxWidth(), colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = ControlGold, focusedLabelColor = ControlGold))
+        OutlinedTextField(value = selected, onValueChange = {}, readOnly = true, label = { Text(label) }, trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded) }, modifier = Modifier.menuAnchor().fillMaxWidth(), colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = ControlGold, focusedLabelColor = ControlGold), colors = studioOutlinedTextFieldColors())
         ExposedDropdownMenu(expanded = expanded, onDismissRequest = { onExpanded(false) }) {
             options.forEach { option -> DropdownMenuItem(text = { Text(option) }, onClick = { onSelect(option); onExpanded(false) }) }
         }

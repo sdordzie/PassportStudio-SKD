@@ -39,6 +39,22 @@ private val BizGold: Color @Composable get() = if (LocalPassportDark.current) Co
 private val BizPanel: Color @Composable get() = Panel
 private val BizMuted: Color @Composable get() = Muted
 @Composable
+private fun businessPrimaryButtonColors() = ButtonDefaults.buttonColors(
+    containerColor = if (LocalPassportDark.current) Color(0xFFE4B45D) else Color(0xFF9A6418),
+    contentColor = Color(0xFF101522),
+    disabledContainerColor = if (LocalPassportDark.current) Color(0xFF51432D) else Color(0xFFE8D5B5),
+    disabledContentColor = if (LocalPassportDark.current) Color(0xFFDED4C2) else Color(0xFF604A2B)
+)
+@Composable
+private fun businessOutlinedButtonColors() = ButtonDefaults.outlinedButtonColors(
+    contentColor = if (LocalPassportDark.current) Color(0xFFE4B45D) else Color(0xFF80520F),
+    disabledContentColor = if (LocalPassportDark.current) Color(0xFFB9C2D0) else Color(0xFF596579)
+)
+@Composable
+private fun businessOutlinedBorder() = androidx.compose.foundation.BorderStroke(
+    1.5.dp, if (LocalPassportDark.current) Color(0xFF78869A) else Color(0xFF667386)
+)
+@Composable
 private fun businessChipColors() = FilterChipDefaults.filterChipColors(
     containerColor = if (LocalPassportDark.current) Color(0xFF273246) else Color(0xFFFFFFFF),
     labelColor = if (LocalPassportDark.current) Color(0xFFB9C4D3) else Color(0xFF465366),
@@ -314,7 +330,7 @@ internal fun BusinessManagementScreen(modifier: Modifier = Modifier) {
                     }
                     val send=Intent(Intent.ACTION_SEND).apply{type="text/plain";putExtra(Intent.EXTRA_SUBJECT,"Daily cashbook");putExtra(Intent.EXTRA_TEXT,report)}
                     context.startActivity(Intent.createChooser(send,"Share daily cashbook"))
-                }) { Text("SHARE DAILY CASHBOOK") }
+                }, colors = businessOutlinedButtonColors(), border = businessOutlinedBorder()) { Text("SHARE DAILY CASHBOOK", fontWeight = FontWeight.SemiBold) }
             }
         }
         Surface(color = BizPanel, shape = RoundedCornerShape(16.dp), modifier = Modifier.fillMaxWidth()) {
@@ -336,7 +352,7 @@ internal fun BusinessManagementScreen(modifier: Modifier = Modifier) {
                     if (amount <= 0L) expenseMessage = "Enter a valid amount."
                     else if (db.addExpense(expenseCategory, expenseDescription, amount, expenseMethod)) { expenseAmount = ""; expenseDescription = ""; expenseMessage = "Expense recorded." }
                     else expenseMessage = "Could not save expense."
-                }, modifier = Modifier.fillMaxWidth(), colors = ButtonDefaults.buttonColors(containerColor = BizGold, contentColor = Color(0xFF101522))) { Text("SAVE EXPENSE") }
+                }, modifier = Modifier.fillMaxWidth(), colors = businessPrimaryButtonColors()) { Text("SAVE EXPENSE") }
                 if (expenseMessage.isNotBlank()) Text(expenseMessage, color = BizGold, fontSize = 11.sp)
             }
         }
@@ -380,7 +396,7 @@ internal fun BusinessManagementScreen(modifier: Modifier = Modifier) {
                 putExtra(Intent.EXTRA_TEXT, paymentsCsv)
             }
             context.startActivity(Intent.createChooser(send, "Export payment ledger"))
-        }, modifier = Modifier.fillMaxWidth(), colors = ButtonDefaults.buttonColors(containerColor = BizPanel, contentColor = BizGold)) {
+        }, modifier = Modifier.fillMaxWidth(), colors = ButtonDefaults.buttonColors(containerColor = if (LocalPassportDark.current) Color(0xFF273246) else Color(0xFFFFFFFF), contentColor = if (LocalPassportDark.current) Color(0xFFE4B45D) else Color(0xFF80520F))) {
             Text("EXPORT PAYMENT LEDGER AS CSV", fontWeight = FontWeight.Bold)
         }
         Button(onClick = {
@@ -458,7 +474,7 @@ internal fun BusinessManagementScreen(modifier: Modifier = Modifier) {
         }
         if (jobs.isNotEmpty()) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                TextButton(onClick = { selectionMode = !selectionMode; selectedIds = emptySet() }) { Text(if (selectionMode) "Cancel selection" else "Select jobs", color = BizGold) }
+                TextButton(onClick = { selectionMode = !selectionMode }, colors = ButtonDefaults.textButtonColors(contentColor = if (LocalPassportDark.current) Color(0xFFE4B45D) else Color(0xFF80520F))) { Text(if (selectionMode) "Cancel selection" else "Select jobs", fontWeight = FontWeight.SemiBold) }
                 if (selectionMode) {
                     TextButton(onClick = { selectedIds = if (selectedIds.size == jobs.size) emptySet() else jobs.map { it.id }.toSet() }) { Text(if (selectedIds.size == jobs.size) "Deselect all" else "Select all", color = PrimaryText) }
                     Text("${selectedIds.size} selected", color = BizMuted, fontSize = 10.sp, modifier = Modifier.weight(1f))

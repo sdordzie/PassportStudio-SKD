@@ -78,9 +78,9 @@ internal fun CustomersScreen(modifier: Modifier = Modifier) {
         Text("CUSTOMER MANAGEMENT", color=if (LocalPassportDark.current) Color(0xFFE4B45D) else Color(0xFF9A6418), fontSize=11.sp, fontWeight=FontWeight.Bold)
         Text("Customer records", color=PrimaryText, fontSize=24.sp, fontWeight=FontWeight.Bold)
         Text("Save customer contacts and notes locally on this device.", color=Muted, fontSize=12.sp)
-        OutlinedTextField(value=name,onValueChange={name=it},label={Text("Customer name")},singleLine=true,modifier=Modifier.fillMaxWidth())
-        OutlinedTextField(value=phone,onValueChange={phone=it},label={Text("Phone / WhatsApp number")},singleLine=true,modifier=Modifier.fillMaxWidth())
-        OutlinedTextField(value=notes,onValueChange={notes=it},label={Text("Notes (optional)")},modifier=Modifier.fillMaxWidth(),minLines=2)
+        OutlinedTextField(value=name,onValueChange={name=it},label={Text("Customer name")},singleLine=true,modifier=Modifier.fillMaxWidth(), colors = studioOutlinedTextFieldColors())
+        OutlinedTextField(value=phone,onValueChange={phone=it},label={Text("Phone / WhatsApp number")},singleLine=true,modifier=Modifier.fillMaxWidth(), colors = studioOutlinedTextFieldColors())
+        OutlinedTextField(value=notes,onValueChange={notes=it},label={Text("Notes (optional)")},modifier=Modifier.fillMaxWidth(),minLines=2, colors = studioOutlinedTextFieldColors())
         Button(onClick={
             if(name.isNotBlank()) { db.add(name,phone,notes); name=""; phone=""; notes=""; customers=db.all() }
         },enabled=name.isNotBlank(),modifier=Modifier.fillMaxWidth(),colors=ButtonDefaults.buttonColors(containerColor=Color(0xFFE4B45D),contentColor=Ink)) {

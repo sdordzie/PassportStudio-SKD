@@ -342,8 +342,8 @@ internal fun BusinessManagementScreen(modifier: Modifier = Modifier) {
                 Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                     listOf("Equipment", "Maintenance", "Marketing", "Other").forEach { c -> FilterChip(selected = expenseCategory == c, onClick = { expenseCategory = c }, label = { Text(c, fontSize = 9.sp, fontWeight = FontWeight.SemiBold) }, colors = businessChipColors()) }
                 }
-                OutlinedTextField(expenseDescription, { expenseDescription = it }, label = { Text("Description / supplier") }, singleLine = true, modifier = Modifier.fillMaxWidth())
-                OutlinedTextField(expenseAmount, { expenseAmount = it.filter { ch -> ch.isDigit() || ch == '.' } }, label = { Text("Amount (GH₵)") }, singleLine = true, modifier = Modifier.fillMaxWidth(), keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal))
+                OutlinedTextField(expenseDescription, { expenseDescription = it }, label = { Text("Description / supplier") }, singleLine = true, modifier = Modifier.fillMaxWidth(), colors = studioOutlinedTextFieldColors())
+                OutlinedTextField(expenseAmount, { expenseAmount = it.filter { ch -> ch.isDigit() || ch == '.' } }, label = { Text("Amount (GH₵)") }, singleLine = true, modifier = Modifier.fillMaxWidth(), keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal), colors = studioOutlinedTextFieldColors())
                 Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                     listOf("Cash", "Mobile Money", "Bank", "Other").forEach { m -> FilterChip(selected = expenseMethod == m, onClick = { expenseMethod = m }, label = { Text(m, fontSize = 9.sp, fontWeight = FontWeight.SemiBold) }, colors = businessChipColors()) }
                 }
@@ -430,13 +430,13 @@ internal fun BusinessManagementScreen(modifier: Modifier = Modifier) {
         Surface(color = BizPanel, shape = RoundedCornerShape(18.dp), modifier = Modifier.fillMaxWidth()) {
             Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(9.dp)) {
                 Text("REGISTER A CUSTOMER JOB", color = BizGold, fontSize = 11.sp, fontWeight = FontWeight.Bold)
-                OutlinedTextField(customer, { customer = it }, label = { Text("Customer name") }, singleLine = true, modifier = Modifier.fillMaxWidth())
-                OutlinedTextField(phone, { phone = it }, label = { Text("Phone / WhatsApp (optional)") }, singleLine = true, modifier = Modifier.fillMaxWidth(), keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone))
-                OutlinedTextField(service, { service = it }, label = { Text("Service / job description") }, singleLine = true, modifier = Modifier.fillMaxWidth())
-                OutlinedTextField(dueDate, { dueDate = it }, label = { Text("Expected delivery date (optional, e.g. 20 Nov 2026)") }, singleLine = true, modifier = Modifier.fillMaxWidth())
+                OutlinedTextField(customer, { customer = it }, label = { Text("Customer name") }, singleLine = true, modifier = Modifier.fillMaxWidth(), colors = studioOutlinedTextFieldColors())
+                OutlinedTextField(phone, { phone = it }, label = { Text("Phone / WhatsApp (optional)") }, singleLine = true, modifier = Modifier.fillMaxWidth(), keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone), colors = studioOutlinedTextFieldColors())
+                OutlinedTextField(service, { service = it }, label = { Text("Service / job description") }, singleLine = true, modifier = Modifier.fillMaxWidth(), colors = studioOutlinedTextFieldColors())
+                OutlinedTextField(dueDate, { dueDate = it }, label = { Text("Expected delivery date (optional, e.g. 20 Nov 2026)") }, singleLine = true, modifier = Modifier.fillMaxWidth(), colors = studioOutlinedTextFieldColors())
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    OutlinedTextField(total, { total = it.filter { ch -> ch.isDigit() || ch == '.' } }, label = { Text("Total (GH₵)") }, singleLine = true, modifier = Modifier.weight(1f), keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal))
-                    OutlinedTextField(paid, { paid = it.filter { ch -> ch.isDigit() || ch == '.' } }, label = { Text("Amount paid") }, singleLine = true, modifier = Modifier.weight(1f), keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal))
+                    OutlinedTextField(total, { total = it.filter { ch -> ch.isDigit() || ch == '.' } }, label = { Text("Total (GH₵)") }, singleLine = true, modifier = Modifier.weight(1f), keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal), colors = studioOutlinedTextFieldColors())
+                    OutlinedTextField(paid, { paid = it.filter { ch -> ch.isDigit() || ch == '.' } }, label = { Text("Amount paid") }, singleLine = true, modifier = Modifier.weight(1f), keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal), colors = studioOutlinedTextFieldColors())
                 }
                 Text("Balance: " + money((totalPesewas - paidPesewas).coerceAtLeast(0)), color = BizMuted, fontSize = 12.sp)
                 Button(onClick = {
@@ -454,7 +454,7 @@ internal fun BusinessManagementScreen(modifier: Modifier = Modifier) {
         }
 
         Text("CUSTOMER JOB HISTORY", color = BizGold, fontSize = 11.sp, fontWeight = FontWeight.Bold)
-        OutlinedTextField(searchHistory, { searchHistory = it }, label = { Text("Search by customer name or phone") }, singleLine = true, modifier = Modifier.fillMaxWidth())
+        OutlinedTextField(searchHistory, { searchHistory = it }, label = { Text("Search by customer name or phone") }, singleLine = true, modifier = Modifier.fillMaxWidth(), colors = studioOutlinedTextFieldColors())
         if (searchHistory.isNotBlank()) {
             Text("${history.size} matching job(s)", color = BizMuted, fontSize = 11.sp)
             history.forEach { job ->
@@ -537,11 +537,11 @@ internal fun BusinessManagementScreen(modifier: Modifier = Modifier) {
             val target = editJob!!
             AlertDialog(onDismissRequest = { editJob = null }, title = { Text("Edit job details") },
                 text = { Column(verticalArrangement = Arrangement.spacedBy(7.dp)) {
-                    OutlinedTextField(editCustomer, { editCustomer = it }, label = { Text("Customer name") }, singleLine = true)
-                    OutlinedTextField(editPhone, { editPhone = it }, label = { Text("Phone") }, singleLine = true)
-                    OutlinedTextField(editService, { editService = it }, label = { Text("Service") }, singleLine = true)
-                    OutlinedTextField(editTotal, { editTotal = it.filter { ch -> ch.isDigit() || ch == '.' } }, label = { Text("Total (GH₵)") }, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal), singleLine = true)
-                    OutlinedTextField(editDue, { editDue = it }, label = { Text("Due date") }, singleLine = true)
+                    OutlinedTextField(editCustomer, { editCustomer = it }, label = { Text("Customer name") }, singleLine = true, colors = studioOutlinedTextFieldColors())
+                    OutlinedTextField(editPhone, { editPhone = it }, label = { Text("Phone") }, singleLine = true, colors = studioOutlinedTextFieldColors())
+                    OutlinedTextField(editService, { editService = it }, label = { Text("Service") }, singleLine = true, colors = studioOutlinedTextFieldColors())
+                    OutlinedTextField(editTotal, { editTotal = it.filter { ch -> ch.isDigit() || ch == '.' } }, label = { Text("Total (GH₵)") }, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal), singleLine = true, colors = studioOutlinedTextFieldColors())
+                    OutlinedTextField(editDue, { editDue = it }, label = { Text("Due date") }, singleLine = true, colors = studioOutlinedTextFieldColors())
                     Text("Total cannot be lower than payments already received (" + money(target.paidPesewas) + ").", color = BizMuted, fontSize = 10.sp)
                     if (editMessage.isNotBlank()) Text(editMessage, color = Color(0xFFE18A75), fontSize = 11.sp)
                 } },
@@ -563,14 +563,14 @@ internal fun BusinessManagementScreen(modifier: Modifier = Modifier) {
                 title = { Text("Record customer payment") },
                 text = { Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     Text("${target.customer} • Outstanding: ${money(target.balancePesewas)}")
-                    OutlinedTextField(paymentAmount, { paymentAmount = it.filter { ch -> ch.isDigit() || ch == '.' } }, label = { Text("Amount received (GH₵)") }, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal), singleLine = true)
+                    OutlinedTextField(paymentAmount, { paymentAmount = it.filter { ch -> ch.isDigit() || ch == '.' } }, label = { Text("Amount received (GH₵)") }, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal), singleLine = true, colors = studioOutlinedTextFieldColors())
                     Text("Payment method", color = BizMuted, fontSize = 11.sp)
                     Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                         listOf("Cash", "Mobile Money", "Bank", "Other").forEach { method ->
                             FilterChip(selected = paymentMethod == method, onClick = { paymentMethod = method }, label = { Text(method, fontSize = 9.sp, fontWeight = FontWeight.SemiBold) }, colors = businessChipColors())
                         }
                     }
-                    OutlinedTextField(paymentReference, { paymentReference = it }, label = { Text("Reference / note (optional)") }, singleLine = true)
+                    OutlinedTextField(paymentReference, { paymentReference = it }, label = { Text("Reference / note (optional)") }, singleLine = true, colors = studioOutlinedTextFieldColors())
                     if (paymentMessage.isNotBlank()) Text(paymentMessage, color = BizGold, fontSize = 11.sp)
                 } },
                 confirmButton = { TextButton(onClick = {

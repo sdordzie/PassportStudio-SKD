@@ -1,6 +1,9 @@
 package gh.com.bigsammy.passportpro
 
 import android.graphics.Bitmap
+import android.content.ContentValues
+import android.os.Build
+import android.provider.MediaStore
 import android.graphics.BitmapFactory
 import android.graphics.Color as Pixel
 import android.graphics.Bitmap.CompressFormat
@@ -240,7 +243,7 @@ internal fun PhotoEditorScreen(photoPath: String, onRetake: () -> Unit, onSaved:
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val original = remember(photoPath) {
-        decodeUprightPhoto(photoPath)?.copy(Bitmap.Config.ARGB_8888, false)?.let { fitPreview(it, 2200) }
+        decodeUprightPhoto(photoPath)?.copy(Bitmap.Config.ARGB_8888, false)
     }
     var editedBase by remember(photoPath) { mutableStateOf(original) }
     var preview by remember(photoPath) { mutableStateOf(original?.let { fitPreview(it, 1000) }) }
@@ -368,17 +371,40 @@ internal fun PhotoEditorScreen(photoPath: String, onRetake: () -> Unit, onSaved:
                         scope.launch {
                             try {
                                 val file = withContext(Dispatchers.IO) {
-                                    val dir = File(context.getExternalFilesDir(null), "PassportPro/Edited").apply { mkdirs() }
                                     val name = "PassportPro_${SimpleDateFormat("yyyyMMdd_HHmmss", Locale.US).format(Date())}.jpg"
+                                    val dir = File(context.getExternalFilesDir(null), "PassportPro/Edited").apply { mkdirs() }
                                     val output = File(dir, name)
                                     FileOutputStream(output).use { stream ->
                                         if (!saveBitmap.compress(CompressFormat.JPEG, jpegQuality, stream)) throw IllegalStateException("JPEG encoding failed")
                                         stream.flush()
                                     }
+                                    val values = ContentValues().apply {
+                                        put(MediaStore.Images.Media.DISPLAY_NAME, name)
+                                        put(MediaStore.Images.Media.MIME_TYPE, "image/jpeg")
+                                        put(MediaStore.Images.Media.DESCRIPTION, "Edited with PassportPro Studio")
+                                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                                            put(MediaStore.Images.Media.RELATIVE_PATH, "Pictures/PassportPro Studio/Edited")
+                                            put(MediaStore.Images.Media.IS_PENDING, 1)
+                                        }
+                                    }
+                                    val uri = context.contentResolver.insert(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, values)
+                                        ?: throw IllegalStateException("Could not add the edited photograph to your device Gallery")
+                                    try {
+                                        context.contentResolver.openOutputStream(uri, "w")?.use { stream ->
+                                            if (!saveBitmap.compress(CompressFormat.JPEG, jpegQuality, stream)) throw IllegalStateException("Gallery JPEG encoding failed")
+                                            stream.flush()
+                                        } ?: throw IllegalStateException("Could not write the photograph to your device Gallery")
+                                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                                            context.contentResolver.update(uri, ContentValues().apply { put(MediaStore.Images.Media.IS_PENDING, 0) }, null, null)
+                                        }
+                                    } catch (error: Exception) {
+                                        context.contentResolver.delete(uri, null, null)
+                                        throw error
+                                    }
                                     output
                                 }
                                 pendingSaveBitmap = null
-                                status = "Saved successfully: ${file.name}"
+                                status = "Saved to Studio Gallery and device Gallery: ${file.name}"
                                 onSaved()
                             } catch (e: Exception) {
                                 status = "Save failed: ${e.localizedMessage ?: "please try again"}"

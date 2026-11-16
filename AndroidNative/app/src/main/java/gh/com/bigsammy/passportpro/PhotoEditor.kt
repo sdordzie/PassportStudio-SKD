@@ -424,14 +424,14 @@ internal fun PhotoEditorScreen(photoPath: String, onRetake: () -> Unit, onSaved:
                         restoreSnapshot(undoStack.last())
                         undoStack = undoStack.dropLast(1)
                     }
-                }, enabled=undoStack.isNotEmpty() && !busy, modifier=Modifier.weight(1f), colors=ButtonDefaults.outlinedButtonColors(contentColor=if (LocalPassportDark.current) Color(0xFFE4B45D) else Color(0xFF80520F), disabledContentColor=if (LocalPassportDark.current) Color(0xFFB9C2D0) else Color(0xFF596579)), border=BorderStroke(1.dp, if (LocalPassportDark.current) Color(0xFF657184) else Color(0xFF7C8798))) { Text("↶ Undo", fontWeight=FontWeight.SemiBold) }
+                }, enabled=!busy, modifier=Modifier.weight(1f), colors=ButtonDefaults.outlinedButtonColors(contentColor=if (LocalPassportDark.current) Color(0xFFE4B45D) else Color(0xFF80520F), disabledContentColor=if (LocalPassportDark.current) Color(0xFFB9C2D0) else Color(0xFF596579)), border=BorderStroke(1.dp, if (LocalPassportDark.current) Color(0xFF657184) else Color(0xFF7C8798))) { Text("↶ Undo", color=if (LocalPassportDark.current) Color(0xFFE4B45D) else Color(0xFF80520F), fontWeight=FontWeight.Bold) }
                 OutlinedButton(onClick={
                     if (redoStack.isNotEmpty()) {
                         undoStack = (undoStack + currentSnapshot()).takeLast(40)
                         restoreSnapshot(redoStack.last())
                         redoStack = redoStack.dropLast(1)
                     }
-                }, enabled=redoStack.isNotEmpty() && !busy, modifier=Modifier.weight(1f), colors=ButtonDefaults.outlinedButtonColors(contentColor=if (LocalPassportDark.current) Color(0xFFE4B45D) else Color(0xFF80520F), disabledContentColor=if (LocalPassportDark.current) Color(0xFFB9C2D0) else Color(0xFF596579)), border=BorderStroke(1.dp, if (LocalPassportDark.current) Color(0xFF657184) else Color(0xFF7C8798))) { Text("Redo ↷", fontWeight=FontWeight.SemiBold) }
+                }, enabled=!busy, modifier=Modifier.weight(1f), colors=ButtonDefaults.outlinedButtonColors(contentColor=if (LocalPassportDark.current) Color(0xFFE4B45D) else Color(0xFF80520F), disabledContentColor=if (LocalPassportDark.current) Color(0xFFB9C2D0) else Color(0xFF596579)), border=BorderStroke(1.dp, if (LocalPassportDark.current) Color(0xFF657184) else Color(0xFF7C8798))) { Text("Redo ↷", color=if (LocalPassportDark.current) Color(0xFFE4B45D) else Color(0xFF80520F), fontWeight=FontWeight.Bold) }
                 FilterChip(selected=showOriginal, onClick={showOriginal=!showOriginal}, label={Text(if(showOriginal) "Show edited" else "Before / after")})
             }
             Text("MANUAL PERSPECTIVE", color=Muted, fontSize=10.sp, fontWeight=FontWeight.Bold)

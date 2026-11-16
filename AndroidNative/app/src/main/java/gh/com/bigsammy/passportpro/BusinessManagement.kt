@@ -38,6 +38,13 @@ import java.util.Locale
 private val BizGold: Color @Composable get() = if (LocalPassportDark.current) Color(0xFFE4B45D) else Color(0xFF9A6418)
 private val BizPanel: Color @Composable get() = Panel
 private val BizMuted: Color @Composable get() = Muted
+@Composable
+private fun businessChipColors() = FilterChipDefaults.filterChipColors(
+    containerColor = if (LocalPassportDark.current) Color(0xFF273246) else Color(0xFFFFFFFF),
+    labelColor = if (LocalPassportDark.current) Color(0xFFB9C4D3) else Color(0xFF465366),
+    selectedContainerColor = if (LocalPassportDark.current) Color(0xFF493A25) else Color(0xFFE9DDF6),
+    selectedLabelColor = if (LocalPassportDark.current) Color(0xFFFFD58A) else Color(0xFF33214B)
+)
 private val workflowStages = listOf("REGISTERED", "EDITING", "READY TO PRINT", "PRINTED", "DELIVERED")
 
 private data class StudioExpense(val id: Long, val category: String, val description: String, val amountPesewas: Long, val method: String, val created: Long)

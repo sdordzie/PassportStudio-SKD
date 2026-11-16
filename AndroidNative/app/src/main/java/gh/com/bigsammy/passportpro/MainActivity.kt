@@ -69,6 +69,23 @@ internal val Muted: Color @Composable get() = if (LocalPassportDark.current) Col
 internal val PrimaryText: Color @Composable get() = if (LocalPassportDark.current) Color(0xFFF7F8FA) else Color(0xFF182230)
 private val Good = Color(0xFF21865A)
 
+@Composable
+internal fun studioOutlinedTextFieldColors() = OutlinedTextFieldDefaults.colors(
+    focusedTextColor = PrimaryText,
+    unfocusedTextColor = PrimaryText,
+    disabledTextColor = Muted,
+    errorTextColor = Color(0xFFB42318),
+    cursorColor = if (LocalPassportDark.current) Color(0xFFE4B45D) else Color(0xFF9A6418),
+    focusedBorderColor = if (LocalPassportDark.current) Color(0xFFE4B45D) else Color(0xFF9A6418),
+    unfocusedBorderColor = if (LocalPassportDark.current) Color(0xFF667085) else Color(0xFF98A2B3),
+    disabledBorderColor = if (LocalPassportDark.current) Color(0xFF475467) else Color(0xFFD0D5DD),
+    focusedLabelColor = if (LocalPassportDark.current) Color(0xFFE4B45D) else Color(0xFF80520F),
+    unfocusedLabelColor = Muted,
+    focusedContainerColor = Panel,
+    unfocusedContainerColor = Panel,
+    disabledContainerColor = Panel
+)
+
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)

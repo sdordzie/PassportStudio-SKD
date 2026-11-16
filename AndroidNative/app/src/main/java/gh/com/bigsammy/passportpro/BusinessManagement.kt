@@ -321,15 +321,15 @@ internal fun BusinessManagementScreen(modifier: Modifier = Modifier) {
             Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(7.dp)) {
                 Text("EXPENSE MANAGEMENT", color = BizGold, fontSize = 11.sp, fontWeight = FontWeight.Bold)
                 Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                    listOf("Supplies", "Transport", "Rent", "Utilities").forEach { c -> FilterChip(selected = expenseCategory == c, onClick = { expenseCategory = c }, label = { Text(c, fontSize = 9.sp) }) }
+                    listOf("Supplies", "Transport", "Rent", "Utilities").forEach { c -> FilterChip(selected = expenseCategory == c, onClick = { expenseCategory = c }, label = { Text(c, fontSize = 9.sp, fontWeight = FontWeight.SemiBold) }, colors = businessChipColors()) }
                 }
                 Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                    listOf("Equipment", "Maintenance", "Marketing", "Other").forEach { c -> FilterChip(selected = expenseCategory == c, onClick = { expenseCategory = c }, label = { Text(c, fontSize = 9.sp) }) }
+                    listOf("Equipment", "Maintenance", "Marketing", "Other").forEach { c -> FilterChip(selected = expenseCategory == c, onClick = { expenseCategory = c }, label = { Text(c, fontSize = 9.sp, fontWeight = FontWeight.SemiBold) }, colors = businessChipColors()) }
                 }
                 OutlinedTextField(expenseDescription, { expenseDescription = it }, label = { Text("Description / supplier") }, singleLine = true, modifier = Modifier.fillMaxWidth())
                 OutlinedTextField(expenseAmount, { expenseAmount = it.filter { ch -> ch.isDigit() || ch == '.' } }, label = { Text("Amount (GH₵)") }, singleLine = true, modifier = Modifier.fillMaxWidth(), keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal))
                 Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                    listOf("Cash", "Mobile Money", "Bank", "Other").forEach { m -> FilterChip(selected = expenseMethod == m, onClick = { expenseMethod = m }, label = { Text(m, fontSize = 9.sp) }) }
+                    listOf("Cash", "Mobile Money", "Bank", "Other").forEach { m -> FilterChip(selected = expenseMethod == m, onClick = { expenseMethod = m }, label = { Text(m, fontSize = 9.sp, fontWeight = FontWeight.SemiBold) }, colors = businessChipColors()) }
                 }
                 Button(onClick = {
                     val amount = ((expenseAmount.toDoubleOrNull() ?: 0.0) * 100).toLong()
@@ -351,7 +351,7 @@ internal fun BusinessManagementScreen(modifier: Modifier = Modifier) {
         Text("BUSINESS ANALYTICS", color = BizGold, fontSize = 11.sp, fontWeight = FontWeight.Bold)
         Row(horizontalArrangement = Arrangement.spacedBy(5.dp)) {
             listOf("Today", "This week", "This month", "All time").forEach { option ->
-                FilterChip(selected = period == option, onClick = { period = option }, label = { Text(option, fontSize = 10.sp) })
+                FilterChip(selected = period == option, onClick = { period = option }, label = { Text(option, fontSize = 10.sp, fontWeight = FontWeight.SemiBold) }, colors = businessChipColors())
             }
         }
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -551,7 +551,7 @@ internal fun BusinessManagementScreen(modifier: Modifier = Modifier) {
                     Text("Payment method", color = BizMuted, fontSize = 11.sp)
                     Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                         listOf("Cash", "Mobile Money", "Bank", "Other").forEach { method ->
-                            FilterChip(selected = paymentMethod == method, onClick = { paymentMethod = method }, label = { Text(method, fontSize = 9.sp) })
+                            FilterChip(selected = paymentMethod == method, onClick = { paymentMethod = method }, label = { Text(method, fontSize = 9.sp, fontWeight = FontWeight.SemiBold) }, colors = businessChipColors())
                         }
                     }
                     OutlinedTextField(paymentReference, { paymentReference = it }, label = { Text("Reference / note (optional)") }, singleLine = true)

@@ -133,7 +133,7 @@ internal fun CustomersScreen(modifier: Modifier = Modifier) {
 }
 
 @Composable
-internal fun GalleryScreen(modifier: Modifier = Modifier) {
+internal fun GalleryScreen(modifier: Modifier = Modifier, onEdit: (String) -> Unit = {}) {
     val context = LocalContext.current
     var refresh by remember { mutableIntStateOf(0) }
     var selectedFile by remember { mutableStateOf<File?>(null) }
@@ -250,6 +250,9 @@ internal fun GalleryScreen(modifier: Modifier = Modifier) {
                     if(selectedBitmap!=null) Image(selectedBitmap.asImageBitmap(),"Full photograph preview",Modifier.fillMaxWidth().heightIn(max=480.dp),contentScale=ContentScale.Fit)
                     Text(selectedFile?.let { SimpleDateFormat("dd MMMM yyyy, HH:mm",Locale.getDefault()).format(Date(it.lastModified())) } ?: "",color=Muted,fontSize=11.sp)
                     Row(horizontalArrangement=Arrangement.spacedBy(8.dp)) {
+                        Button(onClick={ selectedFile?.let { onEdit(it.absolutePath) } }, modifier=Modifier.weight(1f), colors=ButtonDefaults.buttonColors(containerColor=Color(0xFFE4B45D),contentColor=Ink)) {
+                            Icon(Icons.Default.AutoFixHigh,null); Spacer(Modifier.width(5.dp)); Text("Re-edit")
+                        }
                         Button(onClick={
                             selectedFile?.let { file ->
                                 try {

@@ -418,7 +418,7 @@ internal fun PhotoEditorScreen(photoPath: String, onRetake: () -> Unit, onSaved:
             verticalArrangement=Arrangement.spacedBy(6.dp)
         ) {
             Row(horizontalArrangement=Arrangement.spacedBy(7.dp), verticalAlignment=Alignment.CenterVertically) {
-                OutlinedButton(colors=ButtonDefaults.outlinedButtonColors(contentColor=if (LocalPassportDark.current) Color(0xFFE4B45D) else Color(0xFF80520F), disabledContentColor=if (LocalPassportDark.current) Color(0xFFB9C2D0) else Color(0xFF596579)), border=androidx.compose.foundation.BorderStroke(1.5.dp, if (LocalPassportDark.current) Color(0xFF78869A) else Color(0xFF667386)), onClick={
+                OutlinedButton(onClick={
                     if (undoStack.isNotEmpty()) {
                         redoStack = (redoStack + currentSnapshot()).takeLast(40)
                         restoreSnapshot(undoStack.last())

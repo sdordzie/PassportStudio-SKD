@@ -36,6 +36,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import java.io.File
 import java.io.FileOutputStream
+import java.io.ByteArrayOutputStream
 import java.nio.ByteOrder
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -269,6 +270,9 @@ internal fun PhotoEditorScreen(photoPath: String, onRetake: () -> Unit, onSaved:
     var outputDpi by remember { mutableIntStateOf(editorDefaults.getInt("dpi", 300)) }
     var customDefaultSaved by remember { mutableStateOf(hasSavedCustomDefault) }
     var busy by remember { mutableStateOf(false) }
+    var pendingSaveBitmap by remember { mutableStateOf<Bitmap?>(null) }
+    var jpegQuality by remember { mutableIntStateOf(95) }
+    var estimatedJpegBytes by remember { mutableLongStateOf(0L) }
     var showOriginal by remember { mutableStateOf(false) }
     var undoStack by remember { mutableStateOf(listOf<EditorSnapshot>()) }
     var redoStack by remember { mutableStateOf(listOf<EditorSnapshot>()) }
@@ -297,6 +301,17 @@ internal fun PhotoEditorScreen(photoPath: String, onRetake: () -> Unit, onSaved:
         val h = customHeight.toFloatOrNull()?.takeIf { it > 0f }
         if (w == null || h == null) null else w / h
     }
+    LaunchedEffect(pendingSaveBitmap, jpegQuality) {
+        val bitmap = pendingSaveBitmap
+        if (bitmap != null) {
+            estimatedJpegBytes = withContext(Dispatchers.Default) {
+                val buffer = ByteArrayOutputStream()
+                bitmap.compress(CompressFormat.JPEG, jpegQuality, buffer)
+                buffer.size().toLong()
+            }
+        }
+    }
+
     // Draw perspective handles over the uncorrected oriented source so their positions stay stable.
     LaunchedEffect(editedBase, rotation, flipHorizontal, flipVertical) {
         val base = editedBase
@@ -319,6 +334,65 @@ internal fun PhotoEditorScreen(photoPath: String, onRetake: () -> Unit, onSaved:
                 adjustPhoto(cropped, brightness, contrast, saturation)
             }
         }
+    }
+
+    pendingSaveBitmap?.let { saveBitmap ->
+        AlertDialog(
+            onDismissRequest = { if (!busy) pendingSaveBitmap = null },
+            title = { Text("REVIEW SAVE QUALITY", fontWeight = FontWeight.Bold) },
+            text = {
+                Column(Modifier.fillMaxWidth().heightIn(max = 470.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Box(Modifier.fillMaxWidth().heightIn(min = 150.dp, max = 270.dp).background(Color(0xFF090D14), RoundedCornerShape(12.dp)), contentAlignment = Alignment.Center) {
+                        Image(saveBitmap.asImageBitmap(), contentDescription = "Final photograph preview before saving", modifier = Modifier.fillMaxSize().padding(6.dp), contentScale = ContentScale.Fit)
+                    }
+                    Text("FINAL IMAGE", color = Muted, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                    Text("${saveBitmap.width} × ${saveBitmap.height} pixels  •  JPEG", color = PrimaryText, fontWeight = FontWeight.SemiBold)
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text("JPEG quality", color = PrimaryText, modifier = Modifier.weight(1f))
+                        Text("$jpegQuality%", color = Color(0xFFB27A20), fontWeight = FontWeight.Bold)
+                    }
+                    Slider(value = jpegQuality.toFloat(), onValueChange = { jpegQuality = it.toInt().coerceIn(70, 100) }, valueRange = 70f..100f, steps = 29)
+                    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        listOf(80, 90, 95, 100).forEach { value ->
+                            FilterChip(selected = jpegQuality == value, onClick = { jpegQuality = value }, label = { Text("$value%") })
+                        }
+                    }
+                    Text("Estimated file size: " + if (estimatedJpegBytes >= 1024 * 1024) String.format(Locale.US, "%.2f MB", estimatedJpegBytes / (1024f * 1024f)) else String.format(Locale.US, "%.0f KB", estimatedJpegBytes / 1024f), color = PrimaryText, fontWeight = FontWeight.SemiBold)
+                    Text("Higher quality preserves more detail but creates a larger file. Review the image above before committing the save.", color = Muted, fontSize = 11.sp)
+                }
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        busy = true
+                        scope.launch {
+                            try {
+                                val file = withContext(Dispatchers.IO) {
+                                    val dir = File(context.getExternalFilesDir(null), "PassportPro/Edited").apply { mkdirs() }
+                                    val name = "PassportPro_${SimpleDateFormat("yyyyMMdd_HHmmss", Locale.US).format(Date())}.jpg"
+                                    val output = File(dir, name)
+                                    FileOutputStream(output).use { stream ->
+                                        if (!saveBitmap.compress(CompressFormat.JPEG, jpegQuality, stream)) throw IllegalStateException("JPEG encoding failed")
+                                        stream.flush()
+                                    }
+                                    output
+                                }
+                                pendingSaveBitmap = null
+                                status = "Saved successfully: ${file.name}"
+                                onSaved()
+                            } catch (e: Exception) {
+                                status = "Save failed: ${e.localizedMessage ?: "please try again"}"
+                            } finally {
+                                busy = false
+                            }
+                        }
+                    },
+                    enabled = !busy,
+                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFE4B45D), contentColor = Color(0xFF101522))
+                ) { Text(if (busy) "Saving…" else "Save image", fontWeight = FontWeight.Bold) }
+            },
+            dismissButton = { TextButton(onClick = { pendingSaveBitmap = null }, enabled = !busy) { Text("Cancel") } }
+        )
     }
 
     Column(Modifier.fillMaxSize().padding(horizontal = 12.dp, vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(7.dp)) {
@@ -617,46 +691,38 @@ internal fun PhotoEditorScreen(photoPath: String, onRetake: () -> Unit, onSaved:
                     showOriginal=false; status="Edits reset to the saved studio defaults."
                 },enabled=!busy,modifier=Modifier.weight(1f)) { Text("Reset") }
                 Button(
-                    onClick={
-                        val base=editedBase ?: return@Button
-                        busy=true
-                        status="Preparing full-quality photograph…"
+                    onClick = {
+                        val base = editedBase ?: return@Button
+                        busy = true
+                        status = "Preparing full-resolution save preview…"
                         scope.launch {
                             try {
-                                val finalBitmap=withContext(Dispatchers.Default) {
-                                    val oriented=transformPhoto(base,rotation,flipHorizontal,flipVertical)
-                                    val perspective=if(perspectiveEnabled) perspectiveCorrect(oriented,perspectiveCorners) else oriented
-                                    val cropped=cropForPreset(perspective,crop, if(crop=="Custom") customRatio else null)
-                                    val adjusted=adjustPhoto(cropped,brightness,contrast,saturation)
-                                    if (crop=="Custom" && customRatio!=null) {
-                                        val factor=if(customUnit=="mm") outputDpi/25.4f else if(customUnit=="cm") outputDpi/2.54f else if(customUnit=="in") outputDpi.toFloat() else 1f
-                                        val targetW=(customWidth.toFloat()*factor).toInt().coerceIn(1,12000)
-                                        val targetH=(customHeight.toFloat()*factor).toInt().coerceIn(1,12000)
-                                        Bitmap.createScaledBitmap(adjusted,targetW,targetH,true)
+                                val finalBitmap = withContext(Dispatchers.Default) {
+                                    val oriented = transformPhoto(base, rotation, flipHorizontal, flipVertical)
+                                    val perspective = if (perspectiveEnabled) perspectiveCorrect(oriented, perspectiveCorners) else oriented
+                                    val cropped = cropForPreset(perspective, crop, if (crop == "Custom") customRatio else null)
+                                    val adjusted = adjustPhoto(cropped, brightness, contrast, saturation)
+                                    if (crop == "Custom" && customRatio != null) {
+                                        val factor = if (customUnit == "mm") outputDpi / 25.4f else if (customUnit == "cm") outputDpi / 2.54f else if (customUnit == "in") outputDpi.toFloat() else 1f
+                                        val targetW = (customWidth.toFloat() * factor).toInt().coerceIn(1, 12000)
+                                        val targetH = (customHeight.toFloat() * factor).toInt().coerceIn(1, 12000)
+                                        Bitmap.createScaledBitmap(adjusted, targetW, targetH, true)
                                     } else adjusted
                                 }
-                                val file=withContext(Dispatchers.IO) {
-                                    val dir=File(context.getExternalFilesDir(null),"PassportPro/Edited").apply { mkdirs() }
-                                    val name="PassportPro_${SimpleDateFormat("yyyyMMdd_HHmmss",Locale.US).format(Date())}.jpg"
-                                    val output=File(dir,name)
-                                    FileOutputStream(output).use { stream ->
-                                        finalBitmap.compress(CompressFormat.JPEG,92,stream)
-                                        stream.flush()
-                                    }
-                                    output
-                                }
-                                status="Saved successfully: ${file.name}"
-                                onSaved()
-                            } catch(e:Exception) {
-                                status="Save failed: ${e.localizedMessage ?: "please try again"}"
-                                busy=false
+                                pendingSaveBitmap = finalBitmap
+                                jpegQuality = 95
+                                status = "Review the final image and choose its JPEG quality before saving."
+                            } catch (e: Exception) {
+                                status = "Could not prepare save preview: ${e.localizedMessage ?: "please try again"}"
+                            } finally {
+                                busy = false
                             }
                         }
                     },
-                    enabled=!busy && editedBase!=null,
-                    modifier=Modifier.weight(1f),
-                    colors=ButtonDefaults.buttonColors(containerColor=Color(0xFFE4B45D),contentColor=Color(0xFF101522))
-                ) { Text(if(busy) "Saving…" else "Save",fontWeight=FontWeight.Bold) }
+                    enabled = !busy && editedBase != null,
+                    modifier = Modifier.weight(1f),
+                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFE4B45D), contentColor = Color(0xFF101522))
+                ) { Text(if (busy) "Preparing…" else "Review & Save", fontWeight = FontWeight.Bold) }
             }
         }
     }

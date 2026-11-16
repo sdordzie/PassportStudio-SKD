@@ -133,7 +133,7 @@ internal fun CustomersScreen(modifier: Modifier = Modifier) {
 }
 
 @Composable
-internal fun GalleryScreen(modifier: Modifier = Modifier, onEdit: (String) -> Unit = {}) {
+internal fun GalleryScreen(modifier: Modifier = Modifier, onEdit: (String) -> Unit = {}, onPickDevice: () -> Unit = {}) {
     val context = LocalContext.current
     var refresh by remember { mutableIntStateOf(0) }
     var selectedFile by remember { mutableStateOf<File?>(null) }
@@ -159,7 +159,10 @@ internal fun GalleryScreen(modifier: Modifier = Modifier, onEdit: (String) -> Un
                 Text("Studio gallery", color = PrimaryText, fontSize = 25.sp, fontWeight = FontWeight.Bold)
                 Text("${files.size} photographs • Stored securely on this device", color = Muted, fontSize = 11.sp)
             }
-            TextButton(onClick = { refresh++ }) { Text("Refresh", color = if (LocalPassportDark.current) Color(0xFFE4B45D) else Color(0xFF9A6418)) }
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                TextButton(onClick = onPickDevice) { Icon(Icons.Default.AddPhotoAlternate, null); Text("Device photos") }
+                TextButton(onClick = { refresh++ }) { Text("Refresh", color = if (LocalPassportDark.current) Color(0xFFE4B45D) else Color(0xFF9A6418)) }
+            }
         }
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             Surface(color = Panel, shape = RoundedCornerShape(12.dp)) { Text("CAPTURED  ${files.count { it.parentFile?.name != "Edited" }}", color = PrimaryText, modifier = Modifier.padding(10.dp), fontSize = 10.sp) }

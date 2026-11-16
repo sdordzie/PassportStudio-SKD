@@ -438,7 +438,7 @@ private fun CameraStudioScreen(modifier: Modifier = Modifier) {
                     val selector = CameraSelector.Builder().requireLensFacing(lensFacing).build()
                     val preview = Preview.Builder().build().also { it.setSurfaceProvider(previewView.surfaceProvider) }
                     val imageCapture = ImageCapture.Builder()
-                        .setCaptureMode(ImageCapture.CAPTURE_MODE_MINIMIZE_LATENCY)
+                        .setCaptureMode(ImageCapture.CAPTURE_MODE_MAXIMIZE_QUALITY)
                         .setFlashMode(if (flashOn) ImageCapture.FLASH_MODE_ON else ImageCapture.FLASH_MODE_OFF)
                         .build()
                     val analysis = ImageAnalysis.Builder()

@@ -1,8 +1,13 @@
-# SAM Message Scheduler — Android Phase 5
+# SAM Message Scheduler — Android Phase 6
 
 Native Android app using Kotlin, Jetpack Compose, Room and WorkManager.
 
-## Phase 5 features
+## Phase 6 features
+- Export all scheduled message records to a portable JSON backup using Android's document picker.
+- Restore records from a SAM JSON backup and re-enqueue future scheduled messages.
+- Backup and restore are available in Settings; files remain under the user's control.
+
+## Earlier features
 - Attention dashboard for failed, permission-required and WhatsApp-awaiting-user messages.
 - Filter messages that need attention.
 - Retry failed actions; SMS retries request permission when needed.

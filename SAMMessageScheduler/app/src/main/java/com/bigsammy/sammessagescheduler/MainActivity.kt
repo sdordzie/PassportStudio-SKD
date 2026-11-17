@@ -103,6 +103,13 @@ class MainActivity : ComponentActivity() {
         }
 
         val dao = AppDatabase.get(this).messageDao()
+        // Rebuild pending jobs from saved records whenever the app opens.
+        // This repairs delays after device clock/time-zone changes and catches overdue items.
+        lifecycleScope.launch {
+            dao.getAllSnapshot()
+                .filter { it.status == "SCHEDULED" }
+                .forEach { MessageScheduler.schedule(this@MainActivity, it.id, it.scheduledAt) }
+        }
         setContent {
             MaterialTheme(colorScheme = lightColorScheme(primary = Purple, background = Pale)) {
                 val messages by dao.observeAll().collectAsStateWithLifecycle(initialValue = emptyList())

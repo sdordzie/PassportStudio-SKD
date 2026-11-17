@@ -1,6 +1,12 @@
-# SAM Message Scheduler — Android Phase 12
+# SAM Message Scheduler — Android Phase 13
 
 Native Android app using Kotlin, Jetpack Compose, Room and WorkManager.
+
+## Phase 13 contact centre
+- New Contacts tab with local contact storage in Room.
+- Add contacts manually or pick an existing phone contact through Android's contact picker; SAM only receives the selected contact's name and phone number.
+- Search contacts, edit saved details, delete locally, and organise contacts using named groups such as Family, Staff, Students or Customers.
+- Database migration 2 to 3 adds contact storage without deleting existing scheduled messages.
 
 ## Phase 12 CSV bulk import
 - Import the app's exported CSV history or a compatible CSV with Recipient, Message, Channel and Scheduled At columns.
@@ -42,6 +48,6 @@ WhatsApp messages are not silently sent; SAM leaves the final Send action to the
 GitHub Actions builds a debug APK with JDK 17, Gradle 8.9 and Android SDK.
 
 Package: com.bigsammy.sammessagescheduler
-Version: 4.9.0
+Version: 5.0.0
 Minimum Android: 8.0 (API 26)
 Target SDK: 35

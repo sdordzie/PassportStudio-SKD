@@ -57,21 +57,25 @@ class AnniversaryReminderWorker(context: Context, params: WorkerParameters) : Co
 
 object AnniversaryReminderScheduler {
     fun ensureScheduled(context: Context) {
-        val now = Calendar.getInstance()
-        val nextRun = (now.clone() as Calendar).apply {
-            set(Calendar.HOUR_OF_DAY, 9)
-            set(Calendar.MINUTE, 0)
-            set(Calendar.SECOND, 0)
-            set(Calendar.MILLISECOND, 0)
-            if (timeInMillis <= now.timeInMillis) add(Calendar.DAY_OF_YEAR, 1)
+        // Anniversary reminders are optional. Never allow their scheduler to prevent
+        // the main application from opening if WorkManager is unavailable or delayed.
+        runCatching {
+            val now = Calendar.getInstance()
+            val nextRun = (now.clone() as Calendar).apply {
+                set(Calendar.HOUR_OF_DAY, 9)
+                set(Calendar.MINUTE, 0)
+                set(Calendar.SECOND, 0)
+                set(Calendar.MILLISECOND, 0)
+                if (timeInMillis <= now.timeInMillis) add(Calendar.DAY_OF_YEAR, 1)
+            }
+            val request = PeriodicWorkRequestBuilder<AnniversaryReminderWorker>(24, TimeUnit.HOURS)
+                .setInitialDelay(nextRun.timeInMillis - now.timeInMillis, TimeUnit.MILLISECONDS)
+                .build()
+            WorkManager.getInstance(context.applicationContext).enqueueUniquePeriodicWork(
+                "sam_birthday_anniversary_daily",
+                ExistingPeriodicWorkPolicy.KEEP,
+                request
+            )
         }
-        val request = PeriodicWorkRequestBuilder<AnniversaryReminderWorker>(24, TimeUnit.HOURS)
-            .setInitialDelay(nextRun.timeInMillis - now.timeInMillis, TimeUnit.MILLISECONDS)
-            .build()
-        WorkManager.getInstance(context).enqueueUniquePeriodicWork(
-            "sam_birthday_anniversary_daily",
-            ExistingPeriodicWorkPolicy.KEEP,
-            request
-        )
     }
 }

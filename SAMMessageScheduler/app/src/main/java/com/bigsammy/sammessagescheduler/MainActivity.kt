@@ -3,6 +3,8 @@ package com.bigsammy.sammessagescheduler
 import android.Manifest
 import android.os.Build
 import android.os.Bundle
+import android.widget.Toast
+import androidx.core.content.ContextCompat
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
@@ -38,6 +40,13 @@ private val Pale = Color(0xFFF5F3FA)
 class MainActivity : ComponentActivity() {
     private val notificationPermission =
         registerForActivityResult(ActivityResultContracts.RequestPermission()) { }
+    private var pendingSmsAction: (() -> Unit)? = null
+    private val smsPermission =
+        registerForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+            if (granted) pendingSmsAction?.invoke()
+            else Toast.makeText(this, "SMS permission is needed for scheduled SMS sending.", Toast.LENGTH_LONG).show()
+            pendingSmsAction = null
+        }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -51,17 +60,26 @@ class MainActivity : ComponentActivity() {
                 val messages by dao.observeAll().collectAsStateWithLifecycle(initialValue = emptyList())
                 SchedulerScreen(
                     messages = messages,
-                    save = { recipient, body, channel, scheduledAt ->
+                    save = { recipient, body, channel, scheduledAt, repeatRule ->
                         lifecycleScope.launch {
                             val id = dao.insert(
                                 MessageEntity(
                                     recipient = recipient,
                                     body = body,
                                     channel = channel,
-                                    scheduledAt = scheduledAt
+                                    scheduledAt = scheduledAt,
+                                    repeatRule = repeatRule
                                 )
                             )
                             MessageScheduler.schedule(this@MainActivity, id, scheduledAt)
+                        }
+                    },
+                    requestSmsPermission = { action ->
+                        if (ContextCompat.checkSelfPermission(this, Manifest.permission.SEND_SMS) ==
+                            android.content.pm.PackageManager.PERMISSION_GRANTED) action()
+                        else {
+                            pendingSmsAction = action
+                            smsPermission.launch(Manifest.permission.SEND_SMS)
                         }
                     },
                     remove = { id ->
@@ -84,7 +102,8 @@ class MainActivity : ComponentActivity() {
 @Composable
 private fun SchedulerScreen(
     messages: List<MessageEntity>,
-    save: (String, String, String, Long) -> Unit,
+    save: (String, String, String, Long, String) -> Unit,
+    requestSmsPermission: (() -> Unit) -> Unit,
     remove: (Long) -> Unit,
     complete: (MessageEntity) -> Unit
 ) {
@@ -263,8 +282,9 @@ private fun SchedulerScreen(
     if (showComposer) {
         Composer(
             onClose = { showComposer = false },
-            onSave = { recipient, body, channel, scheduledAt ->
-                save(recipient, body, channel, scheduledAt)
+            requestSmsPermission = requestSmsPermission,
+            onSave = { recipient, body, channel, scheduledAt, repeatRule ->
+                save(recipient, body, channel, scheduledAt, repeatRule)
                 showComposer = false
             }
         )
@@ -315,13 +335,15 @@ private fun MessageCard(message: MessageEntity) {
 @Composable
 private fun Composer(
     onClose: () -> Unit,
-    onSave: (String, String, String, Long) -> Unit
+    requestSmsPermission: (() -> Unit) -> Unit,
+    onSave: (String, String, String, Long, String) -> Unit
 ) {
     var recipient by remember { mutableStateOf("") }
     var body by remember { mutableStateOf("") }
     var channel by remember { mutableStateOf("SMS") }
     var date by remember { mutableStateOf("") }
     var time by remember { mutableStateOf("09:00") }
+    var repeatRule by remember { mutableStateOf("NONE") }
     var error by remember { mutableStateOf("") }
 
     AlertDialog(
@@ -332,6 +354,12 @@ private fun Composer(
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     FilterChip(selected = channel == "SMS", onClick = { channel = "SMS" }, label = { Text("SMS") })
                     FilterChip(selected = channel == "WhatsApp", onClick = { channel = "WhatsApp" }, label = { Text("WhatsApp") })
+                }
+                Text("Repeat", fontWeight = FontWeight.SemiBold, color = Navy)
+                Row(horizontalArrangement = Arrangement.spacedBy(5.dp)) {
+                    listOf("NONE" to "Never", "DAILY" to "Daily", "WEEKLY" to "Weekly", "MONTHLY" to "Monthly").forEach { (key, label) ->
+                        FilterChip(selected = repeatRule == key, onClick = { repeatRule = key }, label = { Text(label, fontSize = 11.sp) })
+                    }
                 }
                 OutlinedTextField(
                     value = recipient,
@@ -367,18 +395,21 @@ private fun Composer(
         },
         confirmButton = {
             Button(onClick = {
-                try {
-                    val scheduledAt = SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.US)
-                        .apply { isLenient = false }
-                        .parse("$date $time")!!.time
-                    when {
-                        recipient.isBlank() || body.isBlank() -> error = "Enter recipient and message."
-                        scheduledAt <= System.currentTimeMillis() -> error = "Choose a future date and time."
-                        else -> onSave(recipient.trim(), body.trim(), channel, scheduledAt)
+                val action = {
+                    try {
+                        val scheduledAt = SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.US)
+                            .apply { isLenient = false }
+                            .parse("$date $time")!!.time
+                        when {
+                            recipient.isBlank() || body.isBlank() -> error = "Enter recipient and message."
+                            scheduledAt <= System.currentTimeMillis() -> error = "Choose a future date and time."
+                            else -> onSave(recipient.trim(), body.trim(), channel, scheduledAt, repeatRule)
+                        }
+                    } catch (_: Exception) {
+                        error = "Enter a valid date and time."
                     }
-                } catch (_: Exception) {
-                    error = "Enter a valid date and time."
                 }
+                if (channel == "SMS") requestSmsPermission(action) else action()
             }) {
                 Text("Save schedule")
             }

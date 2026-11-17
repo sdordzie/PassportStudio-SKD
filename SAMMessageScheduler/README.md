@@ -83,3 +83,9 @@ Target SDK: 35
 - Both controls are off by default under Settings → Incoming SMS automation.
 - Requires Android RECEIVE_SMS and SEND_SMS permissions; carrier charges may apply.
 - Forwarding copies message content to the chosen destination. This feature applies to SMS, not WhatsApp.
+
+ 
+## Phase 18 — Reports and analytics dashboard (5.5.0)
+- Home dashboard includes total message count, messages created in the last seven days, failed messages and carrier-confirmed deliveries.
+- Completion-rate indicator and SMS/WhatsApp channel distribution.
+- Metrics are calculated from locally stored records; delivery counts depend on carrier delivery reports.

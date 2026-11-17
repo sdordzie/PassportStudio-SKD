@@ -477,13 +477,13 @@ private fun SchedulerScreen(
                 modifier = Modifier.fillMaxWidth().background(MaterialTheme.colorScheme.surface).padding(18.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Icon(Icons.Default.Forum, contentDescription = null, tint = Purple, modifier = Modifier.size(30.dp))
+                Icon(Icons.Default.Forum, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(30.dp))
                 Spacer(Modifier.width(10.dp))
                 Column(Modifier.weight(1f)) {
                     Text("SAM Message Scheduler", fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface, fontSize = 17.sp)
                     Text("Plan it. Remember it. Send it.", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
-                Icon(Icons.Default.Schedule, contentDescription = null, tint = Purple)
+                Icon(Icons.Default.Schedule, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
             }
         },
         bottomBar = {
@@ -509,7 +509,7 @@ private fun SchedulerScreen(
             if (page != "Settings") {
                 FloatingActionButton(
                     onClick = { showComposer = true },
-                    containerColor = Purple
+                    containerColor = MaterialTheme.colorScheme.primary
                 ) {
                     Icon(Icons.Default.Add, contentDescription = "Add message", tint = Color.White)
                 }
@@ -591,7 +591,7 @@ private fun SchedulerScreen(
                             }
                             Text("Completion rate", fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onSurface)
                             val completionRate = if (totalCount == 0) 0f else completedCount.toFloat() / totalCount.toFloat()
-                            LinearProgressIndicator(progress = completionRate, modifier = Modifier.fillMaxWidth(), color = Purple)
+                            LinearProgressIndicator(progress = completionRate, modifier = Modifier.fillMaxWidth(), color = MaterialTheme.colorScheme.primary)
                             Text("${(completionRate * 100).toInt()}% completed • $completedCount of $totalCount messages", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                             Text("Channel distribution", fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onSurface)
                             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) { Text("SMS", color = MaterialTheme.colorScheme.onSurfaceVariant); Text("$smsCount", fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onSurface) }
@@ -684,7 +684,7 @@ private fun SchedulerScreen(
                                             if (message.status in listOf("FAILED", "PERMISSION_REQUIRED", "AWAITING_USER")) {
                                                 TextButton(onClick = { retry(message) }) { Text("Retry") }
                                             }
-                                            TextButton(onClick = { pendingRemoval = message }) { Text("Cancel", color = Color.Red) }
+                                            TextButton(onClick = { pendingRemoval = message }) { Text("Cancel", color = MaterialTheme.colorScheme.error) }
                                         }
                                     }
                                 }
@@ -725,7 +725,7 @@ private fun SchedulerScreen(
                         item(key = "day_$day") {
                             Text(
                                 day,
-                                color = Purple,
+                                color = MaterialTheme.colorScheme.primary,
                                 fontWeight = FontWeight.Bold,
                                 modifier = Modifier.padding(top = 14.dp, bottom = 6.dp)
                             )
@@ -769,7 +769,7 @@ private fun SchedulerScreen(
                             quietMessage = if (quietEnabled) "Quiet hours saved." else "Quiet hours disabled."
                         }
                     }, modifier = Modifier.fillMaxWidth()) { Text("Save quiet hours") }
-                    if (quietMessage.isNotBlank()) Text(quietMessage, color = Purple, fontSize = 12.sp)
+                    if (quietMessage.isNotBlank()) Text(quietMessage, color = MaterialTheme.colorScheme.primary, fontSize = 12.sp)
                     Text("Incoming SMS automation", fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onSurface, modifier = Modifier.padding(top = 20.dp))
                     Text("Set optional automatic replies and forward incoming SMS messages to a number you choose.", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 12.sp)
                     val automationPrefs = remember { context.getSharedPreferences("sam_sms_automation", android.content.Context.MODE_PRIVATE) }
@@ -831,7 +831,7 @@ private fun SchedulerScreen(
                             automationMessage = if (autoReplyEnabled || forwardingEnabled) "Rules saved. Grant incoming SMS permission when Android asks." else "Incoming SMS automation disabled."
                         }
                     }, modifier = Modifier.fillMaxWidth()) { Text("Save SMS automation rules") }
-                    if (automationMessage.isNotBlank()) Text(automationMessage, color = Purple, fontSize = 12.sp)
+                    if (automationMessage.isNotBlank()) Text(automationMessage, color = MaterialTheme.colorScheme.primary, fontSize = 12.sp)
                     Text("Requires incoming SMS and SMS sending permissions. Carrier charges may apply. Forwarding copies message content to the destination number.", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 11.sp)
                     Text("App security", fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onSurface, modifier = Modifier.padding(top = 18.dp))
                     val securityPrefs = remember { context.getSharedPreferences("sam_app_security", android.content.Context.MODE_PRIVATE) }
@@ -858,7 +858,7 @@ private fun SchedulerScreen(
                             }
                         })
                     }
-                    if (securityMessage.isNotBlank()) Text(securityMessage, color = Purple, fontSize = 12.sp)
+                    if (securityMessage.isNotBlank()) Text(securityMessage, color = MaterialTheme.colorScheme.primary, fontSize = 12.sp)
                     Text("Data protection", fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onSurface, modifier = Modifier.padding(top = 16.dp))
                     var backupPasswordInput by remember { mutableStateOf("") }
                     var backupPasswordVisible by remember { mutableStateOf(false) }
@@ -877,7 +877,7 @@ private fun SchedulerScreen(
                         OutlinedButton(onClick = { if (backupPasswordInput.length < 8) securityMessage = "Set a backup password of at least 8 characters." else onBackup(backupPasswordInput) }, modifier = Modifier.weight(1f)) { Text("Cloud backup") }
                         Button(onClick = { if (backupPasswordInput.length < 8) securityMessage = "Enter the password used for this backup." else onRestore(backupPasswordInput) }, modifier = Modifier.weight(1f)) { Text("Restore cloud backup") }
                     }
-                    if (securityMessage.isNotBlank()) Text(securityMessage, color = Purple, fontSize = 12.sp)
+                    if (securityMessage.isNotBlank()) Text(securityMessage, color = MaterialTheme.colorScheme.primary, fontSize = 12.sp)
 
                     OutlinedButton(onClick = onImportCsv, modifier = Modifier.fillMaxWidth().padding(top = 8.dp)) {
                         Icon(Icons.Default.FileUpload, contentDescription = null)
@@ -931,7 +931,7 @@ private fun SchedulerScreen(
                     importPreview.take(4).forEach { item ->
                         Text("${item.recipient} • ${item.channel}", fontWeight = FontWeight.SemiBold, fontSize = 13.sp)
                         Text(item.body, maxLines = 2, fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                        Text(SimpleDateFormat("dd MMM yyyy, HH:mm", Locale.getDefault()).format(Date(item.scheduledAt)), fontSize = 11.sp, color = Purple)
+                        Text(SimpleDateFormat("dd MMM yyyy, HH:mm", Locale.getDefault()).format(Date(item.scheduledAt)), fontSize = 11.sp, color = MaterialTheme.colorScheme.primary)
                     }
                     if (importPreview.size > 4) Text("And ${importPreview.size - 4} more…", fontSize = 12.sp)
                 }
@@ -952,7 +952,7 @@ private fun SchedulerScreen(
                 TextButton(onClick = {
                     remove(message.id)
                     pendingRemoval = null
-                }) { Text("Remove message", color = Color.Red) }
+                }) { Text("Remove message", color = MaterialTheme.colorScheme.error) }
             },
             dismissButton = {
                 TextButton(onClick = { pendingRemoval = null }) { Text("Keep message") }
@@ -986,7 +986,7 @@ private fun BulkComposer(
             Column(Modifier.fillMaxWidth().heightIn(max = (configuration.screenHeightDp * 0.62f).dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(9.dp)) {
                 Text("Select recipients", fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onSurface)
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text("${selectedIds.size} of ${contacts.size} selected", modifier = Modifier.weight(1f), color = Purple, fontSize = 12.sp)
+                    Text("${selectedIds.size} of ${contacts.size} selected", modifier = Modifier.weight(1f), color = MaterialTheme.colorScheme.primary, fontSize = 12.sp)
                     TextButton(onClick = { selectedIds = if (selectedIds.size == contacts.size) emptySet() else contacts.map { it.id }.toSet() }) {
                         Text(if (selectedIds.size == contacts.size) "Clear all" else "Select all")
                     }
@@ -1010,7 +1010,7 @@ private fun BulkComposer(
                 }
                 OutlinedTextField(date, { date = it }, modifier = Modifier.fillMaxWidth(), label = { Text("Date (YYYY-MM-DD)") }, singleLine = true)
                 OutlinedTextField(time, { time = it }, modifier = Modifier.fillMaxWidth(), label = { Text("Time (24-hour HH:mm)") }, singleLine = true)
-                if (error.isNotBlank()) Text(error, color = Color.Red)
+                if (error.isNotBlank()) Text(error, color = MaterialTheme.colorScheme.error)
                 Text("Each recipient gets a separate scheduled message. WhatsApp requires you to review and tap Send when the chat opens.", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
         },
@@ -1073,10 +1073,10 @@ private fun ContactsPage(
                             Column(Modifier.weight(1f)) {
                                 Text(contact.name, fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onSurface)
                                 Text(contact.phone, color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 13.sp)
-                                Text(contact.groupName, color = Purple, fontSize = 11.sp)
+                                Text(contact.groupName, color = MaterialTheme.colorScheme.primary, fontSize = 11.sp)
                             }
                             TextButton(onClick = { editing = contact; showEditor = true }) { Text("Edit") }
-                            TextButton(onClick = { deleting = contact }) { Text("Delete", color = Color.Red) }
+                            TextButton(onClick = { deleting = contact }) { Text("Delete", color = MaterialTheme.colorScheme.error) }
                         }
                     }
                 }
@@ -1112,7 +1112,7 @@ private fun ContactsPage(
                     OutlinedTextField(group, { group = it }, label = { Text("Group") }, singleLine = true, supportingText = { Text("Examples: Family, Staff, Students, Customers") })
                     OutlinedTextField(birthday, { birthday = it }, label = { Text("Birthday (MM-dd, optional)") }, singleLine = true, supportingText = { Text("Example: 09-25. Repeats every year.") })
                     OutlinedTextField(anniversary, { anniversary = it }, label = { Text("Anniversary (MM-dd, optional)") }, singleLine = true, supportingText = { Text("Example: 12-10. Repeats every year.") })
-                    if (error.isNotBlank()) Text(error, color = Color.Red)
+                    if (error.isNotBlank()) Text(error, color = MaterialTheme.colorScheme.error)
                 }
             },
             confirmButton = { Button(onClick = {
@@ -1137,7 +1137,7 @@ private fun ContactsPage(
             onDismissRequest = { deleting = null },
             title = { Text("Delete contact?") },
             text = { Text("Remove ${contact.name} from SAM's saved contacts? This will not delete the contact from your phone.") },
-            confirmButton = { TextButton(onClick = { deleteContact(contact.id); deleting = null }) { Text("Delete", color = Color.Red) } },
+            confirmButton = { TextButton(onClick = { deleteContact(contact.id); deleting = null }) { Text("Delete", color = MaterialTheme.colorScheme.error) } },
             dismissButton = { TextButton(onClick = { deleting = null }) { Text("Keep") } }
         )
     }
@@ -1166,19 +1166,19 @@ private fun MessageCard(message: MessageEntity) {
         Icon(
             if (message.channel == "SMS") Icons.Default.Sms else Icons.Default.Chat,
             contentDescription = message.channel,
-            tint = Purple,
+            tint = MaterialTheme.colorScheme.primary,
             modifier = Modifier.size(30.dp)
         )
         Spacer(Modifier.width(10.dp))
         Column(Modifier.weight(1f)) {
             Text(message.recipient, fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onSurface)
             Text(message.body, maxLines = 2, fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            Text(message.category, fontSize = 10.sp, color = Purple)
+            Text(message.category, fontSize = 10.sp, color = MaterialTheme.colorScheme.primary)
             Text(
                 "${message.channel} • " + SimpleDateFormat("dd MMM yyyy, HH:mm", Locale.getDefault())
                     .format(Date(message.scheduledAt)),
                 fontSize = 11.sp,
-                color = Purple
+                color = MaterialTheme.colorScheme.primary
             )
         }
         Column(horizontalAlignment = Alignment.End) {
@@ -1288,7 +1288,7 @@ private fun Composer(
                     supportingText = { Text("24-hour format, HH:mm") },
                     singleLine = true
                 )
-                if (error.isNotBlank()) Text(error, color = Color.Red)
+                if (error.isNotBlank()) Text(error, color = MaterialTheme.colorScheme.error)
                 Text(
                     "SMS is submitted automatically with permission. WhatsApp opens a prepared chat for your final confirmation.",
                     fontSize = 11.sp,

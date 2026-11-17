@@ -107,3 +107,13 @@ Target SDK: 35
 - Password-protected backups use PBKDF2-HMAC-SHA256 key derivation and AES-256-GCM authenticated encryption.
 - Encrypted restore validates the backup authentication tag; incorrect passwords or tampered files are rejected. Legacy plain JSON backups remain restorable.
 - Version code: 21.
+
+
+## Phase 21 — Message categories (5.8.0)
+- Added persistent message categories: General, Personal, Family, Work, School, Business, Bulk, Birthday and Reminder.
+- Categories can be selected while composing or editing a scheduled message.
+- Message cards display the category and message search also matches category names.
+- CSV export includes a Category column; CSV import reads it when present and defaults older files to General.
+- JSON backup and restore preserve message categories.
+- Room migration 5→6 adds the category column without deleting existing messages.
+- Version code: 22.

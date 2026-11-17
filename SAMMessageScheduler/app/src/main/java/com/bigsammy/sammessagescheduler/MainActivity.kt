@@ -542,7 +542,7 @@ private fun SchedulerScreen(
                                 Icon(Icons.Default.Warning, contentDescription = null, tint = Color(0xFF9A4D00))
                                 Spacer(Modifier.width(10.dp))
                                 Column(Modifier.weight(1f)) {
-                                    Text("$attentionCount message(s) need attention", fontWeight = FontWeight.SemiBold, color = Navy)
+                                    Text("$attentionCount message(s) need attention", fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onSurface)
                                     Text("Review permission issues, failed actions or WhatsApp messages awaiting you.", fontSize = 12.sp, color = Color.DarkGray)
                                 }
                                 TextButton(onClick = { page = "Scheduled"; statusFilter = "ATTENTION" }) { Text("Review") }
@@ -550,7 +550,7 @@ private fun SchedulerScreen(
                         }
                     }
                     Card(
-                        colors = CardDefaults.cardColors(containerColor = Navy),
+                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.onSurface),
                         shape = RoundedCornerShape(22.dp)
                     ) {
                         Column(Modifier.padding(20.dp)) {
@@ -563,7 +563,7 @@ private fun SchedulerScreen(
                             Button(
                                 onClick = { showComposer = true },
                                 modifier = Modifier.padding(top = 14.dp),
-                                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.surface, contentColor = Navy)
+                                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.surface, contentColor = MaterialTheme.colorScheme.onSurface)
                             ) {
                                 Icon(Icons.Default.Add, contentDescription = null)
                                 Text(" Schedule message")
@@ -589,13 +589,13 @@ private fun SchedulerScreen(
                                 Stat("Failed", failedCount.toString(), Modifier.weight(1f))
                                 Stat("Delivered", deliveredCount.toString(), Modifier.weight(1f))
                             }
-                            Text("Completion rate", fontWeight = FontWeight.SemiBold, color = Navy)
+                            Text("Completion rate", fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onSurface)
                             val completionRate = if (totalCount == 0) 0f else completedCount.toFloat() / totalCount.toFloat()
                             LinearProgressIndicator(progress = completionRate, modifier = Modifier.fillMaxWidth(), color = Purple)
                             Text("${(completionRate * 100).toInt()}% completed • $completedCount of $totalCount messages", fontSize = 12.sp, color = Color.Gray)
-                            Text("Channel distribution", fontWeight = FontWeight.SemiBold, color = Navy)
-                            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) { Text("SMS", color = Color.Gray); Text("$smsCount", fontWeight = FontWeight.SemiBold, color = Navy) }
-                            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) { Text("WhatsApp", color = Color.Gray); Text("$whatsappCount", fontWeight = FontWeight.SemiBold, color = Navy) }
+                            Text("Channel distribution", fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onSurface)
+                            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) { Text("SMS", color = Color.Gray); Text("$smsCount", fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onSurface) }
+                            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) { Text("WhatsApp", color = Color.Gray); Text("$whatsappCount", fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onSurface) }
                             Text("Delivery reports depend on your mobile network. A missing carrier delivery report does not necessarily mean a message failed.", fontSize = 11.sp, color = Color.Gray)
                         }
                     }
@@ -603,7 +603,7 @@ private fun SchedulerScreen(
                     Text(
                         "UPCOMING MESSAGES",
                         fontWeight = FontWeight.Bold,
-                        color = Navy,
+                        color = MaterialTheme.colorScheme.onSurface,
                         modifier = Modifier.padding(top = 22.dp, bottom = 8.dp)
                     )
                     messages.filter { it.status == "SCHEDULED" }
@@ -625,7 +625,7 @@ private fun SchedulerScreen(
                 Column(
                     modifier = Modifier.padding(padding).fillMaxSize().padding(horizontal = 16.dp, vertical = 12.dp)
                 ) {
-                    Text("Your messages", fontSize = 24.sp, fontWeight = FontWeight.Bold, color = Navy)
+                    Text("Your messages", fontSize = 24.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
                     OutlinedTextField(
                         value = searchText,
                         onValueChange = { searchText = it },
@@ -719,7 +719,7 @@ private fun SchedulerScreen(
                     modifier = Modifier.padding(padding).fillMaxSize().padding(18.dp)
                 ) {
                     item {
-                        Text("Schedule calendar", fontSize = 24.sp, fontWeight = FontWeight.Bold, color = Navy)
+                        Text("Schedule calendar", fontSize = 24.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
                     }
                     grouped.forEach { (day, dayMessages) ->
                         item(key = "day_$day") {
@@ -743,14 +743,14 @@ private fun SchedulerScreen(
             "Settings" -> {
                 Column(Modifier.padding(padding).fillMaxSize()
                     .verticalScroll(rememberScrollState()).padding(18.dp)) {
-                    Text("Settings", fontSize = 24.sp, fontWeight = FontWeight.Bold, color = Navy)
+                    Text("Settings", fontSize = 24.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
                     val context = androidx.compose.ui.platform.LocalContext.current
                     val quietPrefs = remember { context.getSharedPreferences("sam_quiet_hours", android.content.Context.MODE_PRIVATE) }
                     var quietEnabled by remember { mutableStateOf(quietPrefs.getBoolean("enabled", false)) }
                     var quietStart by remember { mutableStateOf(quietPrefs.getString("start", "22:00") ?: "22:00") }
                     var quietEnd by remember { mutableStateOf(quietPrefs.getString("end", "07:00") ?: "07:00") }
                     var quietMessage by remember { mutableStateOf("") }
-                    Text("Quiet hours", fontWeight = FontWeight.SemiBold, color = Navy, modifier = Modifier.padding(top = 16.dp))
+                    Text("Quiet hours", fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onSurface, modifier = Modifier.padding(top = 16.dp))
                     Text("Scheduled SMS and WhatsApp reminders will be deferred during this daily window. Your original schedule is preserved.", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 12.sp)
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Checkbox(checked = quietEnabled, onCheckedChange = { quietEnabled = it })
@@ -770,7 +770,7 @@ private fun SchedulerScreen(
                         }
                     }, modifier = Modifier.fillMaxWidth()) { Text("Save quiet hours") }
                     if (quietMessage.isNotBlank()) Text(quietMessage, color = Purple, fontSize = 12.sp)
-                    Text("Incoming SMS automation", fontWeight = FontWeight.SemiBold, color = Navy, modifier = Modifier.padding(top = 20.dp))
+                    Text("Incoming SMS automation", fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onSurface, modifier = Modifier.padding(top = 20.dp))
                     Text("Set optional automatic replies and forward incoming SMS messages to a number you choose.", color = Color.Gray, fontSize = 12.sp)
                     val automationPrefs = remember { context.getSharedPreferences("sam_sms_automation", android.content.Context.MODE_PRIVATE) }
                     var autoReplyEnabled by remember { mutableStateOf(automationPrefs.getBoolean("auto_reply_enabled", false)) }
@@ -833,13 +833,13 @@ private fun SchedulerScreen(
                     }, modifier = Modifier.fillMaxWidth()) { Text("Save SMS automation rules") }
                     if (automationMessage.isNotBlank()) Text(automationMessage, color = Purple, fontSize = 12.sp)
                     Text("Requires incoming SMS and SMS sending permissions. Carrier charges may apply. Forwarding copies message content to the destination number.", color = Color.Gray, fontSize = 11.sp)
-                    Text("App security", fontWeight = FontWeight.SemiBold, color = Navy, modifier = Modifier.padding(top = 18.dp))
+                    Text("App security", fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onSurface, modifier = Modifier.padding(top = 18.dp))
                     val securityPrefs = remember { context.getSharedPreferences("sam_app_security", android.content.Context.MODE_PRIVATE) }
                     var biometricEnabled by remember { mutableStateOf(securityPrefs.getBoolean("biometric_enabled", false)) }
                     var securityMessage by remember { mutableStateOf("") }
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Column(Modifier.weight(1f)) {
-                            Text("Require biometric / device PIN", fontWeight = FontWeight.Medium, color = Navy)
+                            Text("Require biometric / device PIN", fontWeight = FontWeight.Medium, color = MaterialTheme.colorScheme.onSurface)
                             Text("Request fingerprint, face unlock, or Android screen-lock PIN when opening SAM.", color = Color.Gray, fontSize = 11.sp)
                         }
                         Switch(checked = biometricEnabled, onCheckedChange = { enabled ->
@@ -859,7 +859,7 @@ private fun SchedulerScreen(
                         })
                     }
                     if (securityMessage.isNotBlank()) Text(securityMessage, color = Purple, fontSize = 12.sp)
-                    Text("Data protection", fontWeight = FontWeight.SemiBold, color = Navy, modifier = Modifier.padding(top = 16.dp))
+                    Text("Data protection", fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onSurface, modifier = Modifier.padding(top = 16.dp))
                     var backupPasswordInput by remember { mutableStateOf("") }
                     var backupPasswordVisible by remember { mutableStateOf(false) }
                     OutlinedTextField(
@@ -984,7 +984,7 @@ private fun BulkComposer(
         title = { Text("Bulk message") },
         text = {
             Column(Modifier.fillMaxWidth().heightIn(max = (configuration.screenHeightDp * 0.62f).dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(9.dp)) {
-                Text("Select recipients", fontWeight = FontWeight.SemiBold, color = Navy)
+                Text("Select recipients", fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onSurface)
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text("${selectedIds.size} of ${contacts.size} selected", modifier = Modifier.weight(1f), color = Purple, fontSize = 12.sp)
                     TextButton(onClick = { selectedIds = if (selectedIds.size == contacts.size) emptySet() else contacts.map { it.id }.toSet() }) {
@@ -997,12 +997,12 @@ private fun BulkComposer(
                             selectedIds = if (checked) selectedIds + contact.id else selectedIds - contact.id
                         })
                         Column(Modifier.weight(1f)) {
-                            Text(contact.name, fontWeight = FontWeight.Medium, color = Navy)
+                            Text(contact.name, fontWeight = FontWeight.Medium, color = MaterialTheme.colorScheme.onSurface)
                             Text("${contact.phone} • ${contact.groupName}", fontSize = 11.sp, color = Color.Gray)
                         }
                     }
                 }
-                Text("Message template", fontWeight = FontWeight.SemiBold, color = Navy)
+                Text("Message template", fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onSurface)
                 OutlinedTextField(body, { body = it }, modifier = Modifier.fillMaxWidth(), minLines = 3, label = { Text("Message") }, supportingText = { Text("Use {name} and {phone} to personalise each message.") })
                 FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                     FilterChip(selected = channel == "SMS", onClick = { channel = "SMS" }, label = { Text("SMS") })
@@ -1054,7 +1054,7 @@ private fun ContactsPage(
     Column(modifier.fillMaxSize().padding(16.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Column(Modifier.weight(1f)) {
-                Text("Contact centre", fontSize = 24.sp, fontWeight = FontWeight.Bold, color = Navy)
+                Text("Contact centre", fontSize = 24.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
                 Text("${contacts.size} saved contact(s)", color = Color.Gray, fontSize = 12.sp)
             }
             OutlinedButton(onClick = onPickContact) { Icon(Icons.Default.ContactPhone, contentDescription = null); Spacer(Modifier.width(6.dp)); Text("From phone") }
@@ -1071,7 +1071,7 @@ private fun ContactsPage(
                     Card(colors = CardDefaults.cardColors(containerColor = Color.White), modifier = Modifier.fillMaxWidth()) {
                         Row(Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
                             Column(Modifier.weight(1f)) {
-                                Text(contact.name, fontWeight = FontWeight.SemiBold, color = Navy)
+                                Text(contact.name, fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onSurface)
                                 Text(contact.phone, color = Color.Gray, fontSize = 13.sp)
                                 Text(contact.groupName, color = Purple, fontSize = 11.sp)
                             }
@@ -1151,7 +1151,7 @@ private fun Stat(title: String, value: String, modifier: Modifier = Modifier) {
         shape = RoundedCornerShape(18.dp)
     ) {
         Column(Modifier.padding(12.dp)) {
-            Text(value, fontSize = 24.sp, fontWeight = FontWeight.Bold, color = Navy)
+            Text(value, fontSize = 24.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
             Text(title, color = Color.Gray)
         }
     }
@@ -1171,7 +1171,7 @@ private fun MessageCard(message: MessageEntity) {
         )
         Spacer(Modifier.width(10.dp))
         Column(Modifier.weight(1f)) {
-            Text(message.recipient, fontWeight = FontWeight.SemiBold, color = Navy)
+            Text(message.recipient, fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onSurface)
             Text(message.body, maxLines = 2, fontSize = 12.sp, color = Color.Gray)
             Text(message.category, fontSize = 10.sp, color = Purple)
             Text(
@@ -1227,7 +1227,7 @@ private fun Composer(
                     FilterChip(selected = channel == "SMS", onClick = { channel = "SMS" }, label = { Text("SMS") })
                     FilterChip(selected = channel == "WhatsApp", onClick = { channel = "WhatsApp" }, label = { Text("WhatsApp") })
                 }
-                Text("Quick templates", fontWeight = FontWeight.SemiBold, color = Navy)
+                Text("Quick templates", fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onSurface)
                 FlowRow(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(6.dp),
@@ -1242,13 +1242,13 @@ private fun Composer(
                         AssistChip(onClick = { body = template }, label = { Text(label, fontSize = 12.sp) })
                     }
                 }
-                Text("Category", fontWeight = FontWeight.SemiBold, color = Navy)
+                Text("Category", fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onSurface)
                 FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                     listOf("General", "Personal", "Family", "Work", "School", "Business", "Bulk", "Birthday", "Reminder").forEach { value ->
                         FilterChip(selected = category == value, onClick = { category = value }, label = { Text(value, fontSize = 11.sp) })
                     }
                 }
-                Text("Repeat", fontWeight = FontWeight.SemiBold, color = Navy)
+                Text("Repeat", fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onSurface)
                 FlowRow(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(6.dp),

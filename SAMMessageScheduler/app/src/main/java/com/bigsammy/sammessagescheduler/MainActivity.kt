@@ -320,7 +320,9 @@ class MainActivity : FragmentActivity() {
                 val messages by dao.observeAll().collectAsStateWithLifecycle(initialValue = emptyList())
                 val contacts by AppDatabase.get(this@MainActivity).contactDao().observeAll().collectAsStateWithLifecycle(initialValue = emptyList())
                 SchedulerScreen(
-                    contacts = contacts,\n                    pickedRecipientNumber = pickedRecipientNumber,\n                    onPickRecipient = { recipientContactPicker.launch(null) },
+                    contacts = contacts,
+                    pickedRecipientNumber = pickedRecipientNumber,
+                    onPickRecipient = { recipientContactPicker.launch(null) },
                     onPickContact = { deviceContactPicker.launch(null) },
                     saveContact = { contact -> lifecycleScope.launch { AppDatabase.get(this@MainActivity).contactDao().insert(contact) } },
                     updateContact = { contact -> lifecycleScope.launch { AppDatabase.get(this@MainActivity).contactDao().update(contact) } },
@@ -1220,7 +1222,8 @@ private fun Composer(
     requestSmsPermission: (() -> Unit) -> Unit,
     onSave: (Long?, String, String, String, Long, String, String) -> Unit
 ) {
-    var recipient by remember(initialMessage?.id) { mutableStateOf(initialMessage?.recipient ?: "") }\n    LaunchedEffect(pickedRecipientNumber) { if (pickedRecipientNumber.isNotBlank()) recipient = pickedRecipientNumber }
+    var recipient by remember(initialMessage?.id) { mutableStateOf(initialMessage?.recipient ?: "") }
+    LaunchedEffect(pickedRecipientNumber) { if (pickedRecipientNumber.isNotBlank()) recipient = pickedRecipientNumber }
     var body by remember(initialMessage?.id) { mutableStateOf(initialMessage?.body ?: "") }
     var channel by remember(initialMessage?.id) { mutableStateOf(initialMessage?.channel ?: "SMS") }
     var date by remember(initialMessage?.id) { mutableStateOf(initialMessage?.let { SimpleDateFormat("yyyy-MM-dd", Locale.US).format(Date(it.scheduledAt)) } ?: SimpleDateFormat("yyyy-MM-dd", Locale.US).format(Date(System.currentTimeMillis() + 3600000))) }

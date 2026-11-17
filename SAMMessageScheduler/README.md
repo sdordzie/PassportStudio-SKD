@@ -67,3 +67,11 @@ Target SDK: 35
 - Scheduled messages due during quiet hours are deferred until the quiet window ends.
 - The original scheduled timestamp is preserved, so recurring daily, weekly and monthly schedules keep their intended cadence.
 - Existing daily, weekly and monthly repeat options continue to schedule the next occurrence.
+
+
+## Phase 16 — SMS delivery tracking and dual-SIM awareness (v5.3.0)
+- SMS submission uses the Android system's default SMS subscription, including the preferred SIM configured on dual-SIM phones.
+- The message list records separate SMS delivery states: pending, submitted, sent, delivered, send failed and delivery failed.
+- Android sent/delivery callbacks update the saved message and show a notification when the mobile network reports a result.
+- Delivery reports depend on carrier and network support; a missing delivery callback is not proof of failure.
+- Change the preferred SMS SIM in Android system SIM settings. SAM does not silently switch SIMs or override carrier defaults.

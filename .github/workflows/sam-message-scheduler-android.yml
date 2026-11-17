@@ -29,9 +29,9 @@ jobs:
       - name: Accept Android SDK licences
         run: |
           set +o pipefail
-          yes | sdkmanager --licenses
+          yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses
       - name: Install Android platform and build tools
-        run: sdkmanager "platforms;android-35" "build-tools;35.0.0"
+        run: "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "platforms;android-35" "build-tools;35.0.0"
       - name: Build debug APK
         run: gradle --no-daemon -p SAMMessageScheduler :app:assembleDebug
       - name: Upload installable APK

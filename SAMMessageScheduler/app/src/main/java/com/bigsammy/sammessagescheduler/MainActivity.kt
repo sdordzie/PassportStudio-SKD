@@ -119,7 +119,12 @@ class MainActivity : ComponentActivity() {
                                 MessageScheduler.schedule(this@MainActivity, message.id, nextAttempt)
                             }
                         }
-                        if (message.channel == "SMS") requestSmsPermission(scheduleAgain) else scheduleAgain()
+                        if (message.channel == "SMS" &&
+                            ContextCompat.checkSelfPermission(this, Manifest.permission.SEND_SMS) !=
+                            android.content.pm.PackageManager.PERMISSION_GRANTED) {
+                            pendingSmsAction = scheduleAgain
+                            smsPermission.launch(Manifest.permission.SEND_SMS)
+                        } else scheduleAgain()
                     }
                 )
             }

@@ -7,6 +7,12 @@ Native Android app using Kotlin, Jetpack Compose, Room and WorkManager.
 - Editing preserves the original record and safely replaces its pending WorkManager job.
 - New schedules default to one hour from the current time.
 
+## Phase 4.1 responsive interface fixes
+- Composer dialog adapts to phone width and available screen height.
+- Quick templates and repeat choices wrap onto additional rows on narrow displays.
+- Composer content scrolls so fields and actions remain accessible on shorter screens.
+- Home and Settings content scroll vertically; status filters wrap on narrow screens.
+
 ## Earlier features
 - Scheduled SMS submission using Android's SMS service after explicit permission.
 - WhatsApp hand-off: opens a pre-filled WhatsApp chat at the scheduled time; the user must review and tap Send.
@@ -25,6 +31,6 @@ WhatsApp does not provide a general public API for silently sending personal mes
 GitHub Actions builds a debug APK with JDK 17, Gradle 8.9 and Android SDK. Download the artifact named SAM-Message-Scheduler-APK from the Actions run.
 
 Package: com.bigsammy.sammessagescheduler
-Version: 4.0.0
+Version: 4.1.0
 Minimum Android: 8.0 (API 26)
 Target SDK: 35

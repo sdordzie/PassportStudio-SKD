@@ -104,4 +104,6 @@ Target SDK: 35
 - Supports strong biometrics or the device's secure screen-lock credential (PIN, pattern, or password).
 - Authentication is configured in Settings → App security and remains off by default.
 - Requires the user to configure a secure screen lock or biometric in Android Settings first.
+- Password-protected backups use PBKDF2-HMAC-SHA256 key derivation and AES-256-GCM authenticated encryption.
+- Encrypted restore validates the backup authentication tag; incorrect passwords or tampered files are rejected. Legacy plain JSON backups remain restorable.
 - Version code: 21.

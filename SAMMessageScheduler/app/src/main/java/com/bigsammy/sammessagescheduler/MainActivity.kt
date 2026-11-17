@@ -268,8 +268,8 @@ private fun SchedulerScreen(
                     Text("Settings", fontSize = 24.sp, fontWeight = FontWeight.Bold, color = Navy)
                     listOf(
                         "Notifications: allow reminders in Android settings.",
-                        "SMS: Phase 1 opens a reminder for manual sending.",
-                        "WhatsApp: reminder and confirmation workflow.",
+                        "SMS: sends automatically at the scheduled time after permission is granted.",
+                        "WhatsApp: opens a prepared chat; you review and tap Send.",
                         "Privacy: scheduled messages are stored on this device."
                     ).forEach { setting ->
                         Text(setting, modifier = Modifier.fillMaxWidth().padding(vertical = 12.dp))
@@ -387,7 +387,7 @@ private fun Composer(
                 )
                 if (error.isNotBlank()) Text(error, color = Color.Red)
                 Text(
-                    "SAM will remind you to send the message. WhatsApp may require confirmation.",
+                    "SMS is submitted automatically with permission. WhatsApp opens a prepared chat for your final confirmation.",
                     fontSize = 11.sp,
                     color = Color.Gray
                 )

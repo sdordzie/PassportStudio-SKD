@@ -27,7 +27,9 @@ jobs:
         with:
           gradle-version: '8.9'
       - name: Accept Android SDK licences
-        run: yes | sdkmanager --licenses
+        run: |
+          set +o pipefail
+          yes | sdkmanager --licenses
       - name: Install Android platform and build tools
         run: sdkmanager "platforms;android-35" "build-tools;35.0.0"
       - name: Build debug APK

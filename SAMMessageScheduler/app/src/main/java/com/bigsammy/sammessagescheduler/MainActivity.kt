@@ -39,6 +39,7 @@ import com.bigsammy.sammessagescheduler.data.MessageEntity
 import com.bigsammy.sammessagescheduler.data.ContactEntity
 import com.bigsammy.sammessagescheduler.scheduling.MessageScheduler
 import com.bigsammy.sammessagescheduler.scheduling.AnniversaryReminderScheduler
+import com.bigsammy.sammessagescheduler.security.BackupCrypto
 import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -49,6 +50,7 @@ private val Navy = Color(0xFF18243A)
 private val Pale = Color(0xFFF5F3FA)
 
 class MainActivity : FragmentActivity() {
+    private var backupPassword: String = ""
     private var securityPromptActive = false
     var securityAuthenticated = false
 
@@ -114,7 +116,8 @@ class MainActivity : FragmentActivity() {
                         .put("status", item.status).put("repeatRule", item.repeatRule).put("createdAt", item.createdAt))
                 }
                 root.put("messages", array)
-                contentResolver.openOutputStream(uri)?.bufferedWriter()?.use { it.write(root.toString(2)) }
+                val encrypted = BackupCrypto.encrypt(root.toString(), backupPassword.toCharArray())
+                contentResolver.openOutputStream(uri)?.bufferedWriter()?.use { it.write(encrypted) }
                     ?: error("Could not open backup file.")
                 Toast.makeText(this@MainActivity, "Backup exported successfully.", Toast.LENGTH_LONG).show()
             }.onFailure { Toast.makeText(this@MainActivity, "Backup failed.", Toast.LENGTH_LONG).show() }
@@ -194,7 +197,10 @@ class MainActivity : FragmentActivity() {
             runCatching {
                 val raw = contentResolver.openInputStream(uri)?.bufferedReader()?.use { it.readText() }
                     ?: error("Could not read backup file.")
-                val root = JSONObject(raw)
+                val decrypted = if (JSONObject(raw).optString("format") == "SAM_ENCRYPTED_BACKUP") {
+                    BackupCrypto.decrypt(raw, backupPassword.toCharArray())
+                } else raw
+                val root = JSONObject(decrypted)
                 require(root.optString("format") == "SAM_MESSAGE_SCHEDULER_BACKUP") { "Invalid SAM backup file." }
                 val array = root.getJSONArray("messages")
                 val restored = mutableListOf<MessageEntity>()
@@ -776,11 +782,24 @@ private fun SchedulerScreen(
                     }
                     if (securityMessage.isNotBlank()) Text(securityMessage, color = Purple, fontSize = 12.sp)
                     Text("Data protection", fontWeight = FontWeight.SemiBold, color = Navy, modifier = Modifier.padding(top = 16.dp))
-                    Text("Export your message history to a spreadsheet, or create and restore a full backup.", color = Color.Gray)
+                    var backupPasswordInput by remember { mutableStateOf("") }
+                    var backupPasswordVisible by remember { mutableStateOf(false) }
+                    OutlinedTextField(
+                        value = backupPasswordInput,
+                        onValueChange = { backupPasswordInput = it; backupPassword = it },
+                        modifier = Modifier.fillMaxWidth(),
+                        label = { Text("Encrypted backup password") },
+                        supportingText = { Text("At least 8 characters. Remember this password; SAM cannot recover it.") },
+                        singleLine = true,
+                        visualTransformation = if (backupPasswordVisible) androidx.compose.ui.text.input.VisualTransformation.None else androidx.compose.ui.text.input.PasswordVisualTransformation(),
+                        trailingIcon = { IconButton(onClick = { backupPasswordVisible = !backupPasswordVisible }) { Icon(if (backupPasswordVisible) Icons.Default.VisibilityOff else Icons.Default.Visibility, contentDescription = "Toggle password visibility") } }
+                    )
+                    Text("Backups use AES-256-GCM encryption with a password-derived key. Existing plain JSON backups can still be restored.", color = Color.Gray, fontSize = 11.sp)
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth().padding(vertical = 10.dp)) {
-                        OutlinedButton(onClick = onBackup, modifier = Modifier.weight(1f)) { Text("Export backup") }
-                        Button(onClick = onRestore, modifier = Modifier.weight(1f)) { Text("Restore backup") }
+                        OutlinedButton(onClick = { if (backupPasswordInput.length < 8) securityMessage = "Set a backup password of at least 8 characters." else onBackup() }, modifier = Modifier.weight(1f)) { Text("Encrypted backup") }
+                        Button(onClick = { if (backupPasswordInput.length < 8) securityMessage = "Enter the password used for this backup." else onRestore() }, modifier = Modifier.weight(1f)) { Text("Restore backup") }
                     }
+                    if (securityMessage.isNotBlank()) Text(securityMessage, color = Purple, fontSize = 12.sp)
 
                     OutlinedButton(onClick = onImportCsv, modifier = Modifier.fillMaxWidth().padding(top = 8.dp)) {
                         Icon(Icons.Default.FileUpload, contentDescription = null)

@@ -69,7 +69,7 @@ class MainActivity: ComponentActivity() {
     item { Text("Your messages",fontSize=24.sp,fontWeight=FontWeight.Bold,color=Navy) }
     items(messages,key={it.id}) { m -> Card(colors=CardDefaults.cardColors(containerColor=Color.White)) { Column(Modifier.padding(12.dp)) {
      MessageCard(m)
-     Row(Modifier.align(Alignment.End)) { if(m.status=="SCHEDULED") TextButton(onClick={complete(m)}){Text("Mark done")}; TextButton(onClick={remove(m.id)){Text("Cancel",color=Color.Red)} }
+     Row(Modifier.align(Alignment.End)) { if(m.status=="SCHEDULED") TextButton(onClick={complete(m)}){Text("Mark done")}; TextButton(onClick={remove(m.id)}) { Text("Cancel",color=Color.Red) }
     } } }
    }
    "Calendar" -> LazyColumn(Modifier.padding(pad).padding(18.dp)) {

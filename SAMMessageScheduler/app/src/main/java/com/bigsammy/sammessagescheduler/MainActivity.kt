@@ -610,6 +610,32 @@ private fun SchedulerScreen(
                 Column(Modifier.padding(padding).fillMaxSize()
                     .verticalScroll(rememberScrollState()).padding(18.dp)) {
                     Text("Settings", fontSize = 24.sp, fontWeight = FontWeight.Bold, color = Navy)
+                    val context = androidx.compose.ui.platform.LocalContext.current
+                    val quietPrefs = remember { context.getSharedPreferences("sam_quiet_hours", android.content.Context.MODE_PRIVATE) }
+                    var quietEnabled by remember { mutableStateOf(quietPrefs.getBoolean("enabled", false)) }
+                    var quietStart by remember { mutableStateOf(quietPrefs.getString("start", "22:00") ?: "22:00") }
+                    var quietEnd by remember { mutableStateOf(quietPrefs.getString("end", "07:00") ?: "07:00") }
+                    var quietMessage by remember { mutableStateOf("") }
+                    Text("Quiet hours", fontWeight = FontWeight.SemiBold, color = Navy, modifier = Modifier.padding(top = 16.dp))
+                    Text("Scheduled SMS and WhatsApp reminders will be deferred during this daily window. Your original schedule is preserved.", color = Color.Gray, fontSize = 12.sp)
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Checkbox(checked = quietEnabled, onCheckedChange = { quietEnabled = it })
+                        Text("Enable quiet hours")
+                    }
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        OutlinedTextField(quietStart, { quietStart = it }, modifier = Modifier.weight(1f), label = { Text("Start (HH:mm)") }, singleLine = true)
+                        OutlinedTextField(quietEnd, { quietEnd = it }, modifier = Modifier.weight(1f), label = { Text("End (HH:mm)") }, singleLine = true)
+                    }
+                    Button(onClick = {
+                        val valid = Regex("^([01]\\d|2[0-3]):[0-5]\\d$")
+                        if (!valid.matches(quietStart) || !valid.matches(quietEnd) || quietStart == quietEnd) {
+                            quietMessage = "Enter two different valid 24-hour times."
+                        } else {
+                            quietPrefs.edit().putBoolean("enabled", quietEnabled).putString("start", quietStart).putString("end", quietEnd).apply()
+                            quietMessage = if (quietEnabled) "Quiet hours saved." else "Quiet hours disabled."
+                        }
+                    }, modifier = Modifier.fillMaxWidth()) { Text("Save quiet hours") }
+                    if (quietMessage.isNotBlank()) Text(quietMessage, color = Purple, fontSize = 12.sp)
                     Text("Data protection", fontWeight = FontWeight.SemiBold, color = Navy, modifier = Modifier.padding(top = 16.dp))
                     Text("Export your message history to a spreadsheet, or create and restore a full backup.", color = Color.Gray)
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth().padding(vertical = 10.dp)) {

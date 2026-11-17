@@ -3,6 +3,8 @@ package com.bigsammy.sammessagescheduler
 import android.Manifest
 import android.os.Build
 import android.os.Bundle
+import org.json.JSONArray
+import org.json.JSONObject
 import android.widget.Toast
 import androidx.core.content.ContextCompat
 import androidx.activity.ComponentActivity
@@ -44,6 +46,49 @@ class MainActivity : ComponentActivity() {
     private val notificationPermission =
         registerForActivityResult(ActivityResultContracts.RequestPermission()) { }
     private var pendingSmsAction: (() -> Unit)? = null
+    private val backupLauncher = registerForActivityResult(ActivityResultContracts.CreateDocument("application/json")) { uri ->
+        if (uri != null) lifecycleScope.launch {
+            runCatching {
+                val rows = AppDatabase.get(this@MainActivity).messageDao().getAllSnapshot()
+                val root = JSONObject().put("format", "SAM_MESSAGE_SCHEDULER_BACKUP").put("version", 1)
+                val array = JSONArray()
+                rows.forEach { item ->
+                    array.put(JSONObject().put("recipient", item.recipient).put("body", item.body)
+                        .put("channel", item.channel).put("scheduledAt", item.scheduledAt)
+                        .put("status", item.status).put("repeatRule", item.repeatRule).put("createdAt", item.createdAt))
+                }
+                root.put("messages", array)
+                contentResolver.openOutputStream(uri)?.bufferedWriter()?.use { it.write(root.toString(2)) }
+                    ?: error("Could not open backup file.")
+                Toast.makeText(this@MainActivity, "Backup exported successfully.", Toast.LENGTH_LONG).show()
+            }.onFailure { Toast.makeText(this@MainActivity, "Backup failed.", Toast.LENGTH_LONG).show() }
+        }
+    }
+    private val restoreLauncher = registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+        if (uri != null) lifecycleScope.launch {
+            runCatching {
+                val raw = contentResolver.openInputStream(uri)?.bufferedReader()?.use { it.readText() }
+                    ?: error("Could not read backup file.")
+                val root = JSONObject(raw)
+                require(root.optString("format") == "SAM_MESSAGE_SCHEDULER_BACKUP") { "Invalid SAM backup file." }
+                val array = root.getJSONArray("messages")
+                val restored = mutableListOf<MessageEntity>()
+                for (index in 0 until array.length()) {
+                    val item = array.getJSONObject(index)
+                    restored += MessageEntity(recipient = item.getString("recipient"), body = item.getString("body"),
+                        channel = item.getString("channel"), scheduledAt = item.getLong("scheduledAt"),
+                        status = item.optString("status", "SCHEDULED"), repeatRule = item.optString("repeatRule", "NONE"),
+                        createdAt = item.optLong("createdAt", System.currentTimeMillis()))
+                }
+                val dao = AppDatabase.get(this@MainActivity).messageDao()
+                dao.insertAll(restored)
+                val all = dao.getAllSnapshot()
+                all.filter { it.status == "SCHEDULED" && it.scheduledAt > System.currentTimeMillis() }
+                    .forEach { MessageScheduler.schedule(this@MainActivity, it.id, it.scheduledAt) }
+                Toast.makeText(this@MainActivity, "Backup restored.", Toast.LENGTH_LONG).show()
+            }.onFailure { Toast.makeText(this@MainActivity, "Restore failed. Check the backup file.", Toast.LENGTH_LONG).show() }
+        }
+    }
     private val smsPermission =
         registerForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
             if (granted) pendingSmsAction?.invoke()
@@ -63,6 +108,8 @@ class MainActivity : ComponentActivity() {
                 val messages by dao.observeAll().collectAsStateWithLifecycle(initialValue = emptyList())
                 SchedulerScreen(
                     messages = messages,
+                    onBackup = { backupLauncher.launch("sam-message-scheduler-backup.json") },
+                    onRestore = { restoreLauncher.launch(arrayOf("application/json", "text/*")) },
                     save = { existingId, recipient, body, channel, scheduledAt, repeatRule ->
                         lifecycleScope.launch {
                             if (existingId != null) {
@@ -137,6 +184,8 @@ class MainActivity : ComponentActivity() {
 @Composable
 private fun SchedulerScreen(
     messages: List<MessageEntity>,
+    onBackup: () -> Unit,
+    onRestore: () -> Unit,
     save: (Long?, String, String, String, Long, String) -> Unit,
     requestSmsPermission: (() -> Unit) -> Unit,
     remove: (Long) -> Unit,
@@ -357,6 +406,12 @@ private fun SchedulerScreen(
                 Column(Modifier.padding(padding).fillMaxSize()
                     .verticalScroll(rememberScrollState()).padding(18.dp)) {
                     Text("Settings", fontSize = 24.sp, fontWeight = FontWeight.Bold, color = Navy)
+                    Text("Data protection", fontWeight = FontWeight.SemiBold, color = Navy, modifier = Modifier.padding(top = 16.dp))
+                    Text("Export your scheduled messages to a backup file or restore them later.", color = Color.Gray)
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth().padding(vertical = 10.dp)) {
+                        OutlinedButton(onClick = onBackup, modifier = Modifier.weight(1f)) { Text("Export backup") }
+                        Button(onClick = onRestore, modifier = Modifier.weight(1f)) { Text("Restore backup") }
+                    }
                     listOf(
                         "Notifications: allow reminders in Android settings.",
                         "SMS: sends automatically at the scheduled time after permission is granted.",

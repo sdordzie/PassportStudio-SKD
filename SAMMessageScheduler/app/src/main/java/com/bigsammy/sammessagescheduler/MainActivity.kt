@@ -49,7 +49,7 @@ private val Pale = Color(0xFFF5F3FA)
 
 class MainActivity : ComponentActivity() {
     private var securityPromptActive = false
-    private var securityAuthenticated = false
+    var securityAuthenticated = false
 
     override fun onResume() {
         super.onResume()
@@ -62,7 +62,7 @@ class MainActivity : ComponentActivity() {
         securityAuthenticated = false
     }
 
-    private fun authenticateForApp() {
+    fun authenticateForApp() {
         val authenticators = BiometricManager.Authenticators.BIOMETRIC_STRONG or BiometricManager.Authenticators.DEVICE_CREDENTIAL
         if (BiometricManager.from(this).canAuthenticate(authenticators) != BiometricManager.BIOMETRIC_SUCCESS) {
             Toast.makeText(this, "Set up a screen lock or biometric in Android Settings first.", Toast.LENGTH_LONG).show()

@@ -46,11 +46,10 @@ import java.util.Date
 import java.util.Locale
 
 private val Purple = Color(0xFF6750A4)
-private val Navy = Color(0xFF18243A)
-private val Pale = Color(0xFFF5F3FA)
 
 class MainActivity : FragmentActivity() {
     private var backupPassword: String = ""
+    private var themeMode by mutableStateOf("System")
     private var securityPromptActive = false
     var securityAuthenticated = false
 
@@ -270,6 +269,7 @@ class MainActivity : FragmentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        themeMode = getSharedPreferences("sam_appearance", android.content.Context.MODE_PRIVATE).getString("theme_mode", "System") ?: "System"
         if (Build.VERSION.SDK_INT >= 33) {
             notificationPermission.launch(Manifest.permission.POST_NOTIFICATIONS)
         }
@@ -284,7 +284,16 @@ class MainActivity : FragmentActivity() {
                 .forEach { MessageScheduler.schedule(this@MainActivity, it.id, it.scheduledAt) }
         }
         setContent {
-            MaterialTheme(colorScheme = lightColorScheme(primary = Purple, background = Pale)) {
+            val systemDark = androidx.compose.foundation.isSystemInDarkTheme()
+            val useDark = when (themeMode) { "Dark" -> true; "Light" -> false; else -> systemDark }
+            val appColors = if (useDark) darkColorScheme(
+                primary = Color(0xFFD0BCFF), onPrimary = Color(0xFF381E72),
+                secondary = Color(0xFFCCC2DC), background = Color(0xFF101218),
+                surface = Color(0xFF191C24), surfaceVariant = Color(0xFF292D38),
+                onSurface = Color(0xFFE5E1EA), onBackground = Color(0xFFE5E1EA),
+                onSurfaceVariant = Color(0xFFC4C6D0), outline = Color(0xFF8E9099)
+            ) else lightColorScheme(primary = Purple, background = Color(0xFFF5F3FA), surface = Color.White)
+            MaterialTheme(colorScheme = appColors) {
                 val messages by dao.observeAll().collectAsStateWithLifecycle(initialValue = emptyList())
                 val contacts by AppDatabase.get(this@MainActivity).contactDao().observeAll().collectAsStateWithLifecycle(initialValue = emptyList())
                 SchedulerScreen(
@@ -462,23 +471,23 @@ private fun SchedulerScreen(
     var statusFilter by remember { mutableStateOf("ALL") }
 
     Scaffold(
-        containerColor = Pale,
+        containerColor = MaterialTheme.colorScheme.background,
         topBar = {
             Row(
-                modifier = Modifier.fillMaxWidth().background(Color.White).padding(18.dp),
+                modifier = Modifier.fillMaxWidth().background(MaterialTheme.colorScheme.surface).padding(18.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Icon(Icons.Default.Forum, contentDescription = null, tint = Purple, modifier = Modifier.size(30.dp))
                 Spacer(Modifier.width(10.dp))
                 Column(Modifier.weight(1f)) {
-                    Text("SAM Message Scheduler", fontWeight = FontWeight.Bold, color = Navy, fontSize = 17.sp)
-                    Text("Plan it. Remember it. Send it.", fontSize = 11.sp, color = Color.Gray)
+                    Text("SAM Message Scheduler", fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface, fontSize = 17.sp)
+                    Text("Plan it. Remember it. Send it.", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
                 Icon(Icons.Default.Schedule, contentDescription = null, tint = Purple)
             }
         },
         bottomBar = {
-            NavigationBar(containerColor = Color.White) {
+            NavigationBar(containerColor = MaterialTheme.colorScheme.surface) {
                 listOf("Home", "Scheduled", "Calendar", "Contacts", "Settings").forEach { name ->
                     val icon = when (name) {
                         "Home" -> Icons.Default.Home
@@ -514,7 +523,7 @@ private fun SchedulerScreen(
                         .verticalScroll(rememberScrollState())
                         .padding(18.dp)
                 ) {
-                    Text("Good day 👋", fontSize = 25.sp, fontWeight = FontWeight.Bold, color = Navy)
+                    Text("Good day 👋", fontSize = 25.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
                     Text("Your messages, organised and on time.", color = Color.Gray)
                     Row(
                         modifier = Modifier.fillMaxWidth().padding(vertical = 18.dp),
@@ -554,7 +563,7 @@ private fun SchedulerScreen(
                             Button(
                                 onClick = { showComposer = true },
                                 modifier = Modifier.padding(top = 14.dp),
-                                colors = ButtonDefaults.buttonColors(containerColor = Color.White, contentColor = Navy)
+                                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.surface, contentColor = Navy)
                             ) {
                                 Icon(Icons.Default.Add, contentDescription = null)
                                 Text(" Schedule message")
@@ -569,7 +578,7 @@ private fun SchedulerScreen(
                     val smsCount = messages.count { it.channel == "SMS" }
                     val whatsappCount = messages.count { it.channel == "WhatsApp" }
                     val recentCount = messages.count { it.createdAt >= System.currentTimeMillis() - 7L * 24 * 60 * 60 * 1000 }
-                    Text("MESSAGE REPORTS & ANALYTICS", fontWeight = FontWeight.Bold, color = Navy, modifier = Modifier.padding(top = 22.dp, bottom = 8.dp))
+                    Text("MESSAGE REPORTS & ANALYTICS", fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface, modifier = Modifier.padding(top = 22.dp, bottom = 8.dp))
                     Card(colors = CardDefaults.cardColors(containerColor = Color.White), modifier = Modifier.fillMaxWidth()) {
                         Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                             Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
@@ -742,7 +751,7 @@ private fun SchedulerScreen(
                     var quietEnd by remember { mutableStateOf(quietPrefs.getString("end", "07:00") ?: "07:00") }
                     var quietMessage by remember { mutableStateOf("") }
                     Text("Quiet hours", fontWeight = FontWeight.SemiBold, color = Navy, modifier = Modifier.padding(top = 16.dp))
-                    Text("Scheduled SMS and WhatsApp reminders will be deferred during this daily window. Your original schedule is preserved.", color = Color.Gray, fontSize = 12.sp)
+                    Text("Scheduled SMS and WhatsApp reminders will be deferred during this daily window. Your original schedule is preserved.", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 12.sp)
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Checkbox(checked = quietEnabled, onCheckedChange = { quietEnabled = it })
                         Text("Enable quiet hours")

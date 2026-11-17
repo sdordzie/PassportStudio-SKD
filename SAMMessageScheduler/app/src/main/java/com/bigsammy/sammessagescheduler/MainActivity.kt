@@ -561,7 +561,20 @@ private fun SchedulerScreen(
             }
 
             "Contacts" -> {
-                ContactsPage(contacts, onPickContact, saveContact, updateContact, deleteContact, Modifier.padding(padding))
+                ContactsPage(
+                    contacts, onPickContact, saveContact, updateContact, deleteContact,
+                    onBulkSchedule = { selected, body, channel, scheduledAt ->
+                        val scheduleAll = {
+                            selected.forEach { contact ->
+                                val personalised = body.replace("{name}", contact.name, ignoreCase = true)
+                                    .replace("{phone}", contact.phone, ignoreCase = true)
+                                save(null, contact.phone, personalised, channel, scheduledAt, "NONE")
+                            }
+                        }
+                        if (channel == "SMS") requestSmsPermission(scheduleAll) else scheduleAll()
+                    },
+                    modifier = Modifier.padding(padding)
+                )
             }
 
             "Calendar" -> {
@@ -686,6 +699,76 @@ private fun SchedulerScreen(
 }
 
 
+
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun BulkComposer(
+    contacts: List<ContactEntity>,
+    onClose: () -> Unit,
+    onSchedule: (List<ContactEntity>, String, String, Long) -> Unit
+) {
+    var selectedIds by remember { mutableStateOf(contacts.map { it.id }.toSet()) }
+    var body by remember { mutableStateOf("Hello {name}, ") }
+    var channel by remember { mutableStateOf("SMS") }
+    var date by remember { mutableStateOf(SimpleDateFormat("yyyy-MM-dd", Locale.US).format(Date(System.currentTimeMillis() + 3_600_000L))) }
+    var time by remember { mutableStateOf(SimpleDateFormat("HH:mm", Locale.US).format(Date(System.currentTimeMillis() + 3_600_000L))) }
+    var error by remember { mutableStateOf("") }
+    val configuration = androidx.compose.ui.platform.LocalConfiguration.current
+    AlertDialog(
+        modifier = Modifier.fillMaxWidth(0.94f).widthIn(max = 560.dp),
+        properties = DialogProperties(usePlatformDefaultWidth = false),
+        onDismissRequest = onClose,
+        title = { Text("Bulk message") },
+        text = {
+            Column(Modifier.fillMaxWidth().heightIn(max = (configuration.screenHeightDp * 0.62f).dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(9.dp)) {
+                Text("Select recipients", fontWeight = FontWeight.SemiBold, color = Navy)
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text("${selectedIds.size} of ${contacts.size} selected", modifier = Modifier.weight(1f), color = Purple, fontSize = 12.sp)
+                    TextButton(onClick = { selectedIds = if (selectedIds.size == contacts.size) emptySet() else contacts.map { it.id }.toSet() }) {
+                        Text(if (selectedIds.size == contacts.size) "Clear all" else "Select all")
+                    }
+                }
+                contacts.forEach { contact ->
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Checkbox(checked = contact.id in selectedIds, onCheckedChange = { checked ->
+                            selectedIds = if (checked) selectedIds + contact.id else selectedIds - contact.id
+                        })
+                        Column(Modifier.weight(1f)) {
+                            Text(contact.name, fontWeight = FontWeight.Medium, color = Navy)
+                            Text("${contact.phone} • ${contact.groupName}", fontSize = 11.sp, color = Color.Gray)
+                        }
+                    }
+                }
+                Text("Message template", fontWeight = FontWeight.SemiBold, color = Navy)
+                OutlinedTextField(body, { body = it }, modifier = Modifier.fillMaxWidth(), minLines = 3, label = { Text("Message") }, supportingText = { Text("Use {name} and {phone} to personalise each message.") })
+                FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    FilterChip(selected = channel == "SMS", onClick = { channel = "SMS" }, label = { Text("SMS") })
+                    FilterChip(selected = channel == "WhatsApp", onClick = { channel = "WhatsApp" }, label = { Text("WhatsApp") })
+                }
+                OutlinedTextField(date, { date = it }, modifier = Modifier.fillMaxWidth(), label = { Text("Date (YYYY-MM-DD)") }, singleLine = true)
+                OutlinedTextField(time, { time = it }, modifier = Modifier.fillMaxWidth(), label = { Text("Time (24-hour HH:mm)") }, singleLine = true)
+                if (error.isNotBlank()) Text(error, color = Color.Red)
+                Text("Each recipient gets a separate scheduled message. WhatsApp requires you to review and tap Send when the chat opens.", fontSize = 11.sp, color = Color.Gray)
+            }
+        },
+        confirmButton = {
+            Button(onClick = {
+                try {
+                    val at = SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.US).apply { isLenient = false }.parse("$date $time")!!.time
+                    val selected = contacts.filter { it.id in selectedIds }
+                    when {
+                        selected.isEmpty() -> error = "Select at least one contact."
+                        body.isBlank() -> error = "Enter a message."
+                        at <= System.currentTimeMillis() -> error = "Choose a future date and time."
+                        else -> onSchedule(selected, body.trim(), channel, at)
+                    }
+                } catch (_: Exception) { error = "Enter a valid date and time." }
+            }) { Text("Schedule ${selectedIds.size}") }
+        },
+        dismissButton = { TextButton(onClick = onClose) { Text("Cancel") } }
+    )
+}
+
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun ContactsPage(
@@ -694,6 +777,7 @@ private fun ContactsPage(
     saveContact: (ContactEntity) -> Unit,
     updateContact: (ContactEntity) -> Unit,
     deleteContact: (Long) -> Unit,
+    onBulkSchedule: (List<ContactEntity>, String, String, Long) -> Unit,
     modifier: Modifier = Modifier
 ) {
     var query by remember { mutableStateOf("") }
@@ -701,6 +785,7 @@ private fun ContactsPage(
     var editing by remember { mutableStateOf<ContactEntity?>(null) }
     var showEditor by remember { mutableStateOf(false) }
     var deleting by remember { mutableStateOf<ContactEntity?>(null) }
+    var showBulkComposer by remember { mutableStateOf(false) }
     val groups = listOf("All") + contacts.map { it.groupName }.filter { it.isNotBlank() }.distinct().sorted()
     val visible = contacts.filter { (selectedGroup == "All" || it.groupName == selectedGroup) && (query.isBlank() || it.name.contains(query, true) || it.phone.contains(query, true)) }
     Column(modifier.fillMaxSize().padding(16.dp)) {
@@ -734,9 +819,18 @@ private fun ContactsPage(
                 }
             }
         }
-        Button(onClick = { editing = null; showEditor = true }, modifier = Modifier.fillMaxWidth().padding(top = 10.dp)) {
+        OutlinedButton(onClick = { showBulkComposer = true }, modifier = Modifier.fillMaxWidth().padding(top = 10.dp), enabled = contacts.isNotEmpty()) {
+            Icon(Icons.Default.Campaign, contentDescription = null); Spacer(Modifier.width(8.dp)); Text("Create bulk message")
+        }
+        Button(onClick = { editing = null; showEditor = true }, modifier = Modifier.fillMaxWidth().padding(top = 8.dp)) {
             Icon(Icons.Default.PersonAdd, contentDescription = null); Spacer(Modifier.width(8.dp)); Text("Add contact")
         }
+    }
+    if (showBulkComposer) {
+        BulkComposer(contacts, onClose = { showBulkComposer = false }, onSchedule = { selected, body, channel, at ->
+            onBulkSchedule(selected, body, channel, at)
+            showBulkComposer = false
+        })
     }
     if (showEditor) {
         var name by remember(editing?.id) { mutableStateOf(editing?.name ?: "") }

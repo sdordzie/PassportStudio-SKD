@@ -107,8 +107,19 @@ class MainActivity : ComponentActivity() {
                     },
                     complete = { message ->
                         lifecycleScope.launch {
+                            MessageScheduler.cancel(this@MainActivity, message.id)
                             dao.update(message.copy(status = "COMPLETED"))
                         }
+                    },
+                    retry = { message ->
+                        val scheduleAgain = {
+                            lifecycleScope.launch {
+                                val nextAttempt = System.currentTimeMillis() + 30_000L
+                                dao.update(message.copy(status = "SCHEDULED", scheduledAt = nextAttempt))
+                                MessageScheduler.schedule(this@MainActivity, message.id, nextAttempt)
+                            }
+                        }
+                        if (message.channel == "SMS") requestSmsPermission(scheduleAgain) else scheduleAgain()
                     }
                 )
             }
@@ -123,7 +134,8 @@ private fun SchedulerScreen(
     save: (Long?, String, String, String, Long, String) -> Unit,
     requestSmsPermission: (() -> Unit) -> Unit,
     remove: (Long) -> Unit,
-    complete: (MessageEntity) -> Unit
+    complete: (MessageEntity) -> Unit,
+    retry: (MessageEntity) -> Unit
 ) {
     var page by remember { mutableStateOf("Home") }
     var showComposer by remember { mutableStateOf(false) }
@@ -190,7 +202,24 @@ private fun SchedulerScreen(
                         horizontalArrangement = Arrangement.spacedBy(12.dp)
                     ) {
                         Stat("Scheduled", messages.count { it.status == "SCHEDULED" }.toString(), Modifier.weight(1f))
-                        Stat("Completed", messages.count { it.status == "COMPLETED" }.toString(), Modifier.weight(1f))
+                        Stat("Completed", messages.count { it.status == "COMPLETED" || it.status == "SENT" }.toString(), Modifier.weight(1f))
+                    }
+                    val attentionCount = messages.count { it.status in listOf("FAILED", "PERMISSION_REQUIRED", "AWAITING_USER") }
+                    if (attentionCount > 0) {
+                        Card(
+                            modifier = Modifier.fillMaxWidth().padding(bottom = 12.dp),
+                            colors = CardDefaults.cardColors(containerColor = Color(0xFFFFF1E8))
+                        ) {
+                            Row(Modifier.padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
+                                Icon(Icons.Default.Warning, contentDescription = null, tint = Color(0xFF9A4D00))
+                                Spacer(Modifier.width(10.dp))
+                                Column(Modifier.weight(1f)) {
+                                    Text("$attentionCount message(s) need attention", fontWeight = FontWeight.SemiBold, color = Navy)
+                                    Text("Review permission issues, failed actions or WhatsApp messages awaiting you.", fontSize = 12.sp, color = Color.DarkGray)
+                                }
+                                TextButton(onClick = { page = "Scheduled"; statusFilter = "ATTENTION" }) { Text("Review") }
+                            }
+                        }
                     }
                     Card(
                         colors = CardDefaults.cardColors(containerColor = Navy),
@@ -228,7 +257,8 @@ private fun SchedulerScreen(
 
             "Scheduled" -> {
                 val visibleMessages = messages.filter { message ->
-                    (statusFilter == "ALL" || message.status == statusFilter) &&
+                    (statusFilter == "ALL" || message.status == statusFilter ||
+                        (statusFilter == "ATTENTION" && message.status in listOf("FAILED", "PERMISSION_REQUIRED", "AWAITING_USER"))) &&
                         (message.recipient.contains(searchText, true) ||
                             message.body.contains(searchText, true) ||
                             message.channel.contains(searchText, true))
@@ -250,7 +280,7 @@ private fun SchedulerScreen(
                         horizontalArrangement = Arrangement.spacedBy(6.dp),
                         verticalArrangement = Arrangement.spacedBy(4.dp)
                     ) {
-                        listOf("ALL" to "All", "SCHEDULED" to "Upcoming", "SENT" to "Sent", "FAILED" to "Failed").forEach { (key, label) ->
+                        listOf("ALL" to "All", "SCHEDULED" to "Upcoming", "SENT" to "Sent", "FAILED" to "Failed", "ATTENTION" to "Needs attention").forEach { (key, label) ->
                             FilterChip(selected = statusFilter == key, onClick = { statusFilter = key }, label = { Text(label, fontSize = 11.sp) })
                         }
                     }
@@ -274,6 +304,9 @@ private fun SchedulerScreen(
                                             if (message.status == "SCHEDULED") {
                                                 TextButton(onClick = { editMessage = message; showComposer = true }) { Text("Edit") }
                                                 TextButton(onClick = { complete(message) }) { Text("Mark done") }
+                                            }
+                                            if (message.status in listOf("FAILED", "PERMISSION_REQUIRED", "AWAITING_USER")) {
+                                                TextButton(onClick = { retry(message) }) { Text("Retry") }
                                             }
                                             TextButton(onClick = { remove(message.id) }) { Text("Cancel", color = Color.Red) }
                                         }

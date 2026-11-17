@@ -35,6 +35,7 @@ import com.bigsammy.sammessagescheduler.data.AppDatabase
 import com.bigsammy.sammessagescheduler.data.MessageEntity
 import com.bigsammy.sammessagescheduler.data.ContactEntity
 import com.bigsammy.sammessagescheduler.scheduling.MessageScheduler
+import com.bigsammy.sammessagescheduler.scheduling.AnniversaryReminderScheduler
 import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -191,6 +192,7 @@ class MainActivity : ComponentActivity() {
             notificationPermission.launch(Manifest.permission.POST_NOTIFICATIONS)
         }
 
+        AnniversaryReminderScheduler.ensureScheduled(this)
         val dao = AppDatabase.get(this).messageDao()
         // Rebuild pending jobs from saved records whenever the app opens.
         // This repairs delays after device clock/time-zone changes and catches overdue items.
@@ -927,6 +929,8 @@ private fun ContactsPage(
         var name by remember(editing?.id) { mutableStateOf(editing?.name ?: "") }
         var phone by remember(editing?.id) { mutableStateOf(editing?.phone ?: "") }
         var group by remember(editing?.id) { mutableStateOf(editing?.groupName ?: "General") }
+        var birthday by remember(editing?.id) { mutableStateOf(editing?.birthday ?: "") }
+        var anniversary by remember(editing?.id) { mutableStateOf(editing?.anniversary ?: "") }
         var error by remember { mutableStateOf("") }
         AlertDialog(
             onDismissRequest = { showEditor = false },
@@ -936,6 +940,8 @@ private fun ContactsPage(
                     OutlinedTextField(name, { name = it }, label = { Text("Full name") }, singleLine = true)
                     OutlinedTextField(phone, { phone = it }, label = { Text("Phone number") }, singleLine = true)
                     OutlinedTextField(group, { group = it }, label = { Text("Group") }, singleLine = true, supportingText = { Text("Examples: Family, Staff, Students, Customers") })
+                    OutlinedTextField(birthday, { birthday = it }, label = { Text("Birthday (MM-dd, optional)") }, singleLine = true, supportingText = { Text("Example: 09-25. Repeats every year.") })
+                    OutlinedTextField(anniversary, { anniversary = it }, label = { Text("Anniversary (MM-dd, optional)") }, singleLine = true, supportingText = { Text("Example: 12-10. Repeats every year.") })
                     if (error.isNotBlank()) Text(error, color = Color.Red)
                 }
             },
@@ -944,8 +950,10 @@ private fun ContactsPage(
                     name.isBlank() -> error = "Enter the contact's name."
                     phone.count { it.isDigit() } < 7 -> error = "Enter a valid phone number."
                     group.isBlank() -> error = "Enter a group name."
+                    (birthday.isNotBlank() && !Regex("^(0[1-9]|1[0-2])-(0[1-9]|[12][0-9]|3[01])$").matches(birthday)) -> error = "Birthday must use MM-dd format."
+                    (anniversary.isNotBlank() && !Regex("^(0[1-9]|1[0-2])-(0[1-9]|[12][0-9]|3[01])$").matches(anniversary)) -> error = "Anniversary must use MM-dd format."
                     else -> {
-                        val item = ContactEntity(id = editing?.id ?: 0, name = name.trim(), phone = phone.trim(), groupName = group.trim())
+                        val item = ContactEntity(id = editing?.id ?: 0, name = name.trim(), phone = phone.trim(), groupName = group.trim(), birthday = birthday.trim(), anniversary = anniversary.trim())
                         if (editing == null) saveContact(item) else updateContact(item)
                         showEditor = false
                     }

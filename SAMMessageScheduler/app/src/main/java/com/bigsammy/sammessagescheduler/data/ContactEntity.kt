@@ -9,5 +9,7 @@ data class ContactEntity(
     val name: String,
     val phone: String,
     val groupName: String = "General",
+    val birthday: String = "",
+    val anniversary: String = "",
     val createdAt: Long = System.currentTimeMillis()
 )

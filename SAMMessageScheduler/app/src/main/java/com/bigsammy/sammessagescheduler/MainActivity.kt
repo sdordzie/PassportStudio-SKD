@@ -47,6 +47,10 @@ private val Pale = Color(0xFFF5F3FA)
 class MainActivity : ComponentActivity() {
     private val notificationPermission =
         registerForActivityResult(ActivityResultContracts.RequestPermission()) { }
+    private val receiveSmsPermission =
+        registerForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+            Toast.makeText(this, if (granted) "Incoming SMS permission granted." else "Incoming SMS permission denied.", Toast.LENGTH_LONG).show()
+        }
     private var pendingSmsAction: (() -> Unit)? = null
     private var csvImportPreview by mutableStateOf<List<MessageEntity>>(emptyList())
     private var csvImportInvalidCount by mutableStateOf(0)
@@ -210,6 +214,9 @@ class MainActivity : ComponentActivity() {
                     onRestore = { restoreLauncher.launch(arrayOf("application/json", "text/*")) },
                     onExportCsv = { csvExportLauncher.launch("sam-message-history.csv") },
                     onImportCsv = { csvImportLauncher.launch(arrayOf("text/csv", "text/*")) },
+                    onEnableSmsAutomation = {
+                        if (ContextCompat.checkSelfPermission(this, Manifest.permission.RECEIVE_SMS) != android.content.pm.PackageManager.PERMISSION_GRANTED) receiveSmsPermission.launch(Manifest.permission.RECEIVE_SMS)
+                    },
                     importPreview = csvImportPreview,
                     invalidImportCount = csvImportInvalidCount,
                     onConfirmImport = {
@@ -348,6 +355,7 @@ private fun SchedulerScreen(
     onRestore: () -> Unit,
     onExportCsv: () -> Unit,
     onImportCsv: () -> Unit,
+    onEnableSmsAutomation: () -> Unit,
     importPreview: List<MessageEntity>,
     invalidImportCount: Int,
     onConfirmImport: () -> Unit,
@@ -636,6 +644,32 @@ private fun SchedulerScreen(
                         }
                     }, modifier = Modifier.fillMaxWidth()) { Text("Save quiet hours") }
                     if (quietMessage.isNotBlank()) Text(quietMessage, color = Purple, fontSize = 12.sp)
+                    Text("Incoming SMS automation", fontWeight = FontWeight.SemiBold, color = Navy, modifier = Modifier.padding(top = 20.dp))
+                    Text("Set optional automatic replies and forward incoming SMS messages to a number you choose.", color = Color.Gray, fontSize = 12.sp)
+                    val automationPrefs = remember { context.getSharedPreferences("sam_sms_automation", android.content.Context.MODE_PRIVATE) }
+                    var autoReplyEnabled by remember { mutableStateOf(automationPrefs.getBoolean("auto_reply_enabled", false)) }
+                    var replyKeyword by remember { mutableStateOf(automationPrefs.getString("reply_keyword", "") ?: "") }
+                    var replyText by remember { mutableStateOf(automationPrefs.getString("reply_text", "I have received your message. I will get back to you soon.") ?: "") }
+                    var forwardingEnabled by remember { mutableStateOf(automationPrefs.getBoolean("forward_enabled", false)) }
+                    var forwardNumber by remember { mutableStateOf(automationPrefs.getString("forward_number", "") ?: "") }
+                    var automationMessage by remember { mutableStateOf("") }
+                    Row(verticalAlignment = Alignment.CenterVertically) { Checkbox(autoReplyEnabled, { autoReplyEnabled = it }); Text("Enable automatic replies") }
+                    OutlinedTextField(replyKeyword, { replyKeyword = it }, modifier = Modifier.fillMaxWidth(), label = { Text("Reply only when message contains (optional)") }, supportingText = { Text("Leave blank to reply to every incoming SMS.") })
+                    OutlinedTextField(replyText, { replyText = it }, modifier = Modifier.fillMaxWidth(), label = { Text("Automatic reply text") }, minLines = 2)
+                    Divider(modifier = Modifier.padding(vertical = 6.dp))
+                    Row(verticalAlignment = Alignment.CenterVertically) { Checkbox(forwardingEnabled, { forwardingEnabled = it }); Text("Enable SMS forwarding") }
+                    OutlinedTextField(forwardNumber, { forwardNumber = it }, modifier = Modifier.fillMaxWidth(), label = { Text("Forward incoming SMS to") }, singleLine = true)
+                    Button(onClick = {
+                        if (autoReplyEnabled && replyText.isBlank()) automationMessage = "Enter an automatic reply message."
+                        else if (forwardingEnabled && forwardNumber.count { it.isDigit() } < 7) automationMessage = "Enter a valid forwarding number."
+                        else {
+                            automationPrefs.edit().putBoolean("auto_reply_enabled", autoReplyEnabled).putString("reply_keyword", replyKeyword.trim()).putString("reply_text", replyText.trim()).putBoolean("forward_enabled", forwardingEnabled).putString("forward_number", forwardNumber.trim()).apply()
+                            if (autoReplyEnabled || forwardingEnabled) onEnableSmsAutomation()
+                            automationMessage = if (autoReplyEnabled || forwardingEnabled) "Rules saved. Grant incoming SMS permission when Android asks." else "Incoming SMS automation disabled."
+                        }
+                    }, modifier = Modifier.fillMaxWidth()) { Text("Save SMS automation rules") }
+                    if (automationMessage.isNotBlank()) Text(automationMessage, color = Purple, fontSize = 12.sp)
+                    Text("Requires incoming SMS and SMS sending permissions. Carrier charges may apply. Forwarding copies message content to the destination number.", color = Color.Gray, fontSize = 11.sp)
                     Text("Data protection", fontWeight = FontWeight.SemiBold, color = Navy, modifier = Modifier.padding(top = 16.dp))
                     Text("Export your message history to a spreadsheet, or create and restore a full backup.", color = Color.Gray)
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth().padding(vertical = 10.dp)) {

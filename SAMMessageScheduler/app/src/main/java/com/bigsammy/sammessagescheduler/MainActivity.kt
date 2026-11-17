@@ -242,6 +242,7 @@ private fun SchedulerScreen(
     var page by remember { mutableStateOf("Home") }
     var showComposer by remember { mutableStateOf(false) }
     var editMessage by remember { mutableStateOf<MessageEntity?>(null) }
+    var duplicateMode by remember { mutableStateOf(false) }
     var searchText by remember { mutableStateOf("") }
     var statusFilter by remember { mutableStateOf("ALL") }
 
@@ -399,10 +400,22 @@ private fun SchedulerScreen(
                                 Card(colors = CardDefaults.cardColors(containerColor = Color.White)) {
                                     Column(Modifier.padding(12.dp)) {
                                         MessageCard(message)
-                                        Row(
-                                            modifier = Modifier.align(Alignment.End),
-                                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                        FlowRow(
+                                            modifier = Modifier.fillMaxWidth(),
+                                            horizontalArrangement = Arrangement.End,
+                                            verticalArrangement = Arrangement.spacedBy(0.dp)
                                         ) {
+                                            TextButton(onClick = {
+                                                editMessage = message.copy(
+                                                    id = 0L,
+                                                    scheduledAt = System.currentTimeMillis() + 3_600_000L,
+                                                    status = "SCHEDULED",
+                                                    repeatRule = "NONE",
+                                                    createdAt = System.currentTimeMillis()
+                                                )
+                                                duplicateMode = true
+                                                showComposer = true
+                                            }) { Text("Duplicate") }
                                             if (message.status == "SCHEDULED") {
                                                 TextButton(onClick = { editMessage = message; showComposer = true }) { Text("Edit") }
                                                 TextButton(onClick = { togglePause(message) }) { Text("Pause") }
@@ -485,12 +498,14 @@ private fun SchedulerScreen(
     if (showComposer) {
         Composer(
             initialMessage = editMessage,
-            onClose = { showComposer = false; editMessage = null },
+            duplicateMode = duplicateMode,
+            onClose = { showComposer = false; editMessage = null; duplicateMode = false },
             requestSmsPermission = requestSmsPermission,
             onSave = { id, recipient, body, channel, scheduledAt, repeatRule ->
-                save(id, recipient, body, channel, scheduledAt, repeatRule)
+                save(if (duplicateMode) null else id, recipient, body, channel, scheduledAt, repeatRule)
                 showComposer = false
                 editMessage = null
+                duplicateMode = false
             }
         )
     }
@@ -541,6 +556,7 @@ private fun MessageCard(message: MessageEntity) {
 @Composable
 private fun Composer(
     initialMessage: MessageEntity?,
+    duplicateMode: Boolean = false,
     onClose: () -> Unit,
     requestSmsPermission: (() -> Unit) -> Unit,
     onSave: (Long?, String, String, String, Long, String) -> Unit
@@ -558,7 +574,7 @@ private fun Composer(
         modifier = Modifier.fillMaxWidth(0.94f).widthIn(max = 560.dp),
         properties = DialogProperties(usePlatformDefaultWidth = false),
         onDismissRequest = onClose,
-        title = { Text(if (initialMessage == null) "Schedule a message" else "Edit scheduled message") },
+        title = { Text(when { duplicateMode -> "Duplicate message"; initialMessage == null -> "Schedule a message"; else -> "Edit scheduled message" }) },
         text = {
             Column(
                 modifier = Modifier.fillMaxWidth()
@@ -656,7 +672,7 @@ private fun Composer(
                 }
                 if (channel == "SMS") requestSmsPermission(action) else action()
             }) {
-                Text(if (initialMessage == null) "Save schedule" else "Save changes")
+                Text(if (duplicateMode || initialMessage == null) "Save schedule" else "Save changes")
             }
         },
         dismissButton = {

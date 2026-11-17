@@ -107,19 +107,29 @@ class MainActivity : FragmentActivity() {
     private val backupLauncher = registerForActivityResult(ActivityResultContracts.CreateDocument("application/json")) { uri ->
         if (uri != null) lifecycleScope.launch {
             runCatching {
-                val rows = AppDatabase.get(this@MainActivity).messageDao().getAllSnapshot()
-                val root = JSONObject().put("format", "SAM_MESSAGE_SCHEDULER_BACKUP").put("version", 1)
+                val database = AppDatabase.get(this@MainActivity)
+                val rows = database.messageDao().getAllSnapshot()
+                val contacts = database.contactDao().getAllSnapshot()
+                val root = JSONObject().put("format", "SAM_MESSAGE_SCHEDULER_BACKUP").put("version", 2)
                 val array = JSONArray()
                 rows.forEach { item ->
                     array.put(JSONObject().put("recipient", item.recipient).put("body", item.body)
                         .put("channel", item.channel).put("scheduledAt", item.scheduledAt)
                         .put("status", item.status).put("repeatRule", item.repeatRule).put("category", item.category).put("createdAt", item.createdAt))
                 }
-                root.put("messages", array)
+                val contactArray = JSONArray()
+                contacts.forEach { contact ->
+                    contactArray.put(JSONObject().put("id", contact.id).put("name", contact.name)
+                        .put("phone", contact.phone).put("groupName", contact.groupName)
+                        .put("birthday", contact.birthday).put("anniversary", contact.anniversary)
+                        .put("createdAt", contact.createdAt))
+                }
+                root.put("messages", array).put("contacts", contactArray)
                 val encrypted = BackupCrypto.encrypt(root.toString(), backupPassword.toCharArray())
                 contentResolver.openOutputStream(uri)?.bufferedWriter()?.use { it.write(encrypted) }
                     ?: error("Could not open backup file.")
-                Toast.makeText(this@MainActivity, "Backup exported successfully.", Toast.LENGTH_LONG).show()
+                backupPassword = ""
+                Toast.makeText(this@MainActivity, "Encrypted cloud-compatible backup exported (messages and contacts).", Toast.LENGTH_LONG).show()
             }.onFailure { Toast.makeText(this@MainActivity, "Backup failed.", Toast.LENGTH_LONG).show() }
         }
     }
@@ -211,12 +221,29 @@ class MainActivity : FragmentActivity() {
                         status = item.optString("status", "SCHEDULED"), repeatRule = item.optString("repeatRule", "NONE"),
                         createdAt = item.optLong("createdAt", System.currentTimeMillis()), category = item.optString("category", "General"))
                 }
-                val dao = AppDatabase.get(this@MainActivity).messageDao()
+                val database = AppDatabase.get(this@MainActivity)
+                val dao = database.messageDao()
                 dao.insertAll(restored)
+                val restoredContacts = mutableListOf<ContactEntity>()
+                val contactArray = root.optJSONArray("contacts") ?: JSONArray()
+                for (index in 0 until contactArray.length()) {
+                    val item = contactArray.getJSONObject(index)
+                    restoredContacts += ContactEntity(
+                        id = item.optLong("id", 0L),
+                        name = item.getString("name"),
+                        phone = item.getString("phone"),
+                        groupName = item.optString("groupName", "General"),
+                        birthday = item.optString("birthday", ""),
+                        anniversary = item.optString("anniversary", ""),
+                        createdAt = item.optLong("createdAt", System.currentTimeMillis())
+                    )
+                }
+                if (restoredContacts.isNotEmpty()) database.contactDao().insertAll(restoredContacts)
                 val all = dao.getAllSnapshot()
                 all.filter { it.status == "SCHEDULED" && it.scheduledAt > System.currentTimeMillis() }
                     .forEach { MessageScheduler.schedule(this@MainActivity, it.id, it.scheduledAt) }
-                Toast.makeText(this@MainActivity, "Backup restored.", Toast.LENGTH_LONG).show()
+                backupPassword = ""
+                Toast.makeText(this@MainActivity, "Backup restored: messages and contacts.", Toast.LENGTH_LONG).show()
             }.onFailure { Toast.makeText(this@MainActivity, "Restore failed. Check the backup file.", Toast.LENGTH_LONG).show() }
         }
     }
@@ -796,10 +823,10 @@ private fun SchedulerScreen(
                         visualTransformation = if (backupPasswordVisible) androidx.compose.ui.text.input.VisualTransformation.None else androidx.compose.ui.text.input.PasswordVisualTransformation(),
                         trailingIcon = { IconButton(onClick = { backupPasswordVisible = !backupPasswordVisible }) { Icon(if (backupPasswordVisible) Icons.Default.VisibilityOff else Icons.Default.Visibility, contentDescription = "Toggle password visibility") } }
                     )
-                    Text("Backups use AES-256-GCM encryption with a password-derived key. Existing plain JSON backups can still be restored.", color = Color.Gray, fontSize = 11.sp)
+                    Text("Full encrypted backup includes messages, categories, contacts, groups, birthdays and anniversaries. Choose Google Drive or another cloud-storage provider in the Android file picker. Restore on another device using the same password. Existing message-only backups remain supported.", color = Color.Gray, fontSize = 11.sp)
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth().padding(vertical = 10.dp)) {
-                        OutlinedButton(onClick = { if (backupPasswordInput.length < 8) securityMessage = "Set a backup password of at least 8 characters." else onBackup(backupPasswordInput) }, modifier = Modifier.weight(1f)) { Text("Encrypted backup") }
-                        Button(onClick = { if (backupPasswordInput.length < 8) securityMessage = "Enter the password used for this backup." else onRestore(backupPasswordInput) }, modifier = Modifier.weight(1f)) { Text("Restore backup") }
+                        OutlinedButton(onClick = { if (backupPasswordInput.length < 8) securityMessage = "Set a backup password of at least 8 characters." else onBackup(backupPasswordInput) }, modifier = Modifier.weight(1f)) { Text("Cloud backup") }
+                        Button(onClick = { if (backupPasswordInput.length < 8) securityMessage = "Enter the password used for this backup." else onRestore(backupPasswordInput) }, modifier = Modifier.weight(1f)) { Text("Restore cloud backup") }
                     }
                     if (securityMessage.isNotBlank()) Text(securityMessage, color = Purple, fontSize = 12.sp)
 

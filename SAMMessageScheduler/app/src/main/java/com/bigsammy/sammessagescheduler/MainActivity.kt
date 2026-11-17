@@ -10,6 +10,7 @@ import android.widget.Toast
 import androidx.core.content.ContextCompat
 import androidx.biometric.BiometricManager
 import androidx.biometric.BiometricPrompt
+import androidx.fragment.app.FragmentActivity
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
@@ -47,7 +48,7 @@ private val Purple = Color(0xFF6750A4)
 private val Navy = Color(0xFF18243A)
 private val Pale = Color(0xFFF5F3FA)
 
-class MainActivity : ComponentActivity() {
+class MainActivity : FragmentActivity() {
     private var securityPromptActive = false
     var securityAuthenticated = false
 

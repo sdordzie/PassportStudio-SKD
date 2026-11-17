@@ -105,6 +105,8 @@ class MainActivity : FragmentActivity() {
     private var csvImportPreview by mutableStateOf<List<MessageEntity>>(emptyList())
     private var csvImportInvalidCount by mutableStateOf(0)
     private val backupLauncher = registerForActivityResult(ActivityResultContracts.CreateDocument("application/json")) { uri ->
+        val password = backupPassword
+        backupPassword = ""
         if (uri != null) lifecycleScope.launch {
             runCatching {
                 val database = AppDatabase.get(this@MainActivity)
@@ -125,10 +127,9 @@ class MainActivity : FragmentActivity() {
                         .put("createdAt", contact.createdAt))
                 }
                 root.put("messages", array).put("contacts", contactArray)
-                val encrypted = BackupCrypto.encrypt(root.toString(), backupPassword.toCharArray())
+                val encrypted = BackupCrypto.encrypt(root.toString(), password.toCharArray())
                 contentResolver.openOutputStream(uri)?.bufferedWriter()?.use { it.write(encrypted) }
                     ?: error("Could not open backup file.")
-                backupPassword = ""
                 Toast.makeText(this@MainActivity, "Encrypted cloud-compatible backup exported (messages and contacts).", Toast.LENGTH_LONG).show()
             }.onFailure { Toast.makeText(this@MainActivity, "Backup failed.", Toast.LENGTH_LONG).show() }
         }
@@ -203,12 +204,14 @@ class MainActivity : FragmentActivity() {
         }
     }
     private val restoreLauncher = registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+        val password = backupPassword
+        backupPassword = ""
         if (uri != null) lifecycleScope.launch {
             runCatching {
                 val raw = contentResolver.openInputStream(uri)?.bufferedReader()?.use { it.readText() }
                     ?: error("Could not read backup file.")
                 val decrypted = if (JSONObject(raw).optString("format") == "SAM_ENCRYPTED_BACKUP") {
-                    BackupCrypto.decrypt(raw, backupPassword.toCharArray())
+                    BackupCrypto.decrypt(raw, password.toCharArray())
                 } else raw
                 val root = JSONObject(decrypted)
                 require(root.optString("format") == "SAM_MESSAGE_SCHEDULER_BACKUP") { "Invalid SAM backup file." }
@@ -242,7 +245,6 @@ class MainActivity : FragmentActivity() {
                 val all = dao.getAllSnapshot()
                 all.filter { it.status == "SCHEDULED" && it.scheduledAt > System.currentTimeMillis() }
                     .forEach { MessageScheduler.schedule(this@MainActivity, it.id, it.scheduledAt) }
-                backupPassword = ""
                 Toast.makeText(this@MainActivity, "Backup restored: messages and contacts.", Toast.LENGTH_LONG).show()
             }.onFailure { Toast.makeText(this@MainActivity, "Restore failed. Check the backup file.", Toast.LENGTH_LONG).show() }
         }
@@ -608,7 +610,8 @@ private fun SchedulerScreen(
                         (statusFilter == "ATTENTION" && message.status in listOf("FAILED", "PERMISSION_REQUIRED", "AWAITING_USER"))) &&
                         (message.recipient.contains(searchText, true) ||
                             message.body.contains(searchText, true) ||
-                            message.channel.contains(searchText, true))
+                            message.channel.contains(searchText, true) ||
+                            message.category.contains(searchText, true))
                 }.sortedBy { it.scheduledAt }
                 Column(
                     modifier = Modifier.padding(padding).fillMaxSize().padding(horizontal = 16.dp, vertical = 12.dp)
@@ -618,7 +621,7 @@ private fun SchedulerScreen(
                         value = searchText,
                         onValueChange = { searchText = it },
                         modifier = Modifier.fillMaxWidth().padding(top = 10.dp, bottom = 8.dp),
-                        label = { Text("Search recipient or message") },
+                        label = { Text("Search recipient, message or category") },
                         leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
                         singleLine = true
                     )
@@ -1138,8 +1141,8 @@ private fun Stat(title: String, value: String, modifier: Modifier = Modifier) {
         colors = CardDefaults.cardColors(containerColor = Color.White),
         shape = RoundedCornerShape(18.dp)
     ) {
-        Column(Modifier.padding(16.dp)) {
-            Text(value, fontSize = 27.sp, fontWeight = FontWeight.Bold, color = Navy)
+        Column(Modifier.padding(12.dp)) {
+            Text(value, fontSize = 24.sp, fontWeight = FontWeight.Bold, color = Navy)
             Text(title, color = Color.Gray)
         }
     }

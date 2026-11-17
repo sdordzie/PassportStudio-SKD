@@ -112,12 +112,13 @@ class MainActivity : ComponentActivity() {
                         }
                     },
                     retry = { message ->
-                        val scheduleAgain = {
+                        val scheduleAgain: () -> Unit = {
                             lifecycleScope.launch {
                                 val nextAttempt = System.currentTimeMillis() + 30_000L
                                 dao.update(message.copy(status = "SCHEDULED", scheduledAt = nextAttempt))
                                 MessageScheduler.schedule(this@MainActivity, message.id, nextAttempt)
                             }
+                            Unit
                         }
                         if (message.channel == "SMS" &&
                             ContextCompat.checkSelfPermission(this, Manifest.permission.SEND_SMS) !=

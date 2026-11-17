@@ -286,7 +286,7 @@ class MainActivity : FragmentActivity() {
                         }
                     },
                     onDismissImport = { csvImportPreview = emptyList() },
-                    save = { existingId, recipient, body, channel, scheduledAt, repeatRule ->
+                    save = { existingId, recipient, body, channel, scheduledAt, repeatRule, category ->
                         lifecycleScope.launch {
                             if (existingId != null) {
                                 val current = dao.getById(existingId)
@@ -298,6 +298,7 @@ class MainActivity : FragmentActivity() {
                                         channel = channel,
                                         scheduledAt = scheduledAt,
                                         repeatRule = repeatRule,
+                                        category = category,
                                         status = "SCHEDULED"
                                     ))
                                     MessageScheduler.schedule(this@MainActivity, existingId, scheduledAt)
@@ -308,7 +309,8 @@ class MainActivity : FragmentActivity() {
                                     body = body,
                                     channel = channel,
                                     scheduledAt = scheduledAt,
-                                    repeatRule = repeatRule
+                                    repeatRule = repeatRule,
+                                    category = category
                                 ))
                                 MessageScheduler.schedule(this@MainActivity, id, scheduledAt)
                             }

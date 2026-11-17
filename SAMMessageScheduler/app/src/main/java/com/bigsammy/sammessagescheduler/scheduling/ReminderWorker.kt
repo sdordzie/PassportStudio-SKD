@@ -25,6 +25,18 @@ class ReminderWorker(context: Context, params: WorkerParameters) : CoroutineWork
         val item = dao.getById(id) ?: return Result.success()
         if (item.status != "SCHEDULED") return Result.success()
 
+        val quietPrefs = applicationContext.getSharedPreferences("sam_quiet_hours", Context.MODE_PRIVATE)
+        if (quietPrefs.getBoolean("enabled", false)) {
+            val start = quietPrefs.getString("start", "22:00") ?: "22:00"
+            val end = quietPrefs.getString("end", "07:00") ?: "07:00"
+            val deferredUntil = quietHoursEnd(System.currentTimeMillis(), start, end)
+            if (deferredUntil != null) {
+                MessageScheduler.schedule(applicationContext, id, deferredUntil)
+                postNotification(id, "Message postponed by quiet hours", "SAM will process this message after quiet hours end.")
+                return Result.success()
+            }
+        }
+
         return try {
             if (item.channel == "SMS") {
                 if (ContextCompat.checkSelfPermission(applicationContext, Manifest.permission.SEND_SMS) != PackageManager.PERMISSION_GRANTED) {
@@ -79,6 +91,29 @@ class ReminderWorker(context: Context, params: WorkerParameters) : CoroutineWork
             postNotification(id, "Message action failed", e.message ?: "SAM could not process this scheduled message.")
             Result.failure()
         }
+    }
+
+
+    private fun quietHoursEnd(now: Long, start: String, end: String): Long? {
+        return try {
+            val startParts = start.split(":").map { it.toInt() }
+            val endParts = end.split(":").map { it.toInt() }
+            if (startParts.size != 2 || endParts.size != 2) return null
+            val calendar = Calendar.getInstance().apply { timeInMillis = now }
+            val minuteNow = calendar.get(Calendar.HOUR_OF_DAY) * 60 + calendar.get(Calendar.MINUTE)
+            val startMinute = startParts[0] * 60 + startParts[1]
+            val endMinute = endParts[0] * 60 + endParts[1]
+            val inside = if (startMinute < endMinute) minuteNow >= startMinute && minuteNow < endMinute
+                else minuteNow >= startMinute || minuteNow < endMinute
+            if (!inside) return null
+            calendar.set(Calendar.SECOND, 0)
+            calendar.set(Calendar.MILLISECOND, 0)
+            calendar.set(Calendar.HOUR_OF_DAY, endParts[0])
+            calendar.set(Calendar.MINUTE, endParts[1])
+            if (startMinute > endMinute && minuteNow >= startMinute) calendar.add(Calendar.DAY_OF_YEAR, 1)
+            if (calendar.timeInMillis <= now) calendar.add(Calendar.DAY_OF_YEAR, 1)
+            calendar.timeInMillis
+        } catch (_: Exception) { null }
     }
 
     private fun nextOccurrence(previous: Long, rule: String): Long? {

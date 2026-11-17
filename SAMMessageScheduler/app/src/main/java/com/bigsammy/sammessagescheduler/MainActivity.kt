@@ -113,7 +113,7 @@ class MainActivity : FragmentActivity() {
                 rows.forEach { item ->
                     array.put(JSONObject().put("recipient", item.recipient).put("body", item.body)
                         .put("channel", item.channel).put("scheduledAt", item.scheduledAt)
-                        .put("status", item.status).put("repeatRule", item.repeatRule).put("createdAt", item.createdAt))
+                        .put("status", item.status).put("repeatRule", item.repeatRule).put("category", item.category).put("createdAt", item.createdAt))
                 }
                 root.put("messages", array)
                 val encrypted = BackupCrypto.encrypt(root.toString(), backupPassword.toCharArray())
@@ -128,14 +128,14 @@ class MainActivity : FragmentActivity() {
             runCatching {
                 val rows = AppDatabase.get(this@MainActivity).messageDao().getAllSnapshot()
                 fun csv(value: String): String = "\"" + value.replace("\"", "\"\"") + "\""
-                val header = listOf("ID", "Recipient", "Message", "Channel", "Scheduled At", "Status", "Repeat Rule", "Created At")
+                val header = listOf("ID", "Recipient", "Message", "Channel", "Scheduled At", "Status", "Repeat Rule", "Created At", "Category")
                 val lines = mutableListOf(header.joinToString(","))
                 val formatter = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.US)
                 rows.forEach { item ->
                     lines += listOf(
                         item.id.toString(), csv(item.recipient), csv(item.body), csv(item.channel),
                         csv(formatter.format(Date(item.scheduledAt))), csv(item.status), csv(item.repeatRule),
-                        csv(formatter.format(Date(item.createdAt)))
+                        csv(formatter.format(Date(item.createdAt))), csv(item.category)
                     ).joinToString(",")
                 }
                 contentResolver.openOutputStream(uri)?.bufferedWriter()?.use { writer ->
@@ -181,7 +181,7 @@ class MainActivity : FragmentActivity() {
                         require(scheduledAt > System.currentTimeMillis())
                         MessageEntity(recipient = recipient, body = body,
                             channel = if (channel.equals("SMS", true)) "SMS" else "WhatsApp",
-                            scheduledAt = scheduledAt, repeatRule = repeat)
+                            scheduledAt = scheduledAt, repeatRule = repeat, category = row.getOrElse(header.indexOf("category")) { "General" }.ifBlank { "General" })
                     }.getOrElse { invalid++; null }
                 }
                 require(valid.isNotEmpty()) { "No valid future messages were found in this CSV." }
@@ -209,7 +209,7 @@ class MainActivity : FragmentActivity() {
                     restored += MessageEntity(recipient = item.getString("recipient"), body = item.getString("body"),
                         channel = item.getString("channel"), scheduledAt = item.getLong("scheduledAt"),
                         status = item.optString("status", "SCHEDULED"), repeatRule = item.optString("repeatRule", "NONE"),
-                        createdAt = item.optLong("createdAt", System.currentTimeMillis()))
+                        createdAt = item.optLong("createdAt", System.currentTimeMillis()), category = item.optString("category", "General"))
                 }
                 val dao = AppDatabase.get(this@MainActivity).messageDao()
                 dao.insertAll(restored)
@@ -415,7 +415,7 @@ private fun SchedulerScreen(
     invalidImportCount: Int,
     onConfirmImport: () -> Unit,
     onDismissImport: () -> Unit,
-    save: (Long?, String, String, String, Long, String) -> Unit,
+    save: (Long?, String, String, String, Long, String, String) -> Unit,
     requestSmsPermission: (() -> Unit) -> Unit,
     remove: (Long) -> Unit,
     complete: (MessageEntity) -> Unit,
@@ -661,7 +661,7 @@ private fun SchedulerScreen(
                             selected.forEach { contact ->
                                 val personalised = body.replace("{name}", contact.name, ignoreCase = true)
                                     .replace("{phone}", contact.phone, ignoreCase = true)
-                                save(null, contact.phone, personalised, channel, scheduledAt, "NONE")
+                                save(null, contact.phone, personalised, channel, scheduledAt, "NONE", "Bulk")
                             }
                         }
                         if (channel == "SMS") requestSmsPermission(scheduleAll) else scheduleAll()
@@ -832,7 +832,7 @@ private fun SchedulerScreen(
             onClose = { showComposer = false; editMessage = null; duplicateMode = false },
             requestSmsPermission = requestSmsPermission,
             onSave = { id, recipient, body, channel, scheduledAt, repeatRule ->
-                save(if (duplicateMode) null else id, recipient, body, channel, scheduledAt, repeatRule)
+                save(if (duplicateMode) null else id, recipient, body, channel, scheduledAt, repeatRule, category)
                 showComposer = false
                 editMessage = null
                 duplicateMode = false
@@ -1095,6 +1095,7 @@ private fun MessageCard(message: MessageEntity) {
         Column(Modifier.weight(1f)) {
             Text(message.recipient, fontWeight = FontWeight.SemiBold, color = Navy)
             Text(message.body, maxLines = 2, fontSize = 12.sp, color = Color.Gray)
+            Text(message.category, fontSize = 10.sp, color = Purple)
             Text(
                 "${message.channel} • " + SimpleDateFormat("dd MMM yyyy, HH:mm", Locale.getDefault())
                     .format(Date(message.scheduledAt)),
@@ -1116,7 +1117,7 @@ private fun Composer(
     duplicateMode: Boolean = false,
     onClose: () -> Unit,
     requestSmsPermission: (() -> Unit) -> Unit,
-    onSave: (Long?, String, String, String, Long, String) -> Unit
+    onSave: (Long?, String, String, String, Long, String, String) -> Unit
 ) {
     var recipient by remember(initialMessage?.id) { mutableStateOf(initialMessage?.recipient ?: "") }
     var body by remember(initialMessage?.id) { mutableStateOf(initialMessage?.body ?: "") }
@@ -1124,6 +1125,7 @@ private fun Composer(
     var date by remember(initialMessage?.id) { mutableStateOf(initialMessage?.let { SimpleDateFormat("yyyy-MM-dd", Locale.US).format(Date(it.scheduledAt)) } ?: SimpleDateFormat("yyyy-MM-dd", Locale.US).format(Date(System.currentTimeMillis() + 3600000))) }
     var time by remember(initialMessage?.id) { mutableStateOf(initialMessage?.let { SimpleDateFormat("HH:mm", Locale.US).format(Date(it.scheduledAt)) } ?: SimpleDateFormat("HH:mm", Locale.US).format(Date(System.currentTimeMillis() + 3600000))) }
     var repeatRule by remember(initialMessage?.id) { mutableStateOf(initialMessage?.repeatRule ?: "NONE") }
+    var category by remember(initialMessage?.id) { mutableStateOf(initialMessage?.category ?: "General") }
     var error by remember { mutableStateOf("") }
     val configuration = androidx.compose.ui.platform.LocalConfiguration.current
 
@@ -1160,6 +1162,12 @@ private fun Composer(
                         "Meeting" to "This is a reminder of our scheduled meeting. Kindly be on time."
                     ).forEach { (label, template) ->
                         AssistChip(onClick = { body = template }, label = { Text(label, fontSize = 12.sp) })
+                    }
+                }
+                Text("Category", fontWeight = FontWeight.SemiBold, color = Navy)
+                FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    listOf("General", "Personal", "Family", "Work", "School", "Business", "Bulk", "Birthday", "Reminder").forEach { value ->
+                        FilterChip(selected = category == value, onClick = { category = value }, label = { Text(value, fontSize = 11.sp) })
                     }
                 }
                 Text("Repeat", fontWeight = FontWeight.SemiBold, color = Navy)
@@ -1221,7 +1229,7 @@ private fun Composer(
                             recipient.isBlank() || body.isBlank() -> error = "Enter recipient and message."
                             recipient.count { it.isDigit() } < 7 -> error = "Enter a valid phone number with country code where required."
                             scheduledAt <= System.currentTimeMillis() -> error = "Choose a future date and time."
-                            else -> onSave(initialMessage?.id, recipient.trim(), body.trim(), channel, scheduledAt, repeatRule)
+                            else -> onSave(initialMessage?.id, recipient.trim(), body.trim(), channel, scheduledAt, repeatRule, category)
                         }
                     } catch (_: Exception) {
                         error = "Enter a valid date and time."

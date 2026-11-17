@@ -1,6 +1,11 @@
-# SAM Message Scheduler — Android Phase 10
+# SAM Message Scheduler — Android Phase 11
 
 Native Android app using Kotlin, Jetpack Compose, Room and WorkManager.
+
+## Phase 11 safe message removal
+- Selecting Cancel now opens a confirmation dialog showing the recipient.
+- Keep message dismisses the dialog without changing the saved message or its scheduled work.
+- Remove message confirms the action and cancels the scheduled work before deleting the record.
 
 ## Phase 10 message duplication
 - Duplicate any saved message from the message list, including completed, failed, paused and scheduled items.
@@ -31,6 +36,6 @@ WhatsApp messages are not silently sent; SAM leaves the final Send action to the
 GitHub Actions builds a debug APK with JDK 17, Gradle 8.9 and Android SDK.
 
 Package: com.bigsammy.sammessagescheduler
-Version: 4.7.0
+Version: 4.8.0
 Minimum Android: 8.0 (API 26)
 Target SDK: 35

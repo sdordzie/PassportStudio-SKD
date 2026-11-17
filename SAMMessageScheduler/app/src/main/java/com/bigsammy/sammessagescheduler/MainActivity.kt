@@ -790,7 +790,7 @@ private fun SchedulerScreen(
                     OutlinedTextField(forwardNumber, { forwardNumber = it }, modifier = Modifier.fillMaxWidth(), label = { Text("Forward incoming SMS to") }, singleLine = true)
                     OutlinedTextField(forwardKeyword, { forwardKeyword = it }, modifier = Modifier.fillMaxWidth(), label = { Text("Forward only when message contains (optional)") }, supportingText = { Text("Leave blank to forward all incoming SMS.") })
                     Button(onClick = {
-                        val parsedRules = replyRulesText.lineSequence().map { it.trim() }.filter { it.isNotBlank() }.map { line ->
+                        val parsedRules = replyRulesText.lineSequence().map { it.trim() }.filter { it.isNotBlank() }.mapNotNull { line ->
                             val separator = line.indexOf("=>")
                             if (separator < 0 || line.substring(separator + 2).isBlank()) null
                             else line.substring(0, separator).trim() to line.substring(separator + 2).trim()

@@ -13,5 +13,6 @@ data class MessageEntity(
     val status: String = "SCHEDULED",
     val repeatRule: String = "NONE",
     val createdAt: Long = System.currentTimeMillis(),
-    val deliveryStatus: String = "PENDING"
+    val deliveryStatus: String = "PENDING",
+    val category: String = "General"
 )

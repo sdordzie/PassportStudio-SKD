@@ -4,6 +4,7 @@ import android.Manifest
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
+import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
@@ -17,6 +18,37 @@ import androidx.work.WorkerParameters
 import com.bigsammy.sammessagescheduler.data.AppDatabase
 import java.net.URLEncoder
 import java.util.Calendar
+
+
+class SmsStatusReceiver : BroadcastReceiver() {
+    override fun onReceive(context: Context, intent: Intent) {
+        val id = intent.getLongExtra("message_id", -1L)
+        if (id < 0) return
+        val pending = goAsync()
+        kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO).launch {
+            try {
+                val dao = AppDatabase.get(context).messageDao()
+                val item = dao.getById(id) ?: return@launch
+                val status = when (intent.action) {
+                    "com.bigsammy.sammessagescheduler.SMS_SENT" ->
+                        if (resultCode == android.app.Activity.RESULT_OK) "SENT" else "SEND_FAILED"
+                    "com.bigsammy.sammessagescheduler.SMS_DELIVERED" ->
+                        if (resultCode == android.telephony.SmsManager.RESULT_ERROR_GENERIC_FAILURE || resultCode == android.telephony.SmsManager.RESULT_ERROR_NO_SERVICE || resultCode == android.telephony.SmsManager.RESULT_ERROR_NULL_PDU || resultCode == android.telephony.SmsManager.RESULT_ERROR_RADIO_OFF) "DELIVERY_FAILED" else "DELIVERED"
+                    else -> return@launch
+                }
+                dao.update(item.copy(deliveryStatus = status))
+                val manager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+                val channelId = "sam_scheduled_messages"
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) manager.createNotificationChannel(NotificationChannel(channelId, "Scheduled messages", NotificationManager.IMPORTANCE_DEFAULT))
+                manager.notify((id + 500000).toInt(), NotificationCompat.Builder(context, channelId)
+                    .setSmallIcon(android.R.drawable.ic_dialog_email)
+                    .setContentTitle(if (status == "DELIVERED") "SMS delivered" else if (status == "SEND_FAILED" || status == "DELIVERY_FAILED") "SMS delivery problem" else "SMS sent")
+                    .setContentText("Delivery status for ${item.recipient}: ${status.replace('_', ' ').lowercase()}")
+                    .setAutoCancel(true).build())
+            } finally { pending.finish() }
+        }
+    }
+}
 
 class ReminderWorker(context: Context, params: WorkerParameters) : CoroutineWorker(context, params) {
     override suspend fun doWork(): Result {
@@ -44,25 +76,36 @@ class ReminderWorker(context: Context, params: WorkerParameters) : CoroutineWork
                     postNotification(id, "SMS permission required", "Open SAM and grant SMS permission to schedule SMS sending.")
                     return Result.failure()
                 }
-                val sms = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-                    applicationContext.getSystemService(SmsManager::class.java)
-                } else {
-                    @Suppress("DEPRECATION")
-                    SmsManager.getDefault()
-                }
+                @Suppress("DEPRECATION")
+                val subscriptionId = SmsManager.getDefaultSmsSubscriptionId()
+                @Suppress("DEPRECATION")
+                val sms = if (subscriptionId >= 0) SmsManager.getSmsManagerForSubscriptionId(subscriptionId)
+                    else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) applicationContext.getSystemService(SmsManager::class.java)
+                    else SmsManager.getDefault()
                 val parts = sms.divideMessage(item.body)
-                if (parts.size > 1) sms.sendMultipartTextMessage(item.recipient, null, parts, null, null)
-                else sms.sendTextMessage(item.recipient, null, item.body, null, null)
+                val sentIntents = ArrayList<PendingIntent>()
+                val deliveredIntents = ArrayList<PendingIntent>()
+                repeat(parts.size) { part ->
+                    val sent = Intent(applicationContext, SmsStatusReceiver::class.java)
+                        .setAction("com.bigsammy.sammessagescheduler.SMS_SENT")
+                        .putExtra("message_id", id).putExtra("part", part).putExtra("part_count", parts.size)
+                    val delivered = Intent(applicationContext, SmsStatusReceiver::class.java)
+                        .setAction("com.bigsammy.sammessagescheduler.SMS_DELIVERED")
+                        .putExtra("message_id", id).putExtra("part", part).putExtra("part_count", parts.size)
+                    sentIntents += PendingIntent.getBroadcast(applicationContext, (id * 100 + part).toInt(), sent, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
+                    deliveredIntents += PendingIntent.getBroadcast(applicationContext, (id * 1000 + part).toInt(), delivered, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
+                }
+                if (parts.size > 1) sms.sendMultipartTextMessage(item.recipient, null, parts, sentIntents, deliveredIntents)
+                else sms.sendTextMessage(item.recipient, null, item.body, sentIntents.first(), deliveredIntents.first())
 
                 val next = nextOccurrence(item.scheduledAt, item.repeatRule)
                 if (next != null) {
-                    dao.update(item.copy(scheduledAt = next, status = "SCHEDULED"))
+                    dao.update(item.copy(scheduledAt = next, status = "SCHEDULED", deliveryStatus = "SUBMITTED"))
                     MessageScheduler.schedule(applicationContext, id, next)
-                    postNotification(id, "Recurring SMS submitted", "Your SMS was submitted to Android's messaging service for ${item.recipient}.")
                 } else {
-                    dao.update(item.copy(status = "SENT"))
-                    postNotification(id, "SMS submitted", "Your SMS was submitted to Android's messaging service for ${item.recipient}.")
+                    dao.update(item.copy(status = "SENT", deliveryStatus = "SUBMITTED"))
                 }
+                postNotification(id, "SMS submitted", "Android accepted the SMS request for ${item.recipient}. Delivery updates will appear when the network reports them.")
             } else {
                 val phone = item.recipient.filter { it.isDigit() }
                 val encoded = URLEncoder.encode(item.body, "UTF-8")

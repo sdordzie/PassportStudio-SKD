@@ -164,7 +164,8 @@ class ReminderWorker(context: Context, params: WorkerParameters) : CoroutineWork
         val field = when (rule) {
             "DAILY" -> Calendar.DAY_OF_MONTH
             "WEEKLY" -> Calendar.WEEK_OF_YEAR
-            "MONTHLY" -> Calendar.MONTH\n            "YEARLY" -> Calendar.YEAR
+            "MONTHLY" -> Calendar.MONTH
+            "YEARLY" -> Calendar.YEAR
             else -> return null
         }
         return Calendar.getInstance().apply {

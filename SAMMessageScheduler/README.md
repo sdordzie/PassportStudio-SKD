@@ -1,8 +1,14 @@
-# SAM Message Scheduler — Android Phase 4
+# SAM Message Scheduler — Android Phase 5
 
 Native Android app using Kotlin, Jetpack Compose, Room and WorkManager.
 
-## Phase 4 features
+## Phase 5 features
+- Attention dashboard for failed, permission-required and WhatsApp-awaiting-user messages.
+- Filter messages that need attention.
+- Retry failed actions; SMS retries request permission when needed.
+- Marking a scheduled message complete cancels its pending background work.
+
+## Earlier features
 - Edit and reschedule existing scheduled messages without creating duplicates.
 - Editing preserves the original record and safely replaces its pending WorkManager job.
 - New schedules default to one hour from the current time.

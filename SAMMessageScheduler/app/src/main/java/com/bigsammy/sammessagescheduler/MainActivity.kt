@@ -109,6 +109,8 @@ private fun SchedulerScreen(
 ) {
     var page by remember { mutableStateOf("Home") }
     var showComposer by remember { mutableStateOf(false) }
+    var searchText by remember { mutableStateOf("") }
+    var statusFilter by remember { mutableStateOf("ALL") }
 
     Scaffold(
         containerColor = Pale,
@@ -204,28 +206,49 @@ private fun SchedulerScreen(
             }
 
             "Scheduled" -> {
-                LazyColumn(
-                    modifier = Modifier.padding(padding).fillMaxSize().padding(16.dp),
-                    verticalArrangement = Arrangement.spacedBy(10.dp)
+                val visibleMessages = messages.filter { message ->
+                    (statusFilter == "ALL" || message.status == statusFilter) &&
+                        (message.recipient.contains(searchText, true) ||
+                            message.body.contains(searchText, true) ||
+                            message.channel.contains(searchText, true))
+                }.sortedBy { it.scheduledAt }
+                Column(
+                    modifier = Modifier.padding(padding).fillMaxSize().padding(horizontal = 16.dp, vertical = 12.dp)
                 ) {
-                    item {
-                        Text("Your messages", fontSize = 24.sp, fontWeight = FontWeight.Bold, color = Navy)
+                    Text("Your messages", fontSize = 24.sp, fontWeight = FontWeight.Bold, color = Navy)
+                    OutlinedTextField(
+                        value = searchText,
+                        onValueChange = { searchText = it },
+                        modifier = Modifier.fillMaxWidth().padding(top = 10.dp, bottom = 8.dp),
+                        label = { Text("Search recipient or message") },
+                        leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
+                        singleLine = true
+                    )
+                    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        listOf("ALL" to "All", "SCHEDULED" to "Upcoming", "SENT" to "Sent", "FAILED" to "Failed").forEach { (key, label) ->
+                            FilterChip(selected = statusFilter == key, onClick = { statusFilter = key }, label = { Text(label, fontSize = 11.sp) })
+                        }
                     }
-                    items(messages, key = { it.id }) { message ->
-                        Card(colors = CardDefaults.cardColors(containerColor = Color.White)) {
-                            Column(Modifier.padding(12.dp)) {
-                                MessageCard(message)
-                                Row(
-                                    modifier = Modifier.align(Alignment.End),
-                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                                ) {
-                                    if (message.status == "SCHEDULED") {
-                                        TextButton(onClick = { complete(message) }) {
-                                            Text("Mark done")
+                    if (visibleMessages.isEmpty()) {
+                        Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                            Text("No messages match your search.", color = Color.Gray)
+                        }
+                    } else {
+                        LazyColumn(
+                            modifier = Modifier.fillMaxSize().padding(top = 8.dp),
+                            verticalArrangement = Arrangement.spacedBy(10.dp)
+                        ) {
+                            items(visibleMessages, key = { it.id }) { message ->
+                                Card(colors = CardDefaults.cardColors(containerColor = Color.White)) {
+                                    Column(Modifier.padding(12.dp)) {
+                                        MessageCard(message)
+                                        Row(
+                                            modifier = Modifier.align(Alignment.End),
+                                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                        ) {
+                                            if (message.status == "SCHEDULED") TextButton(onClick = { complete(message) }) { Text("Mark done") }
+                                            TextButton(onClick = { remove(message.id) }) { Text("Cancel", color = Color.Red) }
                                         }
-                                    }
-                                    TextButton(onClick = { remove(message.id) }) {
-                                        Text("Cancel", color = Color.Red)
                                     }
                                 }
                             }
@@ -355,6 +378,17 @@ private fun Composer(
                     FilterChip(selected = channel == "SMS", onClick = { channel = "SMS" }, label = { Text("SMS") })
                     FilterChip(selected = channel == "WhatsApp", onClick = { channel = "WhatsApp" }, label = { Text("WhatsApp") })
                 }
+                Text("Quick templates", fontWeight = FontWeight.SemiBold, color = Navy)
+                Row(horizontalArrangement = Arrangement.spacedBy(5.dp)) {
+                    listOf(
+                        "Greeting" to "Hello! I hope you are doing well.",
+                        "Reminder" to "This is a friendly reminder about our earlier arrangement.",
+                        "Birthday" to "Wishing you a very happy birthday. May your new year be filled with blessings!",
+                        "Meeting" to "This is a reminder of our scheduled meeting. Kindly be on time."
+                    ).forEach { (label, template) ->
+                        AssistChip(onClick = { body = template }, label = { Text(label, fontSize = 10.sp) })
+                    }
+                }
                 Text("Repeat", fontWeight = FontWeight.SemiBold, color = Navy)
                 Row(horizontalArrangement = Arrangement.spacedBy(5.dp)) {
                     listOf("NONE" to "Never", "DAILY" to "Daily", "WEEKLY" to "Weekly", "MONTHLY" to "Monthly").forEach { (key, label) ->
@@ -402,6 +436,7 @@ private fun Composer(
                             .parse("$date $time")!!.time
                         when {
                             recipient.isBlank() || body.isBlank() -> error = "Enter recipient and message."
+                            recipient.count { it.isDigit() } < 7 -> error = "Enter a valid phone number with country code where required."
                             scheduledAt <= System.currentTimeMillis() -> error = "Choose a future date and time."
                             else -> onSave(recipient.trim(), body.trim(), channel, scheduledAt, repeatRule)
                         }

@@ -16,7 +16,7 @@ object MessageScheduler {
             .addTag("sam_message_$id")
             .build()
         WorkManager.getInstance(context).enqueueUniqueWork(
-            "sam_message_${id}_$at",
+            "sam_message_$id",
             ExistingWorkPolicy.REPLACE,
             request
         )

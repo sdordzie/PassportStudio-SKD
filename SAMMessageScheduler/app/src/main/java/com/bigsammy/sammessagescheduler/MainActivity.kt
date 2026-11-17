@@ -60,18 +60,32 @@ class MainActivity : ComponentActivity() {
                 val messages by dao.observeAll().collectAsStateWithLifecycle(initialValue = emptyList())
                 SchedulerScreen(
                     messages = messages,
-                    save = { recipient, body, channel, scheduledAt, repeatRule ->
+                    save = { existingId, recipient, body, channel, scheduledAt, repeatRule ->
                         lifecycleScope.launch {
-                            val id = dao.insert(
-                                MessageEntity(
+                            if (existingId != null) {
+                                val current = dao.getById(existingId)
+                                if (current != null) {
+                                    MessageScheduler.cancel(this@MainActivity, existingId)
+                                    dao.update(current.copy(
+                                        recipient = recipient,
+                                        body = body,
+                                        channel = channel,
+                                        scheduledAt = scheduledAt,
+                                        repeatRule = repeatRule,
+                                        status = "SCHEDULED"
+                                    ))
+                                    MessageScheduler.schedule(this@MainActivity, existingId, scheduledAt)
+                                }
+                            } else {
+                                val id = dao.insert(MessageEntity(
                                     recipient = recipient,
                                     body = body,
                                     channel = channel,
                                     scheduledAt = scheduledAt,
                                     repeatRule = repeatRule
-                                )
-                            )
-                            MessageScheduler.schedule(this@MainActivity, id, scheduledAt)
+                                ))
+                                MessageScheduler.schedule(this@MainActivity, id, scheduledAt)
+                            }
                         }
                     },
                     requestSmsPermission = { action ->
@@ -102,13 +116,14 @@ class MainActivity : ComponentActivity() {
 @Composable
 private fun SchedulerScreen(
     messages: List<MessageEntity>,
-    save: (String, String, String, Long, String) -> Unit,
+    save: (Long?, String, String, String, Long, String) -> Unit,
     requestSmsPermission: (() -> Unit) -> Unit,
     remove: (Long) -> Unit,
     complete: (MessageEntity) -> Unit
 ) {
     var page by remember { mutableStateOf("Home") }
     var showComposer by remember { mutableStateOf(false) }
+    var editMessage by remember { mutableStateOf<MessageEntity?>(null) }
     var searchText by remember { mutableStateOf("") }
     var statusFilter by remember { mutableStateOf("ALL") }
 
@@ -246,7 +261,10 @@ private fun SchedulerScreen(
                                             modifier = Modifier.align(Alignment.End),
                                             horizontalArrangement = Arrangement.spacedBy(8.dp)
                                         ) {
-                                            if (message.status == "SCHEDULED") TextButton(onClick = { complete(message) }) { Text("Mark done") }
+                                            if (message.status == "SCHEDULED") {
+                                                TextButton(onClick = { editMessage = message; showComposer = true }) { Text("Edit") }
+                                                TextButton(onClick = { complete(message) }) { Text("Mark done") }
+                                            }
                                             TextButton(onClick = { remove(message.id) }) { Text("Cancel", color = Color.Red) }
                                         }
                                     }
@@ -304,11 +322,13 @@ private fun SchedulerScreen(
 
     if (showComposer) {
         Composer(
-            onClose = { showComposer = false },
+            initialMessage = editMessage,
+            onClose = { showComposer = false; editMessage = null },
             requestSmsPermission = requestSmsPermission,
-            onSave = { recipient, body, channel, scheduledAt, repeatRule ->
-                save(recipient, body, channel, scheduledAt, repeatRule)
+            onSave = { id, recipient, body, channel, scheduledAt, repeatRule ->
+                save(id, recipient, body, channel, scheduledAt, repeatRule)
                 showComposer = false
+                editMessage = null
             }
         )
     }
@@ -357,21 +377,22 @@ private fun MessageCard(message: MessageEntity) {
 
 @Composable
 private fun Composer(
+    initialMessage: MessageEntity?,
     onClose: () -> Unit,
     requestSmsPermission: (() -> Unit) -> Unit,
-    onSave: (String, String, String, Long, String) -> Unit
+    onSave: (Long?, String, String, String, Long, String) -> Unit
 ) {
-    var recipient by remember { mutableStateOf("") }
-    var body by remember { mutableStateOf("") }
-    var channel by remember { mutableStateOf("SMS") }
-    var date by remember { mutableStateOf("") }
-    var time by remember { mutableStateOf("09:00") }
-    var repeatRule by remember { mutableStateOf("NONE") }
+    var recipient by remember(initialMessage?.id) { mutableStateOf(initialMessage?.recipient ?: "") }
+    var body by remember(initialMessage?.id) { mutableStateOf(initialMessage?.body ?: "") }
+    var channel by remember(initialMessage?.id) { mutableStateOf(initialMessage?.channel ?: "SMS") }
+    var date by remember(initialMessage?.id) { mutableStateOf(initialMessage?.let { SimpleDateFormat("yyyy-MM-dd", Locale.US).format(Date(it.scheduledAt)) } ?: SimpleDateFormat("yyyy-MM-dd", Locale.US).format(Date(System.currentTimeMillis() + 3600000))) }
+    var time by remember(initialMessage?.id) { mutableStateOf(initialMessage?.let { SimpleDateFormat("HH:mm", Locale.US).format(Date(it.scheduledAt)) } ?: "09:00") }
+    var repeatRule by remember(initialMessage?.id) { mutableStateOf(initialMessage?.repeatRule ?: "NONE") }
     var error by remember { mutableStateOf("") }
 
     AlertDialog(
         onDismissRequest = onClose,
-        title = { Text("Schedule a message") },
+        title = { Text(if (initialMessage == null) "Schedule a message" else "Edit scheduled message") },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -438,7 +459,7 @@ private fun Composer(
                             recipient.isBlank() || body.isBlank() -> error = "Enter recipient and message."
                             recipient.count { it.isDigit() } < 7 -> error = "Enter a valid phone number with country code where required."
                             scheduledAt <= System.currentTimeMillis() -> error = "Choose a future date and time."
-                            else -> onSave(recipient.trim(), body.trim(), channel, scheduledAt, repeatRule)
+                            else -> onSave(initialMessage?.id, recipient.trim(), body.trim(), channel, scheduledAt, repeatRule)
                         }
                     } catch (_: Exception) {
                         error = "Enter a valid date and time."
@@ -446,7 +467,7 @@ private fun Composer(
                 }
                 if (channel == "SMS") requestSmsPermission(action) else action()
             }) {
-                Text("Save schedule")
+                Text(if (initialMessage == null) "Save schedule" else "Save changes")
             }
         },
         dismissButton = {

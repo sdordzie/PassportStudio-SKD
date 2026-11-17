@@ -475,6 +475,36 @@ private fun SchedulerScreen(
                             }
                         }
                     }
+
+                    val totalCount = messages.size
+                    val completedCount = messages.count { it.status == "COMPLETED" || it.status == "SENT" }
+                    val failedCount = messages.count { it.status == "FAILED" || it.status == "PERMISSION_REQUIRED" }
+                    val deliveredCount = messages.count { it.deliveryStatus == "DELIVERED" }
+                    val smsCount = messages.count { it.channel == "SMS" }
+                    val whatsappCount = messages.count { it.channel == "WhatsApp" }
+                    val recentCount = messages.count { it.createdAt >= System.currentTimeMillis() - 7L * 24 * 60 * 60 * 1000 }
+                    Text("MESSAGE REPORTS & ANALYTICS", fontWeight = FontWeight.Bold, color = Navy, modifier = Modifier.padding(top = 22.dp, bottom = 8.dp))
+                    Card(colors = CardDefaults.cardColors(containerColor = Color.White), modifier = Modifier.fillMaxWidth()) {
+                        Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                            Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+                                Stat("Total messages", totalCount.toString(), Modifier.weight(1f))
+                                Stat("Last 7 days", recentCount.toString(), Modifier.weight(1f))
+                            }
+                            Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+                                Stat("Failed", failedCount.toString(), Modifier.weight(1f))
+                                Stat("Delivered", deliveredCount.toString(), Modifier.weight(1f))
+                            }
+                            Text("Completion rate", fontWeight = FontWeight.SemiBold, color = Navy)
+                            val completionRate = if (totalCount == 0) 0f else completedCount.toFloat() / totalCount.toFloat()
+                            LinearProgressIndicator(progress = completionRate, modifier = Modifier.fillMaxWidth(), color = Purple)
+                            Text("${(completionRate * 100).toInt()}% completed • $completedCount of $totalCount messages", fontSize = 12.sp, color = Color.Gray)
+                            Text("Channel distribution", fontWeight = FontWeight.SemiBold, color = Navy)
+                            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) { Text("SMS", color = Color.Gray); Text("$smsCount", fontWeight = FontWeight.SemiBold, color = Navy) }
+                            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) { Text("WhatsApp", color = Color.Gray); Text("$whatsappCount", fontWeight = FontWeight.SemiBold, color = Navy) }
+                            Text("Delivery reports depend on your mobile network. A missing carrier delivery report does not necessarily mean a message failed.", fontSize = 11.sp, color = Color.Gray)
+                        }
+                    }
+
                     Text(
                         "UPCOMING MESSAGES",
                         fontWeight = FontWeight.Bold,

@@ -10,6 +10,8 @@ import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -23,6 +25,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.window.DialogProperties
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.lifecycleScope
 import com.bigsammy.sammessagescheduler.data.AppDatabase
@@ -113,6 +116,7 @@ class MainActivity : ComponentActivity() {
     }
 }
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun SchedulerScreen(
     messages: List<MessageEntity>,
@@ -175,7 +179,9 @@ private fun SchedulerScreen(
         when (page) {
             "Home" -> {
                 Column(
-                    modifier = Modifier.padding(padding).fillMaxSize().padding(18.dp)
+                    modifier = Modifier.padding(padding).fillMaxSize()
+                        .verticalScroll(rememberScrollState())
+                        .padding(18.dp)
                 ) {
                     Text("Good day 👋", fontSize = 25.sp, fontWeight = FontWeight.Bold, color = Navy)
                     Text("Your messages, organised and on time.", color = Color.Gray)
@@ -239,7 +245,11 @@ private fun SchedulerScreen(
                         leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
                         singleLine = true
                     )
-                    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    FlowRow(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                        verticalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
                         listOf("ALL" to "All", "SCHEDULED" to "Upcoming", "SENT" to "Sent", "FAILED" to "Failed").forEach { (key, label) ->
                             FilterChip(selected = statusFilter == key, onClick = { statusFilter = key }, label = { Text(label, fontSize = 11.sp) })
                         }
@@ -305,7 +315,8 @@ private fun SchedulerScreen(
             }
 
             else -> {
-                Column(Modifier.padding(padding).fillMaxSize().padding(18.dp)) {
+                Column(Modifier.padding(padding).fillMaxSize()
+                    .verticalScroll(rememberScrollState()).padding(18.dp)) {
                     Text("Settings", fontSize = 24.sp, fontWeight = FontWeight.Bold, color = Navy)
                     listOf(
                         "Notifications: allow reminders in Android settings.",
@@ -375,6 +386,7 @@ private fun MessageCard(message: MessageEntity) {
     }
 }
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun Composer(
     initialMessage: MessageEntity?,
@@ -389,57 +401,88 @@ private fun Composer(
     var time by remember(initialMessage?.id) { mutableStateOf(initialMessage?.let { SimpleDateFormat("HH:mm", Locale.US).format(Date(it.scheduledAt)) } ?: SimpleDateFormat("HH:mm", Locale.US).format(Date(System.currentTimeMillis() + 3600000))) }
     var repeatRule by remember(initialMessage?.id) { mutableStateOf(initialMessage?.repeatRule ?: "NONE") }
     var error by remember { mutableStateOf("") }
+    val configuration = androidx.compose.ui.platform.LocalConfiguration.current
 
     AlertDialog(
+        modifier = Modifier.fillMaxWidth(0.94f).widthIn(max = 560.dp),
+        properties = DialogProperties(usePlatformDefaultWidth = false),
         onDismissRequest = onClose,
         title = { Text(if (initialMessage == null) "Schedule a message" else "Edit scheduled message") },
         text = {
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Column(
+                modifier = Modifier.fillMaxWidth()
+                    .heightIn(max = (configuration.screenHeightDp * 0.56f).dp)
+                    .verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                FlowRow(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
                     FilterChip(selected = channel == "SMS", onClick = { channel = "SMS" }, label = { Text("SMS") })
                     FilterChip(selected = channel == "WhatsApp", onClick = { channel = "WhatsApp" }, label = { Text("WhatsApp") })
                 }
                 Text("Quick templates", fontWeight = FontWeight.SemiBold, color = Navy)
-                Row(horizontalArrangement = Arrangement.spacedBy(5.dp)) {
+                FlowRow(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    verticalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
                     listOf(
                         "Greeting" to "Hello! I hope you are doing well.",
                         "Reminder" to "This is a friendly reminder about our earlier arrangement.",
                         "Birthday" to "Wishing you a very happy birthday. May your new year be filled with blessings!",
                         "Meeting" to "This is a reminder of our scheduled meeting. Kindly be on time."
                     ).forEach { (label, template) ->
-                        AssistChip(onClick = { body = template }, label = { Text(label, fontSize = 10.sp) })
+                        AssistChip(onClick = { body = template }, label = { Text(label, fontSize = 12.sp) })
                     }
                 }
                 Text("Repeat", fontWeight = FontWeight.SemiBold, color = Navy)
-                Row(horizontalArrangement = Arrangement.spacedBy(5.dp)) {
+                FlowRow(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    verticalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
                     listOf("NONE" to "Never", "DAILY" to "Daily", "WEEKLY" to "Weekly", "MONTHLY" to "Monthly").forEach { (key, label) ->
-                        FilterChip(selected = repeatRule == key, onClick = { repeatRule = key }, label = { Text(label, fontSize = 11.sp) })
+                        FilterChip(selected = repeatRule == key, onClick = { repeatRule = key }, label = { Text(label, fontSize = 12.sp) })
                     }
                 }
                 OutlinedTextField(
                     value = recipient,
                     onValueChange = { recipient = it },
+                    modifier = Modifier.fillMaxWidth(),
                     label = { Text("Recipient / phone number") },
                     singleLine = true
                 )
                 OutlinedTextField(
                     value = body,
                     onValueChange = { body = it },
+                    modifier = Modifier.fillMaxWidth(),
                     label = { Text("Message") },
                     minLines = 3
                 )
-                OutlinedTextField(
-                    value = date,
-                    onValueChange = { date = it },
-                    label = { Text("Date (YYYY-MM-DD)") },
-                    singleLine = true
-                )
-                OutlinedTextField(
-                    value = time,
-                    onValueChange = { time = it },
-                    label = { Text("Time (HH:mm)") },
-                    singleLine = true
-                )
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    OutlinedTextField(
+                        value = date,
+                        onValueChange = { date = it },
+                        modifier = Modifier.weight(1.15f),
+                        label = { Text("Date") },
+                        supportingText = { Text("YYYY-MM-DD") },
+                        singleLine = true
+                    )
+                    OutlinedTextField(
+                        value = time,
+                        onValueChange = { time = it },
+                        modifier = Modifier.weight(0.85f),
+                        label = { Text("Time") },
+                        supportingText = { Text("HH:mm") },
+                        singleLine = true
+                    )
+                }
                 if (error.isNotBlank()) Text(error, color = Color.Red)
                 Text(
                     "SMS is submitted automatically with permission. WhatsApp opens a prepared chat for your final confirmation.",
@@ -471,7 +514,7 @@ private fun Composer(
             }
         },
         dismissButton = {
-            TextButton(onClick = onClose) { Text("Close") }
+            TextButton(onClick = onClose) { Text("Cancel") }
         }
     )
 }

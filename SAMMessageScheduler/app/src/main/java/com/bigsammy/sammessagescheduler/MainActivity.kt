@@ -467,6 +467,8 @@ private fun parseCsv(content: String): List<List<String>> {
 private fun SchedulerScreen(
     messages: List<MessageEntity>,
     contacts: List<ContactEntity>,
+    pickedRecipientNumber: String,
+    onPickRecipient: () -> Unit,
     onPickContact: () -> Unit,
     saveContact: (ContactEntity) -> Unit,
     updateContact: (ContactEntity) -> Unit,
@@ -931,6 +933,8 @@ private fun SchedulerScreen(
     if (showComposer) {
         Composer(
             initialMessage = editMessage,
+            pickedRecipientNumber = pickedRecipientNumber,
+            onPickRecipient = onPickRecipient,
             duplicateMode = duplicateMode,
             onClose = { showComposer = false; editMessage = null; duplicateMode = false },
             requestSmsPermission = requestSmsPermission,
@@ -1217,6 +1221,8 @@ private fun MessageCard(message: MessageEntity) {
 @Composable
 private fun Composer(
     initialMessage: MessageEntity?,
+    pickedRecipientNumber: String,
+    onPickRecipient: () -> Unit,
     duplicateMode: Boolean = false,
     onClose: () -> Unit,
     requestSmsPermission: (() -> Unit) -> Unit,
@@ -1284,13 +1290,22 @@ private fun Composer(
                         FilterChip(selected = repeatRule == key, onClick = { repeatRule = key }, label = { Text(label, fontSize = 12.sp) })
                     }
                 }
-                OutlinedTextField(
-                    value = recipient,
-                    onValueChange = { recipient = it },
+                Row(
                     modifier = Modifier.fillMaxWidth(),
-                    label = { Text("Recipient / phone number") },
-                    singleLine = true
-                )
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    OutlinedTextField(
+                        value = recipient,
+                        onValueChange = { recipient = it },
+                        modifier = Modifier.weight(1f),
+                        label = { Text("Recipient / phone number") },
+                        singleLine = true
+                    )
+                    OutlinedButton(onClick = onPickRecipient) {
+                        Icon(Icons.Default.Contacts, contentDescription = "Choose contact")
+                    }
+                }
                 OutlinedTextField(
                     value = body,
                     onValueChange = { body = it },

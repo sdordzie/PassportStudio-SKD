@@ -97,3 +97,11 @@ Target SDK: 35
 - Per-contact, per-date deduplication prevents repeated alerts on the same day.
 - Reminders notify the user to prepare a greeting; the app does not silently send birthday or anniversary messages.
 - Room migration 4 to 5 adds optional contact date fields without deleting existing records.
+
+
+## Phase 20 — App security (5.7.0)
+- Optional app-opening authentication using Android BiometricPrompt.
+- Supports strong biometrics or the device's secure screen-lock credential (PIN, pattern, or password).
+- Authentication is configured in Settings → App security and remains off by default.
+- Requires the user to configure a secure screen lock or biometric in Android Settings first.
+- Version code: 21.

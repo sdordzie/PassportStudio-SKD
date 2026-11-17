@@ -3,6 +3,7 @@ package com.bigsammy.sammessagescheduler
 import android.Manifest
 import android.os.Build
 import android.os.Bundle
+import android.provider.ContactsContract
 import org.json.JSONArray
 import org.json.JSONObject
 import android.widget.Toast
@@ -32,6 +33,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.lifecycleScope
 import com.bigsammy.sammessagescheduler.data.AppDatabase
 import com.bigsammy.sammessagescheduler.data.MessageEntity
+import com.bigsammy.sammessagescheduler.data.ContactEntity
 import com.bigsammy.sammessagescheduler.scheduling.MessageScheduler
 import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
@@ -160,6 +162,18 @@ class MainActivity : ComponentActivity() {
             }.onFailure { Toast.makeText(this@MainActivity, "Restore failed. Check the backup file.", Toast.LENGTH_LONG).show() }
         }
     }
+    private val deviceContactPicker = registerForActivityResult(ActivityResultContracts.PickContact()) { uri ->
+        if (uri != null) {
+            runCatching {
+                val contactId = contentResolver.query(uri, arrayOf(ContactsContract.Contacts._ID), null, null, null)?.use { cursor -> if (cursor.moveToFirst()) cursor.getString(0) else null } ?: error("Could not read the selected contact.")
+                val phone = contentResolver.query(ContactsContract.CommonDataKinds.Phone.CONTENT_URI, arrayOf(ContactsContract.CommonDataKinds.Phone.DISPLAY_NAME, ContactsContract.CommonDataKinds.Phone.NUMBER), "${ContactsContract.CommonDataKinds.Phone.CONTACT_ID} = ?", arrayOf(contactId), null)?.use { cursor -> if (cursor.moveToFirst()) cursor.getString(0) to cursor.getString(1) else null } ?: error("The selected contact has no saved phone number.")
+                lifecycleScope.launch {
+                    AppDatabase.get(this@MainActivity).contactDao().insert(ContactEntity(name = phone.first, phone = phone.second))
+                    Toast.makeText(this@MainActivity, "Contact added to SAM.", Toast.LENGTH_SHORT).show()
+                }
+            }.onFailure { Toast.makeText(this, it.message ?: "Could not import contact.", Toast.LENGTH_LONG).show() }
+        }
+    }
     private val smsPermission =
         registerForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
             if (granted) pendingSmsAction?.invoke()
@@ -184,7 +198,13 @@ class MainActivity : ComponentActivity() {
         setContent {
             MaterialTheme(colorScheme = lightColorScheme(primary = Purple, background = Pale)) {
                 val messages by dao.observeAll().collectAsStateWithLifecycle(initialValue = emptyList())
+                val contacts by AppDatabase.get(this@MainActivity).contactDao().observeAll().collectAsStateWithLifecycle(initialValue = emptyList())
                 SchedulerScreen(
+                    contacts = contacts,
+                    onPickContact = { deviceContactPicker.launch(null) },
+                    saveContact = { contact -> lifecycleScope.launch { AppDatabase.get(this@MainActivity).contactDao().insert(contact) } },
+                    updateContact = { contact -> lifecycleScope.launch { AppDatabase.get(this@MainActivity).contactDao().update(contact) } },
+                    deleteContact = { id -> lifecycleScope.launch { AppDatabase.get(this@MainActivity).contactDao().delete(id) } },
                     messages = messages,
                     onBackup = { backupLauncher.launch("sam-message-scheduler-backup.json") },
                     onRestore = { restoreLauncher.launch(arrayOf("application/json", "text/*")) },
@@ -319,6 +339,11 @@ private fun parseCsv(content: String): List<List<String>> {
 @Composable
 private fun SchedulerScreen(
     messages: List<MessageEntity>,
+    contacts: List<ContactEntity>,
+    onPickContact: () -> Unit,
+    saveContact: (ContactEntity) -> Unit,
+    updateContact: (ContactEntity) -> Unit,
+    deleteContact: (Long) -> Unit,
     onBackup: () -> Unit,
     onRestore: () -> Unit,
     onExportCsv: () -> Unit,
@@ -360,11 +385,12 @@ private fun SchedulerScreen(
         },
         bottomBar = {
             NavigationBar(containerColor = Color.White) {
-                listOf("Home", "Scheduled", "Calendar", "Settings").forEach { name ->
+                listOf("Home", "Scheduled", "Calendar", "Contacts", "Settings").forEach { name ->
                     val icon = when (name) {
                         "Home" -> Icons.Default.Home
                         "Scheduled" -> Icons.Default.Schedule
                         "Calendar" -> Icons.Default.CalendarMonth
+                        "Contacts" -> Icons.Default.Contacts
                         else -> Icons.Default.Settings
                     }
                     NavigationBarItem(
@@ -534,6 +560,10 @@ private fun SchedulerScreen(
                 }
             }
 
+            "Contacts" -> {
+                ContactsPage(contacts, onPickContact, saveContact, updateContact, deleteContact, Modifier.padding(padding))
+            }
+
             "Calendar" -> {
                 val grouped = messages.sortedBy { it.scheduledAt }.groupBy {
                     SimpleDateFormat("EEE, dd MMM yyyy", Locale.getDefault()).format(Date(it.scheduledAt))
@@ -563,7 +593,7 @@ private fun SchedulerScreen(
                 }
             }
 
-            else -> {
+            "Settings" -> {
                 Column(Modifier.padding(padding).fillMaxSize()
                     .verticalScroll(rememberScrollState()).padding(18.dp)) {
                     Text("Settings", fontSize = 24.sp, fontWeight = FontWeight.Bold, color = Navy)
@@ -651,6 +681,100 @@ private fun SchedulerScreen(
             dismissButton = {
                 TextButton(onClick = { pendingRemoval = null }) { Text("Keep message") }
             }
+        )
+    }
+}
+
+
+@Composable
+private fun ContactsPage(
+    contacts: List<ContactEntity>,
+    onPickContact: () -> Unit,
+    saveContact: (ContactEntity) -> Unit,
+    updateContact: (ContactEntity) -> Unit,
+    deleteContact: (Long) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    var query by remember { mutableStateOf("") }
+    var selectedGroup by remember { mutableStateOf("All") }
+    var editing by remember { mutableStateOf<ContactEntity?>(null) }
+    var showEditor by remember { mutableStateOf(false) }
+    var deleting by remember { mutableStateOf<ContactEntity?>(null) }
+    val groups = listOf("All") + contacts.map { it.groupName }.filter { it.isNotBlank() }.distinct().sorted()
+    val visible = contacts.filter { (selectedGroup == "All" || it.groupName == selectedGroup) && (query.isBlank() || it.name.contains(query, true) || it.phone.contains(query, true)) }
+    Column(modifier.fillMaxSize().padding(16.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Column(Modifier.weight(1f)) {
+                Text("Contact centre", fontSize = 24.sp, fontWeight = FontWeight.Bold, color = Navy)
+                Text("${contacts.size} saved contact(s)", color = Color.Gray, fontSize = 12.sp)
+            }
+            OutlinedButton(onClick = onPickContact) { Icon(Icons.Default.ContactPhone, contentDescription = null); Spacer(Modifier.width(6.dp)); Text("From phone") }
+        }
+        OutlinedTextField(query, { query = it }, modifier = Modifier.fillMaxWidth().padding(top = 12.dp), label = { Text("Search contacts") }, singleLine = true)
+        FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.fillMaxWidth().padding(vertical = 10.dp)) {
+            groups.forEach { group -> FilterChip(selected = selectedGroup == group, onClick = { selectedGroup = group }, label = { Text(group) }) }
+        }
+        if (visible.isEmpty()) {
+            Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { Text(if (contacts.isEmpty()) "No contacts saved yet. Add one from your phone." else "No contacts match your search.", color = Color.Gray) }
+        } else {
+            LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                items(visible, key = { it.id }) { contact ->
+                    Card(colors = CardDefaults.cardColors(containerColor = Color.White), modifier = Modifier.fillMaxWidth()) {
+                        Row(Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
+                            Column(Modifier.weight(1f)) {
+                                Text(contact.name, fontWeight = FontWeight.SemiBold, color = Navy)
+                                Text(contact.phone, color = Color.Gray, fontSize = 13.sp)
+                                Text(contact.groupName, color = Purple, fontSize = 11.sp)
+                            }
+                            TextButton(onClick = { editing = contact; showEditor = true }) { Text("Edit") }
+                            TextButton(onClick = { deleting = contact }) { Text("Delete", color = Color.Red) }
+                        }
+                    }
+                }
+            }
+        }
+        Button(onClick = { editing = null; showEditor = true }, modifier = Modifier.fillMaxWidth().padding(top = 10.dp)) {
+            Icon(Icons.Default.PersonAdd, contentDescription = null); Spacer(Modifier.width(8.dp)); Text("Add contact")
+        }
+    }
+    if (showEditor) {
+        var name by remember(editing?.id) { mutableStateOf(editing?.name ?: "") }
+        var phone by remember(editing?.id) { mutableStateOf(editing?.phone ?: "") }
+        var group by remember(editing?.id) { mutableStateOf(editing?.groupName ?: "General") }
+        var error by remember { mutableStateOf("") }
+        AlertDialog(
+            onDismissRequest = { showEditor = false },
+            title = { Text(if (editing == null) "Add contact" else "Edit contact") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    OutlinedTextField(name, { name = it }, label = { Text("Full name") }, singleLine = true)
+                    OutlinedTextField(phone, { phone = it }, label = { Text("Phone number") }, singleLine = true)
+                    OutlinedTextField(group, { group = it }, label = { Text("Group") }, singleLine = true, supportingText = { Text("Examples: Family, Staff, Students, Customers") })
+                    if (error.isNotBlank()) Text(error, color = Color.Red)
+                }
+            },
+            confirmButton = { Button(onClick = {
+                when {
+                    name.isBlank() -> error = "Enter the contact's name."
+                    phone.count { it.isDigit() } < 7 -> error = "Enter a valid phone number."
+                    group.isBlank() -> error = "Enter a group name."
+                    else -> {
+                        val item = ContactEntity(id = editing?.id ?: 0, name = name.trim(), phone = phone.trim(), groupName = group.trim())
+                        if (editing == null) saveContact(item) else updateContact(item)
+                        showEditor = false
+                    }
+                }
+            }) { Text("Save contact") } },
+            dismissButton = { TextButton(onClick = { showEditor = false }) { Text("Cancel") } }
+        )
+    }
+    deleting?.let { contact ->
+        AlertDialog(
+            onDismissRequest = { deleting = null },
+            title = { Text("Delete contact?") },
+            text = { Text("Remove ${contact.name} from SAM's saved contacts? This will not delete the contact from your phone.") },
+            confirmButton = { TextButton(onClick = { deleteContact(contact.id); deleting = null }) { Text("Delete", color = Color.Red) } },
+            dismissButton = { TextButton(onClick = { deleting = null }) { Text("Keep") } }
         )
     }
 }

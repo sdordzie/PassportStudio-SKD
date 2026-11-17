@@ -655,7 +655,8 @@ private fun SchedulerScreen(
                     }
                     listOf(
                         "Notifications: allow reminders in Android settings.",
-                        "SMS: sends automatically at the scheduled time after permission is granted.",
+                        "SMS: uses the Android default SMS SIM; change the preferred SIM in Android SIM settings.",
+                        "SMS delivery tracking: sent and delivered updates appear when your mobile network provides them.",
                         "WhatsApp: opens a prepared chat; you review and tap Send.",
                         "Privacy: scheduled messages are stored on this device."
                     ).forEach { setting ->
@@ -937,7 +938,10 @@ private fun MessageCard(message: MessageEntity) {
                 color = Purple
             )
         }
-        Text(message.status.lowercase(), fontSize = 10.sp, color = Color.Gray)
+        Column(horizontalAlignment = Alignment.End) {
+            Text(message.status.lowercase(), fontSize = 10.sp, color = Color.Gray)
+            if (message.channel == "SMS") Text(message.deliveryStatus.replace("_", " ").lowercase(), fontSize = 9.sp, color = if (message.deliveryStatus == "DELIVERED") Color(0xFF237A45) else Color.Gray)
+        }
     }
 }
 

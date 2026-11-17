@@ -117,3 +117,12 @@ Target SDK: 35
 - JSON backup and restore preserve message categories.
 - Room migration 5→6 adds the category column without deleting existing messages.
 - Version code: 22.
+
+
+## Phase 22 — Encrypted cloud-compatible full backup (v5.9.0)
+- Export a complete encrypted backup of scheduled-message history and the SAM Contact Centre, including contact groups, birthdays and anniversaries.
+- Use Android's document picker to save the backup to Google Drive or another installed cloud-storage provider; no cloud account password or provider credentials are collected by SAM.
+- Restore the encrypted backup on this or another Android device with the same backup password.
+- Existing message-only SAM backups remain compatible. Restored future scheduled messages are re-queued with WorkManager.
+- Backup encryption uses the existing AES-256-GCM and PBKDF2 password-derived key protection. Keep the password safe; it cannot be recovered by SAM.
+- Cloud file selection and upload/download are handled by Android and the selected storage provider. This phase provides user-directed cloud backup and restore, not continuous background synchronisation.

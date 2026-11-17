@@ -1,6 +1,12 @@
-# SAM Message Scheduler — Android Phase 11
+# SAM Message Scheduler — Android Phase 12
 
 Native Android app using Kotlin, Jetpack Compose, Room and WorkManager.
+
+## Phase 12 CSV bulk import
+- Import the app's exported CSV history or a compatible CSV with Recipient, Message, Channel and Scheduled At columns.
+- Validate each row, accepting only supported channels, repeat rules, valid phone numbers and future schedule times.
+- Review a preview of valid messages and see how many invalid or past-due rows will be skipped before confirming.
+- Imported messages are saved locally and their future WorkManager schedules are created.
 
 ## Phase 11 safe message removal
 - Selecting Cancel now opens a confirmation dialog showing the recipient.
@@ -36,6 +42,6 @@ WhatsApp messages are not silently sent; SAM leaves the final Send action to the
 GitHub Actions builds a debug APK with JDK 17, Gradle 8.9 and Android SDK.
 
 Package: com.bigsammy.sammessagescheduler
-Version: 4.8.0
+Version: 4.9.0
 Minimum Android: 8.0 (API 26)
 Target SDK: 35

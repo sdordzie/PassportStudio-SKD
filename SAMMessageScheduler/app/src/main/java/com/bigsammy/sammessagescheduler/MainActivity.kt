@@ -833,7 +833,7 @@ private fun SchedulerScreen(
             duplicateMode = duplicateMode,
             onClose = { showComposer = false; editMessage = null; duplicateMode = false },
             requestSmsPermission = requestSmsPermission,
-            onSave = { id, recipient, body, channel, scheduledAt, repeatRule ->
+            onSave = { id, recipient, body, channel, scheduledAt, repeatRule, category ->
                 save(if (duplicateMode) null else id, recipient, body, channel, scheduledAt, repeatRule, category)
                 showComposer = false
                 editMessage = null

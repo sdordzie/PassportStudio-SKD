@@ -8,6 +8,8 @@ import org.json.JSONArray
 import org.json.JSONObject
 import android.widget.Toast
 import androidx.core.content.ContextCompat
+import androidx.biometric.BiometricManager
+import androidx.biometric.BiometricPrompt
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
@@ -46,6 +48,50 @@ private val Navy = Color(0xFF18243A)
 private val Pale = Color(0xFFF5F3FA)
 
 class MainActivity : ComponentActivity() {
+    private var securityPromptActive = false
+    private var securityAuthenticated = false
+
+    override fun onResume() {
+        super.onResume()
+        val prefs = getSharedPreferences("sam_app_security", android.content.Context.MODE_PRIVATE)
+        if (prefs.getBoolean("biometric_enabled", false) && !securityAuthenticated && !securityPromptActive) authenticateForApp()
+    }
+
+    override fun onPause() {
+        super.onPause()
+        securityAuthenticated = false
+    }
+
+    private fun authenticateForApp() {
+        val authenticators = BiometricManager.Authenticators.BIOMETRIC_STRONG or BiometricManager.Authenticators.DEVICE_CREDENTIAL
+        if (BiometricManager.from(this).canAuthenticate(authenticators) != BiometricManager.BIOMETRIC_SUCCESS) {
+            Toast.makeText(this, "Set up a screen lock or biometric in Android Settings first.", Toast.LENGTH_LONG).show()
+            getSharedPreferences("sam_app_security", android.content.Context.MODE_PRIVATE).edit().putBoolean("biometric_enabled", false).apply()
+            return
+        }
+        securityPromptActive = true
+        val prompt = BiometricPrompt(this, ContextCompat.getMainExecutor(this), object : BiometricPrompt.AuthenticationCallback() {
+            override fun onAuthenticationSucceeded(result: BiometricPrompt.AuthenticationResult) {
+                securityPromptActive = false
+                securityAuthenticated = true
+            }
+            override fun onAuthenticationError(errorCode: Int, errString: CharSequence) {
+                securityPromptActive = false
+                if (errorCode != BiometricPrompt.ERROR_USER_CANCELED && errorCode != BiometricPrompt.ERROR_NEGATIVE_BUTTON) {
+                    Toast.makeText(this@MainActivity, "App authentication was not completed.", Toast.LENGTH_LONG).show()
+                }
+            }
+            override fun onAuthenticationFailed() {
+                Toast.makeText(this@MainActivity, "Authentication not recognised. Try again.", Toast.LENGTH_SHORT).show()
+            }
+        })
+        val info = BiometricPrompt.PromptInfo.Builder()
+            .setTitle("Unlock SAM Message Scheduler")
+            .setSubtitle("Use fingerprint, face unlock, or your Android screen-lock PIN")
+            .setAllowedAuthenticators(authenticators)
+            .build()
+        prompt.authenticate(info)
+    }
     private val notificationPermission =
         registerForActivityResult(ActivityResultContracts.RequestPermission()) { }
     private val receiveSmsPermission =
@@ -702,6 +748,32 @@ private fun SchedulerScreen(
                     }, modifier = Modifier.fillMaxWidth()) { Text("Save SMS automation rules") }
                     if (automationMessage.isNotBlank()) Text(automationMessage, color = Purple, fontSize = 12.sp)
                     Text("Requires incoming SMS and SMS sending permissions. Carrier charges may apply. Forwarding copies message content to the destination number.", color = Color.Gray, fontSize = 11.sp)
+                    Text("App security", fontWeight = FontWeight.SemiBold, color = Navy, modifier = Modifier.padding(top = 18.dp))
+                    val securityPrefs = remember { context.getSharedPreferences("sam_app_security", android.content.Context.MODE_PRIVATE) }
+                    var biometricEnabled by remember { mutableStateOf(securityPrefs.getBoolean("biometric_enabled", false)) }
+                    var securityMessage by remember { mutableStateOf("") }
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Column(Modifier.weight(1f)) {
+                            Text("Require biometric / device PIN", fontWeight = FontWeight.Medium, color = Navy)
+                            Text("Request fingerprint, face unlock, or Android screen-lock PIN when opening SAM.", color = Color.Gray, fontSize = 11.sp)
+                        }
+                        Switch(checked = biometricEnabled, onCheckedChange = { enabled ->
+                            if (enabled) {
+                                val available = BiometricManager.from(context).canAuthenticate(BiometricManager.Authenticators.BIOMETRIC_STRONG or BiometricManager.Authenticators.DEVICE_CREDENTIAL) == BiometricManager.BIOMETRIC_SUCCESS
+                                if (available) {
+                                    biometricEnabled = true
+                                    securityPrefs.edit().putBoolean("biometric_enabled", true).apply()
+                                    securityMessage = "App protection enabled."
+                                    (context as? MainActivity)?.let { it.securityAuthenticated = false; it.authenticateForApp() }
+                                } else securityMessage = "First set up a screen lock or biometric in Android Settings."
+                            } else {
+                                biometricEnabled = false
+                                securityPrefs.edit().putBoolean("biometric_enabled", false).apply()
+                                securityMessage = "App protection disabled."
+                            }
+                        })
+                    }
+                    if (securityMessage.isNotBlank()) Text(securityMessage, color = Purple, fontSize = 12.sp)
                     Text("Data protection", fontWeight = FontWeight.SemiBold, color = Navy, modifier = Modifier.padding(top = 16.dp))
                     Text("Export your message history to a spreadsheet, or create and restore a full backup.", color = Color.Gray)
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth().padding(vertical = 10.dp)) {

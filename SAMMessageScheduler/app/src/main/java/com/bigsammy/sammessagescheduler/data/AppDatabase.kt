@@ -9,7 +9,8 @@ import androidx.sqlite.db.SupportSQLiteDatabase
 
 @Database(entities = [MessageEntity::class, ContactEntity::class], version = 3, exportSchema = false)
 abstract class AppDatabase : RoomDatabase() {
-    abstract fun messageDao(): MessageDao\n    abstract fun contactDao(): ContactDao
+    abstract fun messageDao(): MessageDao
+    abstract fun contactDao(): ContactDao
 
     companion object {
         private val MIGRATION_1_2 = object : Migration(1, 2) {

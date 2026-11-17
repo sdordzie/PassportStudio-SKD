@@ -762,22 +762,59 @@ private fun SchedulerScreen(
                     Text("Set optional automatic replies and forward incoming SMS messages to a number you choose.", color = Color.Gray, fontSize = 12.sp)
                     val automationPrefs = remember { context.getSharedPreferences("sam_sms_automation", android.content.Context.MODE_PRIVATE) }
                     var autoReplyEnabled by remember { mutableStateOf(automationPrefs.getBoolean("auto_reply_enabled", false)) }
-                    var replyKeyword by remember { mutableStateOf(automationPrefs.getString("reply_keyword", "") ?: "") }
-                    var replyText by remember { mutableStateOf(automationPrefs.getString("reply_text", "I have received your message. I will get back to you soon.") ?: "") }
+                    var replyRulesText by remember {
+                        mutableStateOf(
+                            automationPrefs.getString("reply_rules", null) ?: run {
+                                val oldKeyword = automationPrefs.getString("reply_keyword", "").orEmpty()
+                                val oldReply = automationPrefs.getString("reply_text", "I have received your message. I will get back to you soon.").orEmpty()
+                                "$oldKeyword => $oldReply"
+                            }
+                        )
+                    }
                     var forwardingEnabled by remember { mutableStateOf(automationPrefs.getBoolean("forward_enabled", false)) }
                     var forwardNumber by remember { mutableStateOf(automationPrefs.getString("forward_number", "") ?: "") }
+                    var forwardKeyword by remember { mutableStateOf(automationPrefs.getString("forward_keyword", "") ?: "") }
                     var automationMessage by remember { mutableStateOf("") }
                     Row(verticalAlignment = Alignment.CenterVertically) { Checkbox(autoReplyEnabled, { autoReplyEnabled = it }); Text("Enable automatic replies") }
-                    OutlinedTextField(replyKeyword, { replyKeyword = it }, modifier = Modifier.fillMaxWidth(), label = { Text("Reply only when message contains (optional)") }, supportingText = { Text("Leave blank to reply to every incoming SMS.") })
-                    OutlinedTextField(replyText, { replyText = it }, modifier = Modifier.fillMaxWidth(), label = { Text("Automatic reply text") }, minLines = 2)
+                    OutlinedTextField(
+                        replyRulesText,
+                        { replyRulesText = it },
+                        modifier = Modifier.fillMaxWidth(),
+                        label = { Text("Automatic reply rules") },
+                        supportingText = { Text("One rule per line: keyword => reply. Use an empty keyword for a default reply, preferably as the last rule.") },
+                        minLines = 4
+                    )
+                    Text("The first matching rule is used. Each sender receives at most one automatic reply from the same rule every 12 hours.", color = Color.Gray, fontSize = 11.sp)
                     Divider(modifier = Modifier.padding(vertical = 6.dp))
                     Row(verticalAlignment = Alignment.CenterVertically) { Checkbox(forwardingEnabled, { forwardingEnabled = it }); Text("Enable SMS forwarding") }
                     OutlinedTextField(forwardNumber, { forwardNumber = it }, modifier = Modifier.fillMaxWidth(), label = { Text("Forward incoming SMS to") }, singleLine = true)
+                    OutlinedTextField(forwardKeyword, { forwardKeyword = it }, modifier = Modifier.fillMaxWidth(), label = { Text("Forward only when message contains (optional)") }, supportingText = { Text("Leave blank to forward all incoming SMS.") })
                     Button(onClick = {
-                        if (autoReplyEnabled && replyText.isBlank()) automationMessage = "Enter an automatic reply message."
-                        else if (forwardingEnabled && forwardNumber.count { it.isDigit() } < 7) automationMessage = "Enter a valid forwarding number."
-                        else {
-                            automationPrefs.edit().putBoolean("auto_reply_enabled", autoReplyEnabled).putString("reply_keyword", replyKeyword.trim()).putString("reply_text", replyText.trim()).putBoolean("forward_enabled", forwardingEnabled).putString("forward_number", forwardNumber.trim()).apply()
+                        val parsedRules = replyRulesText.lineSequence().map { it.trim() }.filter { it.isNotBlank() }.map { line ->
+                            val separator = line.indexOf("=>")
+                            if (separator < 0 || line.substring(separator + 2).isBlank()) null
+                            else line.substring(0, separator).trim() to line.substring(separator + 2).trim()
+                        }.toList()
+                        val hasMalformedRule = replyRulesText.lineSequence().map { it.trim() }.filter { it.isNotBlank() }.any { line ->
+                            val separator = line.indexOf("=>")
+                            separator < 0 || line.substring(separator + 2).isBlank()
+                        }
+                        val hasDefaultBeforeLast = parsedRules.dropLast(1).any { it.first.isBlank() }
+                        if (autoReplyEnabled && (parsedRules.isEmpty() || hasMalformedRule || hasDefaultBeforeLast)) {
+                            automationMessage = "Enter valid reply rules using keyword => reply. Put any blank-keyword default rule last."
+                        } else if (forwardingEnabled && forwardNumber.count { it.isDigit() } < 7) {
+                            automationMessage = "Enter a valid forwarding number."
+                        } else {
+                            val firstRule = parsedRules.firstOrNull()
+                            automationPrefs.edit()
+                                .putBoolean("auto_reply_enabled", autoReplyEnabled)
+                                .putString("reply_rules", parsedRules.joinToString("\\n") { "${it.first} => ${it.second}" })
+                                .putString("reply_keyword", firstRule?.first.orEmpty())
+                                .putString("reply_text", firstRule?.second.orEmpty())
+                                .putBoolean("forward_enabled", forwardingEnabled)
+                                .putString("forward_number", forwardNumber.trim())
+                                .putString("forward_keyword", forwardKeyword.trim())
+                                .apply()
                             if (autoReplyEnabled || forwardingEnabled) onEnableSmsAutomation()
                             automationMessage = if (autoReplyEnabled || forwardingEnabled) "Rules saved. Grant incoming SMS permission when Android asks." else "Incoming SMS automation disabled."
                         }

@@ -55,6 +55,7 @@ private val Purple = Color(0xFF6750A4)
 class MainActivity : FragmentActivity() {
     private var backupPassword: String = ""
     private var themeMode by mutableStateOf("System")
+    private var pickedRecipientNumber by mutableStateOf("")
     private var securityPromptActive = false
     var securityAuthenticated = false
 
@@ -192,7 +193,7 @@ class MainActivity : FragmentActivity() {
                         require(recipient.isNotBlank() && body.isNotBlank())
                         require(recipient.count { it.isDigit() } >= 7)
                         require(channel.equals("SMS", true) || channel.equals("WhatsApp", true))
-                        require(repeat in listOf("NONE", "DAILY", "WEEKLY", "MONTHLY"))
+                        require(repeat in listOf("NONE", "DAILY", "WEEKLY", "MONTHLY", "YEARLY"))
                         require(scheduledAt > System.currentTimeMillis())
                         MessageEntity(recipient = recipient, body = body,
                             channel = if (channel.equals("SMS", true)) "SMS" else "WhatsApp",
@@ -265,6 +266,23 @@ class MainActivity : FragmentActivity() {
             }.onFailure { Toast.makeText(this, it.message ?: "Could not import contact.", Toast.LENGTH_LONG).show() }
         }
     }
+    private val recipientContactPicker = registerForActivityResult(ActivityResultContracts.PickContact()) { uri ->
+        if (uri != null) {
+            runCatching {
+                val contactId = contentResolver.query(uri, arrayOf(ContactsContract.Contacts._ID), null, null, null)?.use { cursor ->
+                    if (cursor.moveToFirst()) cursor.getString(0) else null
+                } ?: error("Could not read the selected contact.")
+                val phone = contentResolver.query(
+                    ContactsContract.CommonDataKinds.Phone.CONTENT_URI,
+                    arrayOf(ContactsContract.CommonDataKinds.Phone.NUMBER),
+                    "${ContactsContract.CommonDataKinds.Phone.CONTACT_ID} = ?",
+                    arrayOf(contactId), null
+                )?.use { cursor -> if (cursor.moveToFirst()) cursor.getString(0) else null }
+                    ?: error("The selected contact has no saved phone number.")
+                pickedRecipientNumber = phone
+            }.onFailure { Toast.makeText(this, it.message ?: "Could not read the selected contact.", Toast.LENGTH_LONG).show() }
+        }
+    }
     private val smsPermission =
         registerForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
             if (granted) pendingSmsAction?.invoke()
@@ -302,7 +320,7 @@ class MainActivity : FragmentActivity() {
                 val messages by dao.observeAll().collectAsStateWithLifecycle(initialValue = emptyList())
                 val contacts by AppDatabase.get(this@MainActivity).contactDao().observeAll().collectAsStateWithLifecycle(initialValue = emptyList())
                 SchedulerScreen(
-                    contacts = contacts,
+                    contacts = contacts,\n                    pickedRecipientNumber = pickedRecipientNumber,\n                    onPickRecipient = { recipientContactPicker.launch(null) },
                     onPickContact = { deviceContactPicker.launch(null) },
                     saveContact = { contact -> lifecycleScope.launch { AppDatabase.get(this@MainActivity).contactDao().insert(contact) } },
                     updateContact = { contact -> lifecycleScope.launch { AppDatabase.get(this@MainActivity).contactDao().update(contact) } },
@@ -1202,7 +1220,7 @@ private fun Composer(
     requestSmsPermission: (() -> Unit) -> Unit,
     onSave: (Long?, String, String, String, Long, String, String) -> Unit
 ) {
-    var recipient by remember(initialMessage?.id) { mutableStateOf(initialMessage?.recipient ?: "") }
+    var recipient by remember(initialMessage?.id) { mutableStateOf(initialMessage?.recipient ?: "") }\n    LaunchedEffect(pickedRecipientNumber) { if (pickedRecipientNumber.isNotBlank()) recipient = pickedRecipientNumber }
     var body by remember(initialMessage?.id) { mutableStateOf(initialMessage?.body ?: "") }
     var channel by remember(initialMessage?.id) { mutableStateOf(initialMessage?.channel ?: "SMS") }
     var date by remember(initialMessage?.id) { mutableStateOf(initialMessage?.let { SimpleDateFormat("yyyy-MM-dd", Locale.US).format(Date(it.scheduledAt)) } ?: SimpleDateFormat("yyyy-MM-dd", Locale.US).format(Date(System.currentTimeMillis() + 3600000))) }
@@ -1259,7 +1277,7 @@ private fun Composer(
                     horizontalArrangement = Arrangement.spacedBy(6.dp),
                     verticalArrangement = Arrangement.spacedBy(4.dp)
                 ) {
-                    listOf("NONE" to "Never", "DAILY" to "Daily", "WEEKLY" to "Weekly", "MONTHLY" to "Monthly").forEach { (key, label) ->
+                    listOf("NONE" to "Never", "DAILY" to "Daily", "WEEKLY" to "Weekly", "MONTHLY" to "Monthly", "YEARLY" to "Yearly").forEach { (key, label) ->
                         FilterChip(selected = repeatRule == key, onClick = { repeatRule = key }, label = { Text(label, fontSize = 12.sp) })
                     }
                 }

@@ -265,8 +265,8 @@ class MainActivity : FragmentActivity() {
                     updateContact = { contact -> lifecycleScope.launch { AppDatabase.get(this@MainActivity).contactDao().update(contact) } },
                     deleteContact = { id -> lifecycleScope.launch { AppDatabase.get(this@MainActivity).contactDao().delete(id) } },
                     messages = messages,
-                    onBackup = { backupLauncher.launch("sam-message-scheduler-backup.json") },
-                    onRestore = { restoreLauncher.launch(arrayOf("application/json", "text/*")) },
+                    onBackup = { password -> backupPassword = password; backupLauncher.launch("sam-message-scheduler-backup.json") },
+                    onRestore = { password -> backupPassword = password; restoreLauncher.launch(arrayOf("application/json", "text/*")) },
                     onExportCsv = { csvExportLauncher.launch("sam-message-history.csv") },
                     onImportCsv = { csvImportLauncher.launch(arrayOf("text/csv", "text/*")) },
                     onEnableSmsAutomation = {
@@ -406,8 +406,8 @@ private fun SchedulerScreen(
     saveContact: (ContactEntity) -> Unit,
     updateContact: (ContactEntity) -> Unit,
     deleteContact: (Long) -> Unit,
-    onBackup: () -> Unit,
-    onRestore: () -> Unit,
+    onBackup: (String) -> Unit,
+    onRestore: (String) -> Unit,
     onExportCsv: () -> Unit,
     onImportCsv: () -> Unit,
     onEnableSmsAutomation: () -> Unit,
@@ -786,7 +786,7 @@ private fun SchedulerScreen(
                     var backupPasswordVisible by remember { mutableStateOf(false) }
                     OutlinedTextField(
                         value = backupPasswordInput,
-                        onValueChange = { backupPasswordInput = it; backupPassword = it },
+                        onValueChange = { backupPasswordInput = it },
                         modifier = Modifier.fillMaxWidth(),
                         label = { Text("Encrypted backup password") },
                         supportingText = { Text("At least 8 characters. Remember this password; SAM cannot recover it.") },
@@ -796,8 +796,8 @@ private fun SchedulerScreen(
                     )
                     Text("Backups use AES-256-GCM encryption with a password-derived key. Existing plain JSON backups can still be restored.", color = Color.Gray, fontSize = 11.sp)
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth().padding(vertical = 10.dp)) {
-                        OutlinedButton(onClick = { if (backupPasswordInput.length < 8) securityMessage = "Set a backup password of at least 8 characters." else onBackup() }, modifier = Modifier.weight(1f)) { Text("Encrypted backup") }
-                        Button(onClick = { if (backupPasswordInput.length < 8) securityMessage = "Enter the password used for this backup." else onRestore() }, modifier = Modifier.weight(1f)) { Text("Restore backup") }
+                        OutlinedButton(onClick = { if (backupPasswordInput.length < 8) securityMessage = "Set a backup password of at least 8 characters." else onBackup(backupPasswordInput) }, modifier = Modifier.weight(1f)) { Text("Encrypted backup") }
+                        Button(onClick = { if (backupPasswordInput.length < 8) securityMessage = "Enter the password used for this backup." else onRestore(backupPasswordInput) }, modifier = Modifier.weight(1f)) { Text("Restore backup") }
                     }
                     if (securityMessage.isNotBlank()) Text(securityMessage, color = Purple, fontSize = 12.sp)
 

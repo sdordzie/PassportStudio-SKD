@@ -64,6 +64,31 @@ class MainActivity : ComponentActivity() {
             }.onFailure { Toast.makeText(this@MainActivity, "Backup failed.", Toast.LENGTH_LONG).show() }
         }
     }
+    private val csvExportLauncher = registerForActivityResult(ActivityResultContracts.CreateDocument("text/csv")) { uri ->
+        if (uri != null) lifecycleScope.launch {
+            runCatching {
+                val rows = AppDatabase.get(this@MainActivity).messageDao().getAllSnapshot()
+                fun csv(value: String): String = "\"" + value.replace("\"", "\"\"") + "\""
+                val header = listOf("ID", "Recipient", "Message", "Channel", "Scheduled At", "Status", "Repeat Rule", "Created At")
+                val lines = mutableListOf(header.joinToString(","))
+                val formatter = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.US)
+                rows.forEach { item ->
+                    lines += listOf(
+                        item.id.toString(), csv(item.recipient), csv(item.body), csv(item.channel),
+                        csv(formatter.format(Date(item.scheduledAt))), csv(item.status), csv(item.repeatRule),
+                        csv(formatter.format(Date(item.createdAt)))
+                    ).joinToString(",")
+                }
+                contentResolver.openOutputStream(uri)?.bufferedWriter()?.use { writer ->
+                    writer.write("\uFEFF")
+                    writer.write(lines.joinToString("\r\n"))
+                } ?: error("Could not create CSV file.")
+                Toast.makeText(this@MainActivity, "Message history exported to CSV.", Toast.LENGTH_LONG).show()
+            }.onFailure {
+                Toast.makeText(this@MainActivity, "CSV export failed.", Toast.LENGTH_LONG).show()
+            }
+        }
+    }
     private val restoreLauncher = registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         if (uri != null) lifecycleScope.launch {
             runCatching {
@@ -117,6 +142,7 @@ class MainActivity : ComponentActivity() {
                     messages = messages,
                     onBackup = { backupLauncher.launch("sam-message-scheduler-backup.json") },
                     onRestore = { restoreLauncher.launch(arrayOf("application/json", "text/*")) },
+                    onExportCsv = { csvExportLauncher.launch("sam-message-history.csv") },
                     save = { existingId, recipient, body, channel, scheduledAt, repeatRule ->
                         lifecycleScope.launch {
                             if (existingId != null) {
@@ -205,6 +231,7 @@ private fun SchedulerScreen(
     messages: List<MessageEntity>,
     onBackup: () -> Unit,
     onRestore: () -> Unit,
+    onExportCsv: () -> Unit,
     save: (Long?, String, String, String, Long, String) -> Unit,
     requestSmsPermission: (() -> Unit) -> Unit,
     remove: (Long) -> Unit,
@@ -432,10 +459,15 @@ private fun SchedulerScreen(
                     .verticalScroll(rememberScrollState()).padding(18.dp)) {
                     Text("Settings", fontSize = 24.sp, fontWeight = FontWeight.Bold, color = Navy)
                     Text("Data protection", fontWeight = FontWeight.SemiBold, color = Navy, modifier = Modifier.padding(top = 16.dp))
-                    Text("Export your scheduled messages to a backup file or restore them later.", color = Color.Gray)
+                    Text("Export your message history to a spreadsheet, or create and restore a full backup.", color = Color.Gray)
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth().padding(vertical = 10.dp)) {
                         OutlinedButton(onClick = onBackup, modifier = Modifier.weight(1f)) { Text("Export backup") }
                         Button(onClick = onRestore, modifier = Modifier.weight(1f)) { Text("Restore backup") }
+                    }
+                    OutlinedButton(onClick = onExportCsv, modifier = Modifier.fillMaxWidth()) {
+                        Icon(Icons.Default.FileDownload, contentDescription = null)
+                        Spacer(Modifier.width(8.dp))
+                        Text("Export message history (CSV)")
                     }
                     listOf(
                         "Notifications: allow reminders in Android settings.",

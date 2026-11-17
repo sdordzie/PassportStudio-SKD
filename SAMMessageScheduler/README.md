@@ -89,3 +89,11 @@ Target SDK: 35
 - Home dashboard includes total message count, messages created in the last seven days, failed messages and carrier-confirmed deliveries.
 - Completion-rate indicator and SMS/WhatsApp channel distribution.
 - Metrics are calculated from locally stored records; delivery counts depend on carrier delivery reports.
+
+ 
+## Phase 19 — Birthday and anniversary reminders (5.6.0)
+- Save optional birthdays and anniversaries on each contact in MM-dd format.
+- Daily background check posts reminders on matching dates, with yearly recurrence.
+- Per-contact, per-date deduplication prevents repeated alerts on the same day.
+- Reminders notify the user to prepare a greeting; the app does not silently send birthday or anniversary messages.
+- Room migration 4 to 5 adds optional contact date fields without deleting existing records.

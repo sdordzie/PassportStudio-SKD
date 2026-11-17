@@ -51,3 +51,12 @@ Package: com.bigsammy.sammessagescheduler
 Version: 5.0.0
 Minimum Android: 8.0 (API 26)
 Target SDK: 35
+
+
+## Phase 14 — Bulk messaging (v5.1.0)
+- Select multiple contacts from the SAM Contact Centre, including select-all and clear-all.
+- Compose one message and schedule a separate message for each selected contact.
+- Personalisation tokens: `{name}` and `{phone}`.
+- Choose SMS or WhatsApp and a shared future date/time.
+- SMS permission is requested before bulk schedules are created. WhatsApp messages open prepared chats for user review and confirmation.
+- Each recipient receives an independent scheduled record, so messages can be managed individually.

@@ -243,6 +243,7 @@ private fun SchedulerScreen(
     var showComposer by remember { mutableStateOf(false) }
     var editMessage by remember { mutableStateOf<MessageEntity?>(null) }
     var duplicateMode by remember { mutableStateOf(false) }
+    var pendingRemoval by remember { mutableStateOf<MessageEntity?>(null) }
     var searchText by remember { mutableStateOf("") }
     var statusFilter by remember { mutableStateOf("ALL") }
 
@@ -428,7 +429,7 @@ private fun SchedulerScreen(
                                             if (message.status in listOf("FAILED", "PERMISSION_REQUIRED", "AWAITING_USER")) {
                                                 TextButton(onClick = { retry(message) }) { Text("Retry") }
                                             }
-                                            TextButton(onClick = { remove(message.id) }) { Text("Cancel", color = Color.Red) }
+                                            TextButton(onClick = { pendingRemoval = message }) { Text("Cancel", color = Color.Red) }
                                         }
                                     }
                                 }
@@ -506,6 +507,25 @@ private fun SchedulerScreen(
                 showComposer = false
                 editMessage = null
                 duplicateMode = false
+            }
+        )
+    }
+
+    pendingRemoval?.let { message ->
+        AlertDialog(
+            onDismissRequest = { pendingRemoval = null },
+            title = { Text("Cancel this message?") },
+            text = {
+                Text("The scheduled message for ${message.recipient} will be removed from this device. This action cannot be undone.")
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    remove(message.id)
+                    pendingRemoval = null
+                }) { Text("Remove message", color = Color.Red) }
+            },
+            dismissButton = {
+                TextButton(onClick = { pendingRemoval = null }) { Text("Keep message") }
             }
         )
     }

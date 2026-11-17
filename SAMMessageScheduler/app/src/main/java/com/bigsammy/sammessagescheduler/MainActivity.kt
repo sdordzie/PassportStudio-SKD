@@ -46,6 +46,8 @@ class MainActivity : ComponentActivity() {
     private val notificationPermission =
         registerForActivityResult(ActivityResultContracts.RequestPermission()) { }
     private var pendingSmsAction: (() -> Unit)? = null
+    private var csvImportPreview by mutableStateOf<List<MessageEntity>>(emptyList())
+    private var csvImportInvalidCount by mutableStateOf(0)
     private val backupLauncher = registerForActivityResult(ActivityResultContracts.CreateDocument("application/json")) { uri ->
         if (uri != null) lifecycleScope.launch {
             runCatching {
@@ -86,6 +88,50 @@ class MainActivity : ComponentActivity() {
                 Toast.makeText(this@MainActivity, "Message history exported to CSV.", Toast.LENGTH_LONG).show()
             }.onFailure {
                 Toast.makeText(this@MainActivity, "CSV export failed.", Toast.LENGTH_LONG).show()
+            }
+        }
+    }
+
+    private val csvImportLauncher = registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+        if (uri != null) lifecycleScope.launch {
+            runCatching {
+                val raw = contentResolver.openInputStream(uri)?.bufferedReader()?.use { it.readText() }
+                    ?: error("Could not read CSV file.")
+                val rows = parseCsv(raw)
+                require(rows.size >= 2) { "CSV must contain a header and at least one data row." }
+                val header = rows.first().map { it.trim().removePrefix("\uFEFF").lowercase(Locale.US) }
+                val recipientIndex = header.indexOf("recipient")
+                val bodyIndex = header.indexOfFirst { it == "message" || it == "body" }
+                val channelIndex = header.indexOf("channel")
+                val dateIndex = header.indexOf("scheduled at")
+                val repeatIndex = header.indexOf("repeat rule")
+                require(recipientIndex >= 0 && bodyIndex >= 0 && channelIndex >= 0 && dateIndex >= 0) {
+                    "Required columns: Recipient, Message, Channel and Scheduled At."
+                }
+                val formatter = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.US).apply { isLenient = false }
+                var invalid = 0
+                val valid = rows.drop(1).mapNotNull { row ->
+                    runCatching {
+                        val recipient = row.getOrElse(recipientIndex) { "" }.trim()
+                        val body = row.getOrElse(bodyIndex) { "" }.trim()
+                        val channel = row.getOrElse(channelIndex) { "" }.trim()
+                        val scheduledAt = formatter.parse(row.getOrElse(dateIndex) { "" }.trim())!!.time
+                        val repeat = if (repeatIndex >= 0) row.getOrElse(repeatIndex) { "NONE" }.trim().uppercase(Locale.US) else "NONE"
+                        require(recipient.isNotBlank() && body.isNotBlank())
+                        require(recipient.count { it.isDigit() } >= 7)
+                        require(channel.equals("SMS", true) || channel.equals("WhatsApp", true))
+                        require(repeat in listOf("NONE", "DAILY", "WEEKLY", "MONTHLY"))
+                        require(scheduledAt > System.currentTimeMillis())
+                        MessageEntity(recipient = recipient, body = body,
+                            channel = if (channel.equals("SMS", true)) "SMS" else "WhatsApp",
+                            scheduledAt = scheduledAt, repeatRule = repeat)
+                    }.getOrElse { invalid++; null }
+                }
+                require(valid.isNotEmpty()) { "No valid future messages were found in this CSV." }
+                csvImportPreview = valid
+                csvImportInvalidCount = invalid
+            }.onFailure {
+                Toast.makeText(this@MainActivity, it.message ?: "CSV import failed.", Toast.LENGTH_LONG).show()
             }
         }
     }
@@ -143,6 +189,21 @@ class MainActivity : ComponentActivity() {
                     onBackup = { backupLauncher.launch("sam-message-scheduler-backup.json") },
                     onRestore = { restoreLauncher.launch(arrayOf("application/json", "text/*")) },
                     onExportCsv = { csvExportLauncher.launch("sam-message-history.csv") },
+                    onImportCsv = { csvImportLauncher.launch(arrayOf("text/csv", "text/*")) },
+                    importPreview = csvImportPreview,
+                    invalidImportCount = csvImportInvalidCount,
+                    onConfirmImport = {
+                        lifecycleScope.launch {
+                            val daoForImport = AppDatabase.get(this@MainActivity).messageDao()
+                            val ids = csvImportPreview.map { daoForImport.insert(it) }
+                            csvImportPreview.forEachIndexed { index, item ->
+                                MessageScheduler.schedule(this@MainActivity, ids[index], item.scheduledAt)
+                            }
+                            Toast.makeText(this@MainActivity, "${ids.size} messages imported and scheduled.", Toast.LENGTH_LONG).show()
+                            csvImportPreview = emptyList()
+                        }
+                    },
+                    onDismissImport = { csvImportPreview = emptyList() },
                     save = { existingId, recipient, body, channel, scheduledAt, repeatRule ->
                         lifecycleScope.launch {
                             if (existingId != null) {
@@ -225,6 +286,35 @@ class MainActivity : ComponentActivity() {
     }
 }
 
+
+private fun parseCsv(content: String): List<List<String>> {
+    val result = mutableListOf<List<String>>()
+    val row = mutableListOf<String>()
+    val cell = StringBuilder()
+    var quoted = false
+    var i = 0
+    while (i < content.length) {
+        val c = content[i]
+        when {
+            c == '"' && quoted && i + 1 < content.length && content[i + 1] == '"' -> { cell.append('"'); i++ }
+            c == '"' -> quoted = !quoted
+            c == ',' && !quoted -> { row += cell.toString(); cell.setLength(0) }
+            (c == '\n' || c == '\r') && !quoted -> {
+                if (c == '\r' && i + 1 < content.length && content[i + 1] == '\n') i++
+                row += cell.toString(); cell.setLength(0)
+                if (row.any { it.isNotBlank() }) result += row.toList()
+                row.clear()
+            }
+            else -> cell.append(c)
+        }
+        i++
+    }
+    row += cell.toString()
+    if (row.any { it.isNotBlank() }) result += row.toList()
+    require(!quoted) { "CSV contains an unclosed quoted field." }
+    return result
+}
+
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun SchedulerScreen(
@@ -232,6 +322,11 @@ private fun SchedulerScreen(
     onBackup: () -> Unit,
     onRestore: () -> Unit,
     onExportCsv: () -> Unit,
+    onImportCsv: () -> Unit,
+    importPreview: List<MessageEntity>,
+    invalidImportCount: Int,
+    onConfirmImport: () -> Unit,
+    onDismissImport: () -> Unit,
     save: (Long?, String, String, String, Long, String) -> Unit,
     requestSmsPermission: (() -> Unit) -> Unit,
     remove: (Long) -> Unit,
@@ -478,6 +573,12 @@ private fun SchedulerScreen(
                         OutlinedButton(onClick = onBackup, modifier = Modifier.weight(1f)) { Text("Export backup") }
                         Button(onClick = onRestore, modifier = Modifier.weight(1f)) { Text("Restore backup") }
                     }
+
+                    OutlinedButton(onClick = onImportCsv, modifier = Modifier.fillMaxWidth().padding(top = 8.dp)) {
+                        Icon(Icons.Default.FileUpload, contentDescription = null)
+                        Spacer(Modifier.width(8.dp))
+                        Text("Import messages from CSV")
+                    }
                     OutlinedButton(onClick = onExportCsv, modifier = Modifier.fillMaxWidth()) {
                         Icon(Icons.Default.FileDownload, contentDescription = null)
                         Spacer(Modifier.width(8.dp))
@@ -508,6 +609,29 @@ private fun SchedulerScreen(
                 editMessage = null
                 duplicateMode = false
             }
+        )
+    }
+
+
+    if (importPreview.isNotEmpty()) {
+        AlertDialog(
+            onDismissRequest = onDismissImport,
+            title = { Text("Review CSV import") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text("${importPreview.size} valid future message(s) are ready to import.")
+                    if (invalidImportCount > 0) Text("$invalidImportCount row(s) will be skipped because their data is invalid or their scheduled time has passed.", color = Color(0xFF9A4D00))
+                    Text("Preview", fontWeight = FontWeight.SemiBold)
+                    importPreview.take(4).forEach { item ->
+                        Text("${item.recipient} • ${item.channel}", fontWeight = FontWeight.SemiBold, fontSize = 13.sp)
+                        Text(item.body, maxLines = 2, fontSize = 12.sp, color = Color.Gray)
+                        Text(SimpleDateFormat("dd MMM yyyy, HH:mm", Locale.getDefault()).format(Date(item.scheduledAt)), fontSize = 11.sp, color = Purple)
+                    }
+                    if (importPreview.size > 4) Text("And ${importPreview.size - 4} more…", fontSize = 12.sp)
+                }
+            },
+            confirmButton = { Button(onClick = onConfirmImport) { Text("Import ${importPreview.size}") } },
+            dismissButton = { TextButton(onClick = onDismissImport) { Text("Cancel") } }
         )
     }
 

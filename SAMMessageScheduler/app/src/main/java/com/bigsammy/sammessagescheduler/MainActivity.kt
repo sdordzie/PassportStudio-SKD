@@ -165,6 +165,18 @@ class MainActivity : ComponentActivity() {
                             dao.update(message.copy(status = "COMPLETED"))
                         }
                     },
+                    togglePause = { message ->
+                        lifecycleScope.launch {
+                            if (message.status == "SCHEDULED") {
+                                MessageScheduler.cancel(this@MainActivity, message.id)
+                                dao.update(message.copy(status = "PAUSED"))
+                            } else if (message.status == "PAUSED") {
+                                val resumeAt = maxOf(message.scheduledAt, System.currentTimeMillis() + 5_000L)
+                                dao.update(message.copy(status = "SCHEDULED", scheduledAt = resumeAt))
+                                MessageScheduler.schedule(this@MainActivity, message.id, resumeAt)
+                            }
+                        }
+                    },
                     retry = { message ->
                         val scheduleAgain: () -> Unit = {
                             lifecycleScope.launch {
@@ -197,6 +209,7 @@ private fun SchedulerScreen(
     requestSmsPermission: (() -> Unit) -> Unit,
     remove: (Long) -> Unit,
     complete: (MessageEntity) -> Unit,
+    togglePause: (MessageEntity) -> Unit,
     retry: (MessageEntity) -> Unit
 ) {
     var page by remember { mutableStateOf("Home") }
@@ -342,7 +355,7 @@ private fun SchedulerScreen(
                         horizontalArrangement = Arrangement.spacedBy(6.dp),
                         verticalArrangement = Arrangement.spacedBy(4.dp)
                     ) {
-                        listOf("ALL" to "All", "SCHEDULED" to "Upcoming", "SENT" to "Sent", "FAILED" to "Failed", "ATTENTION" to "Needs attention").forEach { (key, label) ->
+                        listOf("ALL" to "All", "SCHEDULED" to "Upcoming", "PAUSED" to "Paused", "SENT" to "Sent", "FAILED" to "Failed", "ATTENTION" to "Needs attention").forEach { (key, label) ->
                             FilterChip(selected = statusFilter == key, onClick = { statusFilter = key }, label = { Text(label, fontSize = 11.sp) })
                         }
                     }
@@ -365,7 +378,12 @@ private fun SchedulerScreen(
                                         ) {
                                             if (message.status == "SCHEDULED") {
                                                 TextButton(onClick = { editMessage = message; showComposer = true }) { Text("Edit") }
+                                                TextButton(onClick = { togglePause(message) }) { Text("Pause") }
                                                 TextButton(onClick = { complete(message) }) { Text("Mark done") }
+                                            }
+                                            if (message.status == "PAUSED") {
+                                                TextButton(onClick = { togglePause(message) }) { Text("Resume") }
+                                                TextButton(onClick = { editMessage = message; showComposer = true }) { Text("Edit") }
                                             }
                                             if (message.status in listOf("FAILED", "PERMISSION_REQUIRED", "AWAITING_USER")) {
                                                 TextButton(onClick = { retry(message) }) { Text("Retry") }

@@ -75,3 +75,11 @@ Target SDK: 35
 - Android sent/delivery callbacks update the saved message and show a notification when the mobile network reports a result.
 - Delivery reports depend on carrier and network support; a missing delivery callback is not proof of failure.
 - Change the preferred SMS SIM in Android system SIM settings. SAM does not silently switch SIMs or override carrier defaults.
+
+
+## Phase 17 — Automatic replies and SMS forwarding (5.4.0)
+- Optional automatic replies to incoming SMS, for all messages or keyword matches.
+- Optional forwarding of incoming SMS content to a configured phone number.
+- Both controls are off by default under Settings → Incoming SMS automation.
+- Requires Android RECEIVE_SMS and SEND_SMS permissions; carrier charges may apply.
+- Forwarding copies message content to the chosen destination. This feature applies to SMS, not WhatsApp.

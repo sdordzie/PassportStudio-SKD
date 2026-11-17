@@ -60,3 +60,10 @@ Target SDK: 35
 - Choose SMS or WhatsApp and a shared future date/time.
 - SMS permission is requested before bulk schedules are created. WhatsApp messages open prepared chats for user review and confirmation.
 - Each recipient receives an independent scheduled record, so messages can be managed individually.
+
+
+## Phase 15 — Advanced scheduling and quiet hours (v5.2.0)
+- Configure daily quiet hours with 24-hour start and end times, including overnight windows.
+- Scheduled messages due during quiet hours are deferred until the quiet window ends.
+- The original scheduled timestamp is preserved, so recurring daily, weekly and monthly schedules keep their intended cadence.
+- Existing daily, weekly and monthly repeat options continue to schedule the next occurrence.

@@ -48,7 +48,7 @@ WhatsApp messages are not silently sent; SAM leaves the final Send action to the
 GitHub Actions builds a debug APK with JDK 17, Gradle 8.9 and Android SDK.
 
 Package: com.bigsammy.sammessagescheduler
-Version: 5.0.0
+Version: 6.1.0
 Minimum Android: 8.0 (API 26)
 Target SDK: 35
 
@@ -135,3 +135,13 @@ Target SDK: 35
 - Filter SMS forwarding by an optional keyword, or leave the filter blank to forward all incoming SMS.
 - Existing single-keyword automatic reply settings are retained as a compatibility fallback when no multi-rule list has been saved.
 - Automation remains opt-in and requires Android SMS permissions. SMS charges may apply; forwarding shares message content with the configured destination.
+
+
+## Phase 24 — Reliability, mobile UI and release preparation (v6.1.0)
+- Refined dashboard statistic cards with more compact spacing for mobile screens.
+- Scheduled-message search now includes message category as well as recipient, body and channel.
+- Backup and restore passwords are cleared from the Activity's in-memory field as soon as the Android file picker returns, including cancellation paths.
+- Disabled Android's automatic app-data backup so the app's private database and settings are not silently copied outside the explicit encrypted backup workflow.
+- Use Settings → Cloud backup to create a password-protected full backup before moving SAM to another phone. Restore it with the same password.
+- Build version code: 25; version name: 6.1.0.
+- Release verification is based on the GitHub Actions Android build. Real-device SMS, WhatsApp hand-off, biometric prompts, notification timing and manufacturer battery behaviour still require testing on supported devices.

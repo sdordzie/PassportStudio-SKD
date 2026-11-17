@@ -524,7 +524,7 @@ private fun SchedulerScreen(
                         .padding(18.dp)
                 ) {
                     Text("Good day 👋", fontSize = 25.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
-                    Text("Your messages, organised and on time.", color = Color.Gray)
+                    Text("Your messages, organised and on time.", color = MaterialTheme.colorScheme.onSurfaceVariant)
                     Row(
                         modifier = Modifier.fillMaxWidth().padding(vertical = 18.dp),
                         horizontalArrangement = Arrangement.spacedBy(12.dp)
@@ -536,28 +536,28 @@ private fun SchedulerScreen(
                     if (attentionCount > 0) {
                         Card(
                             modifier = Modifier.fillMaxWidth().padding(bottom = 12.dp),
-                            colors = CardDefaults.cardColors(containerColor = Color(0xFFFFF1E8))
+                            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.errorContainer)
                         ) {
                             Row(Modifier.padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
-                                Icon(Icons.Default.Warning, contentDescription = null, tint = Color(0xFF9A4D00))
+                                Icon(Icons.Default.Warning, contentDescription = null, tint = MaterialTheme.colorScheme.error)
                                 Spacer(Modifier.width(10.dp))
                                 Column(Modifier.weight(1f)) {
                                     Text("$attentionCount message(s) need attention", fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onSurface)
-                                    Text("Review permission issues, failed actions or WhatsApp messages awaiting you.", fontSize = 12.sp, color = Color.DarkGray)
+                                    Text("Review permission issues, failed actions or WhatsApp messages awaiting you.", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                                 }
                                 TextButton(onClick = { page = "Scheduled"; statusFilter = "ATTENTION" }) { Text("Review") }
                             }
                         }
                     }
                     Card(
-                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.onSurface),
+                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer),
                         shape = RoundedCornerShape(22.dp)
                     ) {
                         Column(Modifier.padding(20.dp)) {
-                            Text("Make every message count", fontSize = 19.sp, fontWeight = FontWeight.Bold, color = Color.White)
+                            Text("Make every message count", fontSize = 19.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onPrimaryContainer)
                             Text(
                                 "Prepare an SMS or WhatsApp reminder in seconds.",
-                                color = Color.White.copy(alpha = 0.8f),
+                                color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.82f),
                                 modifier = Modifier.padding(top = 6.dp)
                             )
                             Button(
@@ -579,7 +579,7 @@ private fun SchedulerScreen(
                     val whatsappCount = messages.count { it.channel == "WhatsApp" }
                     val recentCount = messages.count { it.createdAt >= System.currentTimeMillis() - 7L * 24 * 60 * 60 * 1000 }
                     Text("MESSAGE REPORTS & ANALYTICS", fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface, modifier = Modifier.padding(top = 22.dp, bottom = 8.dp))
-                    Card(colors = CardDefaults.cardColors(containerColor = Color.White), modifier = Modifier.fillMaxWidth()) {
+                    Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface), modifier = Modifier.fillMaxWidth()) {
                         Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                             Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
                                 Stat("Total messages", totalCount.toString(), Modifier.weight(1f))
@@ -592,11 +592,11 @@ private fun SchedulerScreen(
                             Text("Completion rate", fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onSurface)
                             val completionRate = if (totalCount == 0) 0f else completedCount.toFloat() / totalCount.toFloat()
                             LinearProgressIndicator(progress = completionRate, modifier = Modifier.fillMaxWidth(), color = Purple)
-                            Text("${(completionRate * 100).toInt()}% completed • $completedCount of $totalCount messages", fontSize = 12.sp, color = Color.Gray)
+                            Text("${(completionRate * 100).toInt()}% completed • $completedCount of $totalCount messages", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                             Text("Channel distribution", fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onSurface)
-                            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) { Text("SMS", color = Color.Gray); Text("$smsCount", fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onSurface) }
-                            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) { Text("WhatsApp", color = Color.Gray); Text("$whatsappCount", fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onSurface) }
-                            Text("Delivery reports depend on your mobile network. A missing carrier delivery report does not necessarily mean a message failed.", fontSize = 11.sp, color = Color.Gray)
+                            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) { Text("SMS", color = MaterialTheme.colorScheme.onSurfaceVariant); Text("$smsCount", fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onSurface) }
+                            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) { Text("WhatsApp", color = MaterialTheme.colorScheme.onSurfaceVariant); Text("$whatsappCount", fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onSurface) }
+                            Text("Delivery reports depend on your mobile network. A missing carrier delivery report does not necessarily mean a message failed.", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         }
                     }
 
@@ -645,7 +645,7 @@ private fun SchedulerScreen(
                     }
                     if (visibleMessages.isEmpty()) {
                         Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                            Text("No messages match your search.", color = Color.Gray)
+                            Text("No messages match your search.", color = MaterialTheme.colorScheme.onSurfaceVariant)
                         }
                     } else {
                         LazyColumn(
@@ -653,7 +653,7 @@ private fun SchedulerScreen(
                             verticalArrangement = Arrangement.spacedBy(10.dp)
                         ) {
                             items(visibleMessages, key = { it.id }) { message ->
-                                Card(colors = CardDefaults.cardColors(containerColor = Color.White)) {
+                                Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
                                     Column(Modifier.padding(12.dp)) {
                                         MessageCard(message)
                                         FlowRow(
@@ -735,7 +735,7 @@ private fun SchedulerScreen(
                         }
                     }
                     if (messages.isEmpty()) {
-                        item { Text("No messages scheduled yet.", color = Color.Gray) }
+                        item { Text("No messages scheduled yet.", color = MaterialTheme.colorScheme.onSurfaceVariant) }
                     }
                 }
             }
@@ -771,7 +771,7 @@ private fun SchedulerScreen(
                     }, modifier = Modifier.fillMaxWidth()) { Text("Save quiet hours") }
                     if (quietMessage.isNotBlank()) Text(quietMessage, color = Purple, fontSize = 12.sp)
                     Text("Incoming SMS automation", fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onSurface, modifier = Modifier.padding(top = 20.dp))
-                    Text("Set optional automatic replies and forward incoming SMS messages to a number you choose.", color = Color.Gray, fontSize = 12.sp)
+                    Text("Set optional automatic replies and forward incoming SMS messages to a number you choose.", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 12.sp)
                     val automationPrefs = remember { context.getSharedPreferences("sam_sms_automation", android.content.Context.MODE_PRIVATE) }
                     var autoReplyEnabled by remember { mutableStateOf(automationPrefs.getBoolean("auto_reply_enabled", false)) }
                     var replyRulesText by remember {
@@ -796,7 +796,7 @@ private fun SchedulerScreen(
                         supportingText = { Text("One rule per line: keyword => reply. Use an empty keyword for a default reply, preferably as the last rule.") },
                         minLines = 4
                     )
-                    Text("The first matching rule is used. Each sender receives at most one automatic reply from the same rule every 12 hours.", color = Color.Gray, fontSize = 11.sp)
+                    Text("The first matching rule is used. Each sender receives at most one automatic reply from the same rule every 12 hours.", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 11.sp)
                     Divider(modifier = Modifier.padding(vertical = 6.dp))
                     Row(verticalAlignment = Alignment.CenterVertically) { Checkbox(forwardingEnabled, { forwardingEnabled = it }); Text("Enable SMS forwarding") }
                     OutlinedTextField(forwardNumber, { forwardNumber = it }, modifier = Modifier.fillMaxWidth(), label = { Text("Forward incoming SMS to") }, singleLine = true)
@@ -832,7 +832,7 @@ private fun SchedulerScreen(
                         }
                     }, modifier = Modifier.fillMaxWidth()) { Text("Save SMS automation rules") }
                     if (automationMessage.isNotBlank()) Text(automationMessage, color = Purple, fontSize = 12.sp)
-                    Text("Requires incoming SMS and SMS sending permissions. Carrier charges may apply. Forwarding copies message content to the destination number.", color = Color.Gray, fontSize = 11.sp)
+                    Text("Requires incoming SMS and SMS sending permissions. Carrier charges may apply. Forwarding copies message content to the destination number.", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 11.sp)
                     Text("App security", fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onSurface, modifier = Modifier.padding(top = 18.dp))
                     val securityPrefs = remember { context.getSharedPreferences("sam_app_security", android.content.Context.MODE_PRIVATE) }
                     var biometricEnabled by remember { mutableStateOf(securityPrefs.getBoolean("biometric_enabled", false)) }
@@ -840,7 +840,7 @@ private fun SchedulerScreen(
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Column(Modifier.weight(1f)) {
                             Text("Require biometric / device PIN", fontWeight = FontWeight.Medium, color = MaterialTheme.colorScheme.onSurface)
-                            Text("Request fingerprint, face unlock, or Android screen-lock PIN when opening SAM.", color = Color.Gray, fontSize = 11.sp)
+                            Text("Request fingerprint, face unlock, or Android screen-lock PIN when opening SAM.", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 11.sp)
                         }
                         Switch(checked = biometricEnabled, onCheckedChange = { enabled ->
                             if (enabled) {
@@ -872,7 +872,7 @@ private fun SchedulerScreen(
                         visualTransformation = if (backupPasswordVisible) androidx.compose.ui.text.input.VisualTransformation.None else androidx.compose.ui.text.input.PasswordVisualTransformation(),
                         trailingIcon = { IconButton(onClick = { backupPasswordVisible = !backupPasswordVisible }) { Icon(if (backupPasswordVisible) Icons.Default.VisibilityOff else Icons.Default.Visibility, contentDescription = "Toggle password visibility") } }
                     )
-                    Text("Full encrypted backup includes messages, categories, contacts, groups, birthdays and anniversaries. Choose Google Drive or another cloud-storage provider in the Android file picker. Restore on another device using the same password. Existing message-only backups remain supported.", color = Color.Gray, fontSize = 11.sp)
+                    Text("Full encrypted backup includes messages, categories, contacts, groups, birthdays and anniversaries. Choose Google Drive or another cloud-storage provider in the Android file picker. Restore on another device using the same password. Existing message-only backups remain supported.", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 11.sp)
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth().padding(vertical = 10.dp)) {
                         OutlinedButton(onClick = { if (backupPasswordInput.length < 8) securityMessage = "Set a backup password of at least 8 characters." else onBackup(backupPasswordInput) }, modifier = Modifier.weight(1f)) { Text("Cloud backup") }
                         Button(onClick = { if (backupPasswordInput.length < 8) securityMessage = "Enter the password used for this backup." else onRestore(backupPasswordInput) }, modifier = Modifier.weight(1f)) { Text("Restore cloud backup") }
@@ -930,7 +930,7 @@ private fun SchedulerScreen(
                     Text("Preview", fontWeight = FontWeight.SemiBold)
                     importPreview.take(4).forEach { item ->
                         Text("${item.recipient} • ${item.channel}", fontWeight = FontWeight.SemiBold, fontSize = 13.sp)
-                        Text(item.body, maxLines = 2, fontSize = 12.sp, color = Color.Gray)
+                        Text(item.body, maxLines = 2, fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         Text(SimpleDateFormat("dd MMM yyyy, HH:mm", Locale.getDefault()).format(Date(item.scheduledAt)), fontSize = 11.sp, color = Purple)
                     }
                     if (importPreview.size > 4) Text("And ${importPreview.size - 4} more…", fontSize = 12.sp)
@@ -998,7 +998,7 @@ private fun BulkComposer(
                         })
                         Column(Modifier.weight(1f)) {
                             Text(contact.name, fontWeight = FontWeight.Medium, color = MaterialTheme.colorScheme.onSurface)
-                            Text("${contact.phone} • ${contact.groupName}", fontSize = 11.sp, color = Color.Gray)
+                            Text("${contact.phone} • ${contact.groupName}", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         }
                     }
                 }
@@ -1011,7 +1011,7 @@ private fun BulkComposer(
                 OutlinedTextField(date, { date = it }, modifier = Modifier.fillMaxWidth(), label = { Text("Date (YYYY-MM-DD)") }, singleLine = true)
                 OutlinedTextField(time, { time = it }, modifier = Modifier.fillMaxWidth(), label = { Text("Time (24-hour HH:mm)") }, singleLine = true)
                 if (error.isNotBlank()) Text(error, color = Color.Red)
-                Text("Each recipient gets a separate scheduled message. WhatsApp requires you to review and tap Send when the chat opens.", fontSize = 11.sp, color = Color.Gray)
+                Text("Each recipient gets a separate scheduled message. WhatsApp requires you to review and tap Send when the chat opens.", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
         },
         confirmButton = {
@@ -1055,7 +1055,7 @@ private fun ContactsPage(
         Row(verticalAlignment = Alignment.CenterVertically) {
             Column(Modifier.weight(1f)) {
                 Text("Contact centre", fontSize = 24.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
-                Text("${contacts.size} saved contact(s)", color = Color.Gray, fontSize = 12.sp)
+                Text("${contacts.size} saved contact(s)", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 12.sp)
             }
             OutlinedButton(onClick = onPickContact) { Icon(Icons.Default.ContactPhone, contentDescription = null); Spacer(Modifier.width(6.dp)); Text("From phone") }
         }
@@ -1064,15 +1064,15 @@ private fun ContactsPage(
             groups.forEach { group -> FilterChip(selected = selectedGroup == group, onClick = { selectedGroup = group }, label = { Text(group) }) }
         }
         if (visible.isEmpty()) {
-            Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { Text(if (contacts.isEmpty()) "No contacts saved yet. Add one from your phone." else "No contacts match your search.", color = Color.Gray) }
+            Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { Text(if (contacts.isEmpty()) "No contacts saved yet. Add one from your phone." else "No contacts match your search.", color = MaterialTheme.colorScheme.onSurfaceVariant) }
         } else {
             LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 items(visible, key = { it.id }) { contact ->
-                    Card(colors = CardDefaults.cardColors(containerColor = Color.White), modifier = Modifier.fillMaxWidth()) {
+                    Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface), modifier = Modifier.fillMaxWidth()) {
                         Row(Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
                             Column(Modifier.weight(1f)) {
                                 Text(contact.name, fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onSurface)
-                                Text(contact.phone, color = Color.Gray, fontSize = 13.sp)
+                                Text(contact.phone, color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 13.sp)
                                 Text(contact.groupName, color = Purple, fontSize = 11.sp)
                             }
                             TextButton(onClick = { editing = contact; showEditor = true }) { Text("Edit") }
@@ -1147,12 +1147,12 @@ private fun ContactsPage(
 private fun Stat(title: String, value: String, modifier: Modifier = Modifier) {
     Card(
         modifier = modifier,
-        colors = CardDefaults.cardColors(containerColor = Color.White),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
         shape = RoundedCornerShape(18.dp)
     ) {
         Column(Modifier.padding(12.dp)) {
             Text(value, fontSize = 24.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
-            Text(title, color = Color.Gray)
+            Text(title, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
     }
 }
@@ -1172,7 +1172,7 @@ private fun MessageCard(message: MessageEntity) {
         Spacer(Modifier.width(10.dp))
         Column(Modifier.weight(1f)) {
             Text(message.recipient, fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onSurface)
-            Text(message.body, maxLines = 2, fontSize = 12.sp, color = Color.Gray)
+            Text(message.body, maxLines = 2, fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
             Text(message.category, fontSize = 10.sp, color = Purple)
             Text(
                 "${message.channel} • " + SimpleDateFormat("dd MMM yyyy, HH:mm", Locale.getDefault())
@@ -1182,8 +1182,8 @@ private fun MessageCard(message: MessageEntity) {
             )
         }
         Column(horizontalAlignment = Alignment.End) {
-            Text(message.status.lowercase(), fontSize = 10.sp, color = Color.Gray)
-            if (message.channel == "SMS") Text(message.deliveryStatus.replace("_", " ").lowercase(), fontSize = 9.sp, color = if (message.deliveryStatus == "DELIVERED") Color(0xFF237A45) else Color.Gray)
+            Text(message.status.lowercase(), fontSize = 10.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            if (message.channel == "SMS") Text(message.deliveryStatus.replace("_", " ").lowercase(), fontSize = 9.sp, color = if (message.deliveryStatus == "DELIVERED") Color(0xFF237A45) else MaterialTheme.colorScheme.onSurfaceVariant)
         }
     }
 }
@@ -1292,7 +1292,7 @@ private fun Composer(
                 Text(
                     "SMS is submitted automatically with permission. WhatsApp opens a prepared chat for your final confirmation.",
                     fontSize = 11.sp,
-                    color = Color.Gray
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
         },

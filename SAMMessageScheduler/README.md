@@ -126,3 +126,12 @@ Target SDK: 35
 - Existing message-only SAM backups remain compatible. Restored future scheduled messages are re-queued with WorkManager.
 - Backup encryption uses the existing AES-256-GCM and PBKDF2 password-derived key protection. Keep the password safe; it cannot be recovered by SAM.
 - Cloud file selection and upload/download are handled by Android and the selected storage provider. This phase provides user-directed cloud backup and restore, not continuous background synchronisation.
+
+
+## Phase 23 — Advanced SMS automation rules (v6.0.0)
+- Configure multiple keyword-based automatic reply rules, evaluated in the order entered; the first matching rule is used.
+- Add an optional default reply using a blank keyword rule at the end of the list.
+- Apply a 12-hour per-sender, per-rule cooldown to reduce repeated automatic replies.
+- Filter SMS forwarding by an optional keyword, or leave the filter blank to forward all incoming SMS.
+- Existing single-keyword automatic reply settings are retained as a compatibility fallback when no multi-rule list has been saved.
+- Automation remains opt-in and requires Android SMS permissions. SMS charges may apply; forwarding shares message content with the configured destination.

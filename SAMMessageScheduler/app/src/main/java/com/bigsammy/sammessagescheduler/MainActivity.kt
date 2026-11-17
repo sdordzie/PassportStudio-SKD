@@ -462,27 +462,22 @@ private fun Composer(
                     label = { Text("Message") },
                     minLines = 3
                 )
-                Row(
+                OutlinedTextField(
+                    value = date,
+                    onValueChange = { date = it },
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    OutlinedTextField(
-                        value = date,
-                        onValueChange = { date = it },
-                        modifier = Modifier.weight(1.15f),
-                        label = { Text("Date") },
-                        supportingText = { Text("YYYY-MM-DD") },
-                        singleLine = true
-                    )
-                    OutlinedTextField(
-                        value = time,
-                        onValueChange = { time = it },
-                        modifier = Modifier.weight(0.85f),
-                        label = { Text("Time") },
-                        supportingText = { Text("HH:mm") },
-                        singleLine = true
-                    )
-                }
+                    label = { Text("Date") },
+                    supportingText = { Text("Enter as YYYY-MM-DD") },
+                    singleLine = true
+                )
+                OutlinedTextField(
+                    value = time,
+                    onValueChange = { time = it },
+                    modifier = Modifier.fillMaxWidth(),
+                    label = { Text("Time") },
+                    supportingText = { Text("24-hour format, HH:mm") },
+                    singleLine = true
+                )
                 if (error.isNotBlank()) Text(error, color = Color.Red)
                 Text(
                     "SMS is submitted automatically with permission. WhatsApp opens a prepared chat for your final confirmation.",

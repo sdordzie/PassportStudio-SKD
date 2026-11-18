@@ -144,8 +144,13 @@ class MainActivity : FragmentActivity() {
             }
             override fun onAuthenticationError(errorCode: Int, errString: CharSequence) {
                 securityPromptActive = false
-                if (errorCode != BiometricPrompt.ERROR_USER_CANCELED && errorCode != BiometricPrompt.ERROR_NEGATIVE_BUTTON) {
-                    Toast.makeText(this@MainActivity, "App authentication was not completed.", Toast.LENGTH_LONG).show()
+                if (!securityAuthenticated && getSharedPreferences("sam_app_security", android.content.Context.MODE_PRIVATE)
+                        .getBoolean("biometric_enabled", false)) {
+                    if (errorCode != BiometricPrompt.ERROR_USER_CANCELED && errorCode != BiometricPrompt.ERROR_NEGATIVE_BUTTON) {
+                        Toast.makeText(this@MainActivity, "App authentication was not completed.", Toast.LENGTH_LONG).show()
+                    }
+                    // Do not leave protected content visible after a cancelled or failed unlock.
+                    finish()
                 }
             }
             override fun onAuthenticationFailed() {
@@ -315,7 +320,7 @@ class MainActivity : FragmentActivity() {
                         val repeat = if (repeatIndex >= 0) row.getOrElse(repeatIndex) { "NONE" }.trim().uppercase(Locale.US) else "NONE"
                         require(recipient.isNotBlank() && body.isNotBlank())
                         require(recipient.count { it.isDigit() } >= 7)
-                        require(channel.equals("SMS", true) || channel.equals("WhatsApp", true))
+                        require(channel.equals("SMS", true) || channel.equals("WhatsApp", true) || channel.equals("Social", true))
                         require(repeat in listOf("NONE", "DAILY", "WEEKLY", "MONTHLY", "YEARLY"))
                         require(scheduledAt > System.currentTimeMillis())
                         MessageEntity(recipient = recipient, body = body,
@@ -1238,7 +1243,10 @@ private fun SchedulerScreen(
                                             Text(stateLabel, fontSize = 10.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.secondary)
                                              val campaignPosts = messages.filter { it.channel == "Social" && it.campaignId == campaign.id }
                                              val scheduledCampaignPosts = campaignPosts.count { it.status == "SCHEDULED" }
-                                             Text("${campaignPosts.size} linked post(s) • $scheduledCampaignPosts scheduled • ${campaignPosts.size - scheduledCampaignPosts} processed", fontSize = 10.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                             val awaitingCampaignPosts = campaignPosts.count { it.status == "AWAITING_USER" }
+                                             val failedCampaignPosts = campaignPosts.count { it.status == "FAILED" || it.status == "PERMISSION_REQUIRED" }
+                                             val completedCampaignPosts = campaignPosts.count { it.status == "COMPLETED" || it.status == "SENT" }
+                                             Text("${campaignPosts.size} linked • $scheduledCampaignPosts scheduled • $awaitingCampaignPosts awaiting review • $completedCampaignPosts completed • $failedCampaignPosts failed", fontSize = 10.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                                         }
                                         IconButton(onClick = { persistCampaigns(socialCampaigns.filterNot { it.id == campaign.id }) }) {
                                             Icon(Icons.Default.DeleteOutline, contentDescription = "Delete campaign", tint = MaterialTheme.colorScheme.error)

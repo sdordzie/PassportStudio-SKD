@@ -838,7 +838,9 @@ private fun SchedulerScreen(
             "Scheduled" -> {
                 val visibleMessages = messages.filter { message ->
                     (statusFilter == "ALL" || message.status == statusFilter ||
-                        (statusFilter == "ATTENTION" && message.status in listOf("FAILED", "PERMISSION_REQUIRED", "AWAITING_USER"))) &&
+                        (statusFilter == "ATTENTION" && message.status in listOf("FAILED", "PERMISSION_REQUIRED", "AWAITING_USER")) ||
+                        (statusFilter == "DELIVERED" && message.deliveryStatus == "DELIVERED") ||
+                        (statusFilter == "DELIVERY_ISSUES" && message.deliveryStatus in listOf("SEND_FAILED", "DELIVERY_FAILED"))) &&
                         (message.recipient.contains(searchText, true) ||
                             message.body.contains(searchText, true) ||
                             message.channel.contains(searchText, true) ||
@@ -861,7 +863,7 @@ private fun SchedulerScreen(
                         horizontalArrangement = Arrangement.spacedBy(6.dp),
                         verticalArrangement = Arrangement.spacedBy(4.dp)
                     ) {
-                        listOf("ALL" to "All", "SCHEDULED" to "Upcoming", "PAUSED" to "Paused", "SENT" to "Sent", "FAILED" to "Failed", "ATTENTION" to "Needs attention").forEach { (key, label) ->
+                        listOf("ALL" to "All", "SCHEDULED" to "Upcoming", "PAUSED" to "Paused", "SENT" to "Sent", "FAILED" to "Failed", "DELIVERED" to "SMS delivered", "DELIVERY_ISSUES" to "SMS issues", "ATTENTION" to "Needs attention").forEach { (key, label) ->
                             FilterChip(selected = statusFilter == key, onClick = { statusFilter = key }, label = { Text(label, fontSize = 11.sp) })
                         }
                     }

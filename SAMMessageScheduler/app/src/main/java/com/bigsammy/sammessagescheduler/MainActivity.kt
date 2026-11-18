@@ -1369,7 +1369,7 @@ private fun Composer(
                     }, modifier = Modifier.weight(1f)) { Icon(Icons.Default.CalendarMonth, contentDescription = null); Text("Choose date") }
                     OutlinedButton(onClick = {
                         val cal = java.util.Calendar.getInstance().apply { time = runCatching { SimpleDateFormat("HH:mm", Locale.US).parse(time)!! }.getOrDefault(Date()) }
-                        android.app.TimePickerDialog(configuration.context, { _, h, m -> time = String.format(Locale.US, "%02d:%02d", h, m) }, cal.get(java.util.Calendar.HOUR_OF_DAY), cal.get(java.util.Calendar.MINUTE), true).show()
+                        android.app.TimePickerDialog(context, { _, h, m -> time = String.format(Locale.US, "%02d:%02d", h, m) }, cal.get(java.util.Calendar.HOUR_OF_DAY), cal.get(java.util.Calendar.MINUTE), true).show()
                     }, modifier = Modifier.weight(1f)) { Icon(Icons.Default.Schedule, contentDescription = null); Text("Choose time") }
                 }
                 OutlinedTextField(

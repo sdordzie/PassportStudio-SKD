@@ -367,7 +367,7 @@ class MainActivity : FragmentActivity() {
                     contacts = contacts,
                     pickedRecipientNumber = pickedRecipientNumber,
                     pickedAttachmentUris = pickedAttachmentUris,
-                    onPickAttachments = { mediaPicker.launch(arrayOf("image/*", "video/*")) },
+                    onPickAttachments = { mediaPicker.launch(arrayOf("image/*", "video/*", "audio/*")) },
                     onCapturePhoto = { captureMedia(false) },
                     onCaptureVideo = { captureMedia(true) },
                     onPickRecipient = { recipientContactPicker.launch(null) },
@@ -1416,7 +1416,7 @@ private fun Composer(
                         Icon(Icons.Default.Videocam, contentDescription = null); Spacer(Modifier.width(4.dp)); Text("Video", fontSize = 12.sp)
                     }
                     OutlinedButton(onClick = onPickAttachments, modifier = Modifier.weight(1f)) {
-                        Icon(Icons.Default.AttachFile, contentDescription = null); Spacer(Modifier.width(4.dp)); Text("Gallery", fontSize = 12.sp)
+                        Icon(Icons.Default.AttachFile, contentDescription = null); Spacer(Modifier.width(4.dp)); Text("Media", fontSize = 12.sp)
                     }
                 }
                 if (attachments.isNotEmpty()) {

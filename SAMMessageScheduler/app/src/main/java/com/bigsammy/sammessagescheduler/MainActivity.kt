@@ -161,7 +161,10 @@ class MainActivity : FragmentActivity() {
                 rows.forEach { item ->
                     array.put(JSONObject().put("recipient", item.recipient).put("body", item.body)
                         .put("channel", item.channel).put("scheduledAt", item.scheduledAt)
-                        .put("status", item.status).put("repeatRule", item.repeatRule).put("category", item.category).put("createdAt", item.createdAt)\n                        .put("attachmentsJson", item.attachmentsJson).put("triggerType", item.triggerType)\n                        .put("latitude", item.latitude).put("longitude", item.longitude)\n                        .put("radiusMeters", item.radiusMeters).put("locationLabel", item.locationLabel))
+                        .put("status", item.status).put("repeatRule", item.repeatRule).put("category", item.category).put("createdAt", item.createdAt)
+                        .put("attachmentsJson", item.attachmentsJson).put("triggerType", item.triggerType)
+                        .put("latitude", item.latitude).put("longitude", item.longitude)
+                        .put("radiusMeters", item.radiusMeters).put("locationLabel", item.locationLabel))
                 }
                 val contactArray = JSONArray()
                 contacts.forEach { contact ->
@@ -195,7 +198,8 @@ class MainActivity : FragmentActivity() {
                 }
                 contentResolver.openOutputStream(uri)?.bufferedWriter()?.use { writer ->
                     writer.write("\uFEFF")
-                    writer.write(lines.joinToString("\r\n"))
+                    writer.write(lines.joinToString("\r
+"))
                 } ?: error("Could not create CSV file.")
                 Toast.makeText(this@MainActivity, "Message history exported to CSV.", Toast.LENGTH_LONG).show()
             }.onFailure {
@@ -266,7 +270,11 @@ class MainActivity : FragmentActivity() {
                     restored += MessageEntity(recipient = item.getString("recipient"), body = item.getString("body"),
                         channel = item.getString("channel"), scheduledAt = item.getLong("scheduledAt"),
                         status = item.optString("status", "SCHEDULED"), repeatRule = item.optString("repeatRule", "NONE"),
-                        createdAt = item.optLong("createdAt", System.currentTimeMillis()), category = item.optString("category", "General"),\n                        attachmentsJson = item.optString("attachmentsJson", "[]"), triggerType = item.optString("triggerType", "TIME"),\n                        latitude = if (item.isNull("latitude")) null else item.optDouble("latitude"),\n                        longitude = if (item.isNull("longitude")) null else item.optDouble("longitude"),\n                        radiusMeters = item.optDouble("radiusMeters", 150.0).toFloat(), locationLabel = item.optString("locationLabel", ""))
+                        createdAt = item.optLong("createdAt", System.currentTimeMillis()), category = item.optString("category", "General"),
+                        attachmentsJson = item.optString("attachmentsJson", "[]"), triggerType = item.optString("triggerType", "TIME"),
+                        latitude = if (item.isNull("latitude")) null else item.optDouble("latitude"),
+                        longitude = if (item.isNull("longitude")) null else item.optDouble("longitude"),
+                        radiusMeters = item.optDouble("radiusMeters", 150.0).toFloat(), locationLabel = item.optString("locationLabel", ""))
                 }
                 val database = AppDatabase.get(this@MainActivity)
                 val dao = database.messageDao()
@@ -513,8 +521,10 @@ private fun parseCsv(content: String): List<List<String>> {
             c == '"' && quoted && i + 1 < content.length && content[i + 1] == '"' -> { cell.append('"'); i++ }
             c == '"' -> quoted = !quoted
             c == ',' && !quoted -> { row += cell.toString(); cell.setLength(0) }
-            (c == '\n' || c == '\r') && !quoted -> {
-                if (c == '\r' && i + 1 < content.length && content[i + 1] == '\n') i++
+            (c == '
+' || c == '\r') && !quoted -> {
+                if (c == '\r' && i + 1 < content.length && content[i + 1] == '
+') i++
                 row += cell.toString(); cell.setLength(0)
                 if (row.any { it.isNotBlank() }) result += row.toList()
                 row.clear()
@@ -942,7 +952,8 @@ private fun SchedulerScreen(
                             val firstRule = parsedRules.firstOrNull()
                             automationPrefs.edit()
                                 .putBoolean("auto_reply_enabled", autoReplyEnabled)
-                                .putString("reply_rules", parsedRules.joinToString("\\n") { "${it.first} => ${it.second}" })
+                                .putString("reply_rules", parsedRules.joinToString("\
+") { "${it.first} => ${it.second}" })
                                 .putString("reply_keyword", firstRule?.first.orEmpty())
                                 .putString("reply_text", firstRule?.second.orEmpty())
                                 .putBoolean("forward_enabled", forwardingEnabled)

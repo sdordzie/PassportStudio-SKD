@@ -71,7 +71,46 @@ class ReminderWorker(context: Context, params: WorkerParameters) : CoroutineWork
         }
 
         return try {
-            if (item.channel == "SMS") {
+            val attachmentUris = runCatching {
+                org.json.JSONArray(item.attachmentsJson).let { array ->
+                    (0 until array.length()).mapNotNull { index ->
+                        runCatching { Uri.parse(array.getString(index)) }.getOrNull()
+                    }
+                }
+            }.getOrDefault(emptyList())
+
+            if (attachmentUris.isNotEmpty()) {
+                // Media messages use a user-confirmed share flow; Android's public SMS API
+                // does not provide a dependable carrier-independent MMS send operation.
+                val share = Intent(Intent.ACTION_SEND_MULTIPLE).apply {
+                    type = "*/*"
+                    putParcelableArrayListExtra(Intent.EXTRA_STREAM, ArrayList(attachmentUris))
+                    putExtra(Intent.EXTRA_TEXT, item.body)
+                    addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_ACTIVITY_NEW_TASK)
+                    clipData = android.content.ClipData.newUri(
+                        applicationContext.contentResolver, "SAM scheduled attachments", attachmentUris.first()
+                    ).also { clip ->
+                        attachmentUris.drop(1).forEach { clip.addItem(android.content.ClipData.Item(it)) }
+                    }
+                }
+                val chooser = Intent.createChooser(share, "Send scheduled message").addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                val openShare = PendingIntent.getActivity(
+                    applicationContext, id.toInt(), chooser,
+                    PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+                )
+                val next = nextOccurrence(item.scheduledAt, item.repeatRule)
+                if (next != null) {
+                    dao.update(item.copy(scheduledAt = next, status = "SCHEDULED"))
+                    MessageScheduler.schedule(applicationContext, id, next)
+                } else {
+                    dao.update(item.copy(status = "AWAITING_USER"))
+                }
+                postNotification(
+                    id, "Your scheduled media message is ready",
+                    "Tap to choose an app and recipient. Review the message and attachments, then tap Send. Recipient: ${item.recipient}.",
+                    openShare
+                )
+            } else if (item.channel == "SMS") {
                 if (ContextCompat.checkSelfPermission(applicationContext, Manifest.permission.SEND_SMS) != PackageManager.PERMISSION_GRANTED) {
                     dao.update(item.copy(status = "PERMISSION_REQUIRED"))
                     postNotification(id, "SMS permission required", "Open SAM and grant SMS permission to schedule SMS sending.")

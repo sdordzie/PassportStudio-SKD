@@ -800,7 +800,7 @@ private fun SchedulerScreen(
                             selected.forEach { contact ->
                                 val personalised = body.replace("{name}", contact.name, ignoreCase = true)
                                     .replace("{phone}", contact.phone, ignoreCase = true)
-                                save(null, contact.phone, personalised, channel, scheduledAt, "NONE", "Bulk", emptyList())
+                                save(null, contact.phone, personalised, channel, scheduledAt, "NONE", "Bulk", emptyList(), "TIME", null, null, 150f, "")
                             }
                         }
                         if (channel == "SMS") requestSmsPermission(scheduleAll) else scheduleAll()

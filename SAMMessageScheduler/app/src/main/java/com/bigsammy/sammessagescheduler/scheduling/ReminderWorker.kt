@@ -51,13 +51,22 @@ class SmsStatusReceiver : BroadcastReceiver() {
                     state.put(eventPrefix, events).put("count", partCount)
                     prefs.edit().putString(key, state.toString()).apply()
 
-                    val values = (0 until partCount).mapNotNull { index ->
-                        events.optString(index.toString(), "").takeIf { it.isNotEmpty() }
+                    val sentEvents = state.optJSONObject("sent") ?: org.json.JSONObject()
+                    val deliveredEvents = state.optJSONObject("delivered") ?: org.json.JSONObject()
+                    val sentValues = (0 until partCount).mapNotNull { index ->
+                        sentEvents.optString(index.toString(), "").takeIf { it.isNotEmpty() }
                     }
+                    val deliveredValues = (0 until partCount).mapNotNull { index ->
+                        deliveredEvents.optString(index.toString(), "").takeIf { it.isNotEmpty() }
+                    }
+                    // Delivery callbacks are authoritative and must never be downgraded by a late sent callback.
                     val aggregate = when {
-                        values.any { it == "FAILED" } -> if (isSentEvent) "SEND_FAILED" else "DELIVERY_FAILED"
-                        values.size == partCount -> if (isSentEvent) "SENT" else "DELIVERED"
-                        else -> if (isSentEvent) "SENDING_PARTS_${values.size}_OF_$partCount" else "DELIVERING_PARTS_${values.size}_OF_$partCount"
+                        sentValues.any { it == "FAILED" } -> "SEND_FAILED"
+                        deliveredValues.any { it == "FAILED" } -> "DELIVERY_FAILED"
+                        deliveredValues.size == partCount -> "DELIVERED"
+                        sentValues.size == partCount -> "SENT"
+                        sentValues.isNotEmpty() -> "SENDING_PARTS_${sentValues.size}_OF_$partCount"
+                        else -> "DELIVERING_PARTS_${deliveredValues.size}_OF_$partCount"
                     }
                     kotlinx.coroutines.runBlocking {
                         val item = dao.getById(id) ?: return@runBlocking

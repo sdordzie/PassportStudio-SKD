@@ -63,6 +63,11 @@ private data class SocialCampaign(
     val endAt: Long,
     val platforms: List<String>
 )
+private data class SocialCaptionTemplate(
+    val name: String,
+    val platform: String,
+    val caption: String
+)
 
 private val Purple = Color(0xFF6750A4)
 // Shared Compose state lets the settings screen refresh when the Activity resumes.
@@ -1284,6 +1289,7 @@ private fun SchedulerScreen(
                             dismissButton = { TextButton(onClick = { campaignDialog = false }) { Text("Cancel") } }
                         )
                     }
+                    val captionPlatforms = listOf("All platforms", "Facebook", "Instagram", "TikTok", "Snapchat", "Telegram", "X", "LinkedIn", "Pinterest", "WhatsApp", "WhatsApp Business")
                     var captionTemplates by remember {
                         mutableStateOf(runCatching {
                             val saved = appContext.getSharedPreferences("sam_social_templates", android.content.Context.MODE_PRIVATE)
@@ -1291,18 +1297,20 @@ private fun SchedulerScreen(
                             val array = JSONArray(saved)
                             (0 until array.length()).map { index ->
                                 val item = array.getJSONObject(index)
-                                item.optString("name") to item.optString("caption")
+                                SocialCaptionTemplate(item.optString("name"), item.optString("platform", "All platforms"), item.optString("caption"))
                             }
                         }.getOrDefault(emptyList()))
                     }
                     var templateDialog by remember { mutableStateOf(false) }
                     var templateName by remember { mutableStateOf("") }
                     var templateCaption by remember { mutableStateOf("") }
+                    var templatePlatform by remember { mutableStateOf("All platforms") }
+                    var templatePlatformMenu by remember { mutableStateOf(false) }
                     var templateError by remember { mutableStateOf("") }
-                    fun persistCaptionTemplates(items: List<Pair<String, String>>) {
+                    fun persistCaptionTemplates(items: List<SocialCaptionTemplate>) {
                         val array = JSONArray()
-                        items.forEach { (name, caption) ->
-                            array.put(JSONObject().put("name", name).put("caption", caption))
+                        items.forEach { item ->
+                            array.put(JSONObject().put("name", item.name).put("platform", item.platform).put("caption", item.caption))
                         }
                         appContext.getSharedPreferences("sam_social_templates", android.content.Context.MODE_PRIVATE)
                             .edit().putString("templates", array.toString()).apply()
@@ -1315,7 +1323,7 @@ private fun SchedulerScreen(
                                     Text("Caption library", fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
                                     Text("Save reusable captions and campaign copy on this device.", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                                 }
-                                IconButton(onClick = { templateName = ""; templateCaption = ""; templateError = ""; templateDialog = true }) {
+                                IconButton(onClick = { templateName = ""; templateCaption = ""; templatePlatform = "All platforms"; templateError = ""; templateDialog = true }) {
                                     Icon(Icons.Default.Add, contentDescription = "Add caption template")
                                 }
                             }
@@ -1326,13 +1334,14 @@ private fun SchedulerScreen(
                                     HorizontalDivider()
                                     Row(verticalAlignment = Alignment.CenterVertically) {
                                         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                                            Text(item.first, fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onSurface)
-                                            Text(item.second, maxLines = 2, fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                            Text(item.name, fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onSurface)
+                                            Text(item.platform, fontSize = 10.sp, color = MaterialTheme.colorScheme.primary)
+                                            Text(item.caption, maxLines = 2, fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                                         }
                                         IconButton(onClick = {
                                             val clipboard = appContext.getSystemService(android.content.Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
-                                            clipboard.setPrimaryClip(android.content.ClipData.newPlainText(item.first, item.second))
-                                            Toast.makeText(appContext, "Caption copied. Paste it into your post.", Toast.LENGTH_SHORT).show()
+                                            clipboard.setPrimaryClip(android.content.ClipData.newPlainText(item.name, item.caption))
+                                            Toast.makeText(appContext, "${item.platform} caption copied.", Toast.LENGTH_SHORT).show()
                                         }) { Icon(Icons.Default.ContentCopy, contentDescription = "Copy caption") }
                                         IconButton(onClick = { persistCaptionTemplates(captionTemplates.filterIndexed { i, _ -> i != index }) }) {
                                             Icon(Icons.Default.DeleteOutline, contentDescription = "Delete caption", tint = MaterialTheme.colorScheme.error)
@@ -1345,10 +1354,21 @@ private fun SchedulerScreen(
                     if (templateDialog) {
                         AlertDialog(
                             onDismissRequest = { templateDialog = false },
-                            title = { Text("Save caption template") },
+                            title = { Text("Save platform caption") },
                             text = {
                                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                                     OutlinedTextField(templateName, { templateName = it }, label = { Text("Template name") }, singleLine = true)
+                                    Box {
+                                        OutlinedButton(onClick = { templatePlatformMenu = true }, modifier = Modifier.fillMaxWidth()) {
+                                            Text("Platform: $templatePlatform", modifier = Modifier.weight(1f))
+                                            Icon(Icons.Default.ArrowDropDown, contentDescription = "Choose platform")
+                                        }
+                                        DropdownMenu(expanded = templatePlatformMenu, onDismissRequest = { templatePlatformMenu = false }) {
+                                            captionPlatforms.forEach { platform ->
+                                                DropdownMenuItem(text = { Text(platform) }, onClick = { templatePlatform = platform; templatePlatformMenu = false })
+                                            }
+                                        }
+                                    }
                                     OutlinedTextField(templateCaption, { templateCaption = it }, label = { Text("Caption text") }, minLines = 4)
                                     if (templateError.isNotBlank()) Text(templateError, color = MaterialTheme.colorScheme.error, fontSize = 12.sp)
                                 }
@@ -1359,13 +1379,13 @@ private fun SchedulerScreen(
                                     val caption = templateCaption.trim()
                                     when {
                                         name.isBlank() || caption.isBlank() -> templateError = "Enter both a name and caption."
-                                        captionTemplates.any { it.first.equals(name, true) } -> templateError = "A template with this name already exists."
+                                        captionTemplates.any { it.name.equals(name, true) && it.platform.equals(templatePlatform, true) } -> templateError = "This template already has a caption for $templatePlatform."
                                         else -> {
-                                            persistCaptionTemplates(captionTemplates + (name to caption))
+                                            persistCaptionTemplates(captionTemplates + SocialCaptionTemplate(name, templatePlatform, caption))
                                             templateDialog = false
                                         }
                                     }
-                                }) { Text("Save template") }
+                                }) { Text("Save caption") }
                             },
                             dismissButton = { TextButton(onClick = { templateDialog = false }) { Text("Cancel") } }
                         )

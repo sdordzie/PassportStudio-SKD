@@ -156,12 +156,12 @@ class MainActivity : FragmentActivity() {
                 val database = AppDatabase.get(this@MainActivity)
                 val rows = database.messageDao().getAllSnapshot()
                 val contacts = database.contactDao().getAllSnapshot()
-                val root = JSONObject().put("format", "SAM_MESSAGE_SCHEDULER_BACKUP").put("version", 2)
+                val root = JSONObject().put("format", "SAM_MESSAGE_SCHEDULER_BACKUP").put("version", 3)
                 val array = JSONArray()
                 rows.forEach { item ->
                     array.put(JSONObject().put("recipient", item.recipient).put("body", item.body)
                         .put("channel", item.channel).put("scheduledAt", item.scheduledAt)
-                        .put("status", item.status).put("repeatRule", item.repeatRule).put("category", item.category).put("createdAt", item.createdAt))
+                        .put("status", item.status).put("repeatRule", item.repeatRule).put("category", item.category).put("createdAt", item.createdAt)\n                        .put("attachmentsJson", item.attachmentsJson).put("triggerType", item.triggerType)\n                        .put("latitude", item.latitude).put("longitude", item.longitude)\n                        .put("radiusMeters", item.radiusMeters).put("locationLabel", item.locationLabel))
                 }
                 val contactArray = JSONArray()
                 contacts.forEach { contact ->
@@ -266,7 +266,7 @@ class MainActivity : FragmentActivity() {
                     restored += MessageEntity(recipient = item.getString("recipient"), body = item.getString("body"),
                         channel = item.getString("channel"), scheduledAt = item.getLong("scheduledAt"),
                         status = item.optString("status", "SCHEDULED"), repeatRule = item.optString("repeatRule", "NONE"),
-                        createdAt = item.optLong("createdAt", System.currentTimeMillis()), category = item.optString("category", "General"))
+                        createdAt = item.optLong("createdAt", System.currentTimeMillis()), category = item.optString("category", "General"),\n                        attachmentsJson = item.optString("attachmentsJson", "[]"), triggerType = item.optString("triggerType", "TIME"),\n                        latitude = if (item.isNull("latitude")) null else item.optDouble("latitude"),\n                        longitude = if (item.isNull("longitude")) null else item.optDouble("longitude"),\n                        radiusMeters = item.optDouble("radiusMeters", 150.0).toFloat(), locationLabel = item.optString("locationLabel", ""))
                 }
                 val database = AppDatabase.get(this@MainActivity)
                 val dao = database.messageDao()

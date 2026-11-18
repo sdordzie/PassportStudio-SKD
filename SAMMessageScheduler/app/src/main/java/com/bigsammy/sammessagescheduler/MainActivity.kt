@@ -742,7 +742,7 @@ private fun SchedulerScreen(
                             selected.forEach { contact ->
                                 val personalised = body.replace("{name}", contact.name, ignoreCase = true)
                                     .replace("{phone}", contact.phone, ignoreCase = true)
-                                save(null, contact.phone, personalised, channel, scheduledAt, "NONE", "Bulk")
+                                save(null, contact.phone, personalised, channel, scheduledAt, "NONE", "Bulk", emptyList())
                             }
                         }
                         if (channel == "SMS") requestSmsPermission(scheduleAll) else scheduleAll()

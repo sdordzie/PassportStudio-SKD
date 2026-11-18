@@ -306,9 +306,9 @@ class MainActivity : FragmentActivity() {
                         require(repeat in listOf("NONE", "DAILY", "WEEKLY", "MONTHLY", "YEARLY"))
                         require(scheduledAt > System.currentTimeMillis())
                         MessageEntity(recipient = recipient, body = body,
-                            channel = if (channel.equals("SMS", true)) "SMS" else "WhatsApp",
+                            channel = when (channel.uppercase(Locale.US)) { "SMS" -> "SMS"; "SOCIAL" -> "Social"; else -> "WhatsApp" },
                             scheduledAt = scheduledAt, repeatRule = repeat, category = row.getOrElse(header.indexOf("category")) { "General" }.ifBlank { "General" },
-                            whatsappPackage = if (channel.equals("WhatsApp", true) && whatsappAppIndex >= 0) row.getOrElse(whatsappAppIndex) { "" }.trim() else "")
+                            whatsappPackage = if ((channel.equals("WhatsApp", true) || channel.equals("Social", true)) && whatsappAppIndex >= 0) row.getOrElse(whatsappAppIndex) { "" }.trim() else "")
                     }.getOrElse { invalid++; null }
                 }
                 require(valid.isNotEmpty()) { "No valid future messages were found in this CSV." }
@@ -509,7 +509,7 @@ class MainActivity : FragmentActivity() {
                                         longitude = longitude,
                                         radiusMeters = radiusMeters,
                                         locationLabel = locationLabel,
-                                        whatsappPackage = if (channel == "WhatsApp") whatsappPackage else "",
+                                        whatsappPackage = if (channel == "WhatsApp" || channel == "Social") whatsappPackage else "",
                                         status = "SCHEDULED"
                                     ))
                                     if (triggerType == "LOCATION" && latitude != null && longitude != null) {
@@ -1287,6 +1287,7 @@ private fun BulkComposer(
                 FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                     FilterChip(selected = channel == "SMS", onClick = { channel = "SMS" }, label = { Text("SMS") })
                     FilterChip(selected = channel == "WhatsApp", onClick = { channel = "WhatsApp" }, label = { Text("WhatsApp") })
+                    FilterChip(selected = channel == "Social", onClick = { channel = "Social"; if (recipient.isBlank()) recipient = "Social media" }, label = { Text("Social media") })
                 }
                 OutlinedTextField(date, { date = it }, modifier = Modifier.fillMaxWidth(), label = { Text("Date (YYYY-MM-DD)") }, singleLine = true)
                 OutlinedTextField(time, { time = it }, modifier = Modifier.fillMaxWidth(), label = { Text("Time (24-hour HH:mm)") }, singleLine = true)
@@ -1489,6 +1490,7 @@ private fun Composer(
     var channel by remember(initialMessage?.id) { mutableStateOf(initialMessage?.channel ?: "SMS") }
     var whatsappPackage by remember(initialMessage?.id) { mutableStateOf(initialMessage?.whatsappPackage ?: "") }
     var whatsappMenuExpanded by remember { mutableStateOf(false) }
+    var socialMenuExpanded by remember { mutableStateOf(false) }
     var date by remember(initialMessage?.id) { mutableStateOf(initialMessage?.let { SimpleDateFormat("yyyy-MM-dd", Locale.US).format(Date(it.scheduledAt)) } ?: SimpleDateFormat("yyyy-MM-dd", Locale.US).format(Date(System.currentTimeMillis() + 3600000))) }
     var time by remember(initialMessage?.id) { mutableStateOf(initialMessage?.let { SimpleDateFormat("HH:mm", Locale.US).format(Date(it.scheduledAt)) } ?: SimpleDateFormat("HH:mm", Locale.US).format(Date(System.currentTimeMillis() + 3600000))) }
     var repeatRule by remember(initialMessage?.id) { mutableStateOf(initialMessage?.repeatRule ?: "NONE") }
@@ -1548,6 +1550,38 @@ private fun Composer(
                 ) {
                     FilterChip(selected = channel == "SMS", onClick = { channel = "SMS" }, label = { Text("SMS") })
                     FilterChip(selected = channel == "WhatsApp", onClick = { channel = "WhatsApp" }, label = { Text("WhatsApp") })
+                }
+                if (channel == "Social") {
+                    val socialTargets = listOf(
+                        "com.facebook.katana" to "Facebook",
+                        "com.instagram.android" to "Instagram",
+                        "com.zhiliaoapp.musically" to "TikTok",
+                        "com.snapchat.android" to "Snapchat",
+                        "org.telegram.messenger" to "Telegram",
+                        "com.twitter.android" to "X",
+                        "com.linkedin.android" to "LinkedIn",
+                        "com.pinterest" to "Pinterest"
+                    )
+                    Text("Social destination", fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onSurface)
+                    Box {
+                        OutlinedButton(onClick = { socialMenuExpanded = true }, modifier = Modifier.fillMaxWidth()) {
+                            Icon(Icons.Default.Share, contentDescription = null)
+                            Spacer(Modifier.width(8.dp))
+                            Text(socialTargets.firstOrNull { it.first == whatsappPackage }?.second ?: "Choose social app", modifier = Modifier.weight(1f))
+                            Icon(Icons.Default.ArrowDropDown, contentDescription = "Choose social app")
+                        }
+                        DropdownMenu(expanded = socialMenuExpanded, onDismissRequest = { socialMenuExpanded = false }) {
+                            socialTargets.forEach { (pkg, label) ->
+                                DropdownMenuItem(
+                                    text = { Text(label) },
+                                    leadingIcon = { Icon(Icons.Default.Share, contentDescription = null) },
+                                    trailingIcon = { if (whatsappPackage == pkg) Icon(Icons.Default.Check, contentDescription = "Selected") },
+                                    onClick = { whatsappPackage = pkg; socialMenuExpanded = false }
+                                )
+                            }
+                        }
+                    }
+                    Text("At the scheduled time SAM opens the selected app with your text and media ready. Review and publish inside that app. Direct publishing will activate only for accounts and platforms whose official API access has been approved and connected.", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
                 if (channel == "WhatsApp") {
                     Text("WhatsApp application", fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onSurface)

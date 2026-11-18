@@ -304,7 +304,7 @@ class ReminderWorker(context: Context, params: WorkerParameters) : CoroutineWork
      */
     private fun unlockAwareGuidance(actionText: String): String {
         val keyguard = applicationContext.getSystemService(Context.KEYGUARD_SERVICE) as? KeyguardManager
-        val deviceLocked = keyguard?.isKeyguardLocked == true
+        val deviceLocked = keyguard?.isDeviceLocked == true || keyguard?.isKeyguardLocked == true
         val unlockText = if (deviceLocked) {
             " Your phone is locked. Unlock it first, then tap this notification to continue."
         } else {
@@ -328,7 +328,13 @@ class ReminderWorker(context: Context, params: WorkerParameters) : CoroutineWork
             .setPriority(NotificationCompat.PRIORITY_HIGH)
             .setVisibility(NotificationCompat.VISIBILITY_PRIVATE)
             .setCategory(NotificationCompat.CATEGORY_MESSAGE)
-        if (action != null) builder.setContentIntent(action)
+        if (action != null) {
+            // A notification action is a user-initiated foreground launch. Android
+            // presents the system keyguard before opening the destination when locked.
+            // The same immutable PendingIntent is used for the body tap and action button.
+            builder.setContentIntent(action)
+                .addAction(android.R.drawable.ic_lock_lock, "Unlock & continue", action)
+        }
         manager.notify(id.toInt(), builder.build())
     }
 }

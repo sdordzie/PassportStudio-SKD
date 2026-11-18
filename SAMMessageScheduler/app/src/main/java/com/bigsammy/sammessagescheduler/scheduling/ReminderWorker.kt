@@ -80,7 +80,7 @@ class SmsStatusReceiver : BroadcastReceiver() {
                 }
                 val statusText = if (failed) "part $part of $partCount failed" else "part $part of $partCount updated"
                 manager.notify((id + 500000).toInt(), NotificationCompat.Builder(context, channelId)
-                    .setSmallIcon(android.R.drawable.ic_dialog_email)
+                    .setSmallIcon(com.bigsammy.sammessagescheduler.R.drawable.ic_stat_sam)
                     .setContentTitle(if (failed) "SMS delivery problem" else "SMS status update")
                     .setContentText("Recipient: ${dao.getById(id)?.recipient ?: "saved contact"} · $statusText")
                     .setAutoCancel(true).build())
@@ -303,7 +303,7 @@ class ReminderWorker(context: Context, params: WorkerParameters) : CoroutineWork
             manager.createNotificationChannel(NotificationChannel(channelId, "Scheduled messages", NotificationManager.IMPORTANCE_HIGH))
         }
         val builder = NotificationCompat.Builder(applicationContext, channelId)
-            .setSmallIcon(android.R.drawable.ic_dialog_email)
+            .setSmallIcon(com.bigsammy.sammessagescheduler.R.drawable.ic_stat_sam)
             .setContentTitle(title)
             .setContentText(text)
             .setStyle(NotificationCompat.BigTextStyle().bigText(text))

@@ -198,8 +198,7 @@ class MainActivity : FragmentActivity() {
                 }
                 contentResolver.openOutputStream(uri)?.bufferedWriter()?.use { writer ->
                     writer.write("\uFEFF")
-                    writer.write(lines.joinToString("\r
-"))
+                    writer.write(lines.joinToString("\r\n"))
                 } ?: error("Could not create CSV file.")
                 Toast.makeText(this@MainActivity, "Message history exported to CSV.", Toast.LENGTH_LONG).show()
             }.onFailure {
@@ -952,8 +951,7 @@ private fun SchedulerScreen(
                             val firstRule = parsedRules.firstOrNull()
                             automationPrefs.edit()
                                 .putBoolean("auto_reply_enabled", autoReplyEnabled)
-                                .putString("reply_rules", parsedRules.joinToString("\
-") { "${it.first} => ${it.second}" })
+                                .putString("reply_rules", parsedRules.joinToString("\n") { "${it.first} => ${it.second}" })
                                 .putString("reply_keyword", firstRule?.first.orEmpty())
                                 .putString("reply_text", firstRule?.second.orEmpty())
                                 .putBoolean("forward_enabled", forwardingEnabled)

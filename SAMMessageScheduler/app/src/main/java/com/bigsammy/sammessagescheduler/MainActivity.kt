@@ -149,6 +149,65 @@ class MainActivity : FragmentActivity() {
             Toast.makeText(this, if (granted) "Incoming SMS permission granted." else "Incoming SMS permission denied.", Toast.LENGTH_LONG).show()
         }
     private var pendingSmsAction: (() -> Unit)? = null
+    private var pendingLocationAction: (() -> Unit)? = null
+
+    private fun hasForegroundLocationPermission(): Boolean =
+        ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) == android.content.pm.PackageManager.PERMISSION_GRANTED ||
+            ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_COARSE_LOCATION) == android.content.pm.PackageManager.PERMISSION_GRANTED
+
+    private fun hasBackgroundLocationPermission(): Boolean =
+        Build.VERSION.SDK_INT < 29 ||
+            ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_BACKGROUND_LOCATION) == android.content.pm.PackageManager.PERMISSION_GRANTED
+
+    private val foregroundLocationPermission = registerForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { result ->
+        if (result[Manifest.permission.ACCESS_FINE_LOCATION] == true || result[Manifest.permission.ACCESS_COARSE_LOCATION] == true) {
+            continueLocationPermissionFlow()
+        } else {
+            pendingLocationAction = null
+            Toast.makeText(this, "Location access is required to activate an arrival reminder.", Toast.LENGTH_LONG).show()
+        }
+    }
+
+    private val backgroundLocationPermission = registerForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+        if (granted) {
+            pendingLocationAction?.invoke()
+        } else {
+            pendingLocationAction = null
+            Toast.makeText(this, "Allow location access all the time to activate arrival reminders when SAM is closed.", Toast.LENGTH_LONG).show()
+        }
+    }
+
+    private val locationSettingsLauncher = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) {
+        if (hasForegroundLocationPermission() && hasBackgroundLocationPermission()) {
+            pendingLocationAction?.invoke()
+        } else {
+            pendingLocationAction = null
+            Toast.makeText(this, "Arrival reminder not saved. Enable Location > Allow all the time in Android app settings.", Toast.LENGTH_LONG).show()
+        }
+    }
+
+    private fun requestLocationPermissions(action: () -> Unit) {
+        pendingLocationAction = action
+        if (!hasForegroundLocationPermission()) {
+            foregroundLocationPermission.launch(arrayOf(
+                Manifest.permission.ACCESS_FINE_LOCATION,
+                Manifest.permission.ACCESS_COARSE_LOCATION
+            ))
+        } else continueLocationPermissionFlow()
+    }
+
+    private fun continueLocationPermissionFlow() {
+        if (hasBackgroundLocationPermission()) {
+            pendingLocationAction?.invoke()
+        } else if (Build.VERSION.SDK_INT >= 30) {
+            Toast.makeText(this, "On the next screen, choose App permissions > Location > Allow all the time, then return to SAM.", Toast.LENGTH_LONG).show()
+            val intent = android.content.Intent(android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
+                android.net.Uri.parse("package:$packageName"))
+            locationSettingsLauncher.launch(intent)
+        } else {
+            backgroundLocationPermission.launch(Manifest.permission.ACCESS_BACKGROUND_LOCATION)
+        }
+    }
     private var csvImportPreview by mutableStateOf<List<MessageEntity>>(emptyList())
     private var csvImportInvalidCount by mutableStateOf(0)
     private val backupLauncher = registerForActivityResult(ActivityResultContracts.CreateDocument("application/json")) { uri ->
@@ -409,7 +468,8 @@ class MainActivity : FragmentActivity() {
                     },
                     onDismissImport = { csvImportPreview = emptyList() },
                     save = { existingId, recipient, body, channel, scheduledAt, repeatRule, category, attachments, triggerType, latitude, longitude, radiusMeters, locationLabel ->
-                        lifecycleScope.launch {
+                        val persistSchedule: () -> Unit = {
+                            lifecycleScope.launch {
                             if (existingId != null) {
                                 val current = dao.getById(existingId)
                                 if (current != null) {
@@ -472,7 +532,9 @@ class MainActivity : FragmentActivity() {
                                         }
                                 } else MessageScheduler.schedule(this@MainActivity, id, scheduledAt)
                             }
+                            }
                         }
+                        if (triggerType == "LOCATION") requestLocationPermissions(persistSchedule) else persistSchedule()
                     },
                     requestSmsPermission = { action ->
                         if (ContextCompat.checkSelfPermission(this, Manifest.permission.SEND_SMS) ==

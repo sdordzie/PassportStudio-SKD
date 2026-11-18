@@ -56,6 +56,7 @@ class MainActivity : FragmentActivity() {
     private var backupPassword: String = ""
     private var themeMode by mutableStateOf("System")
     private var pickedRecipientNumber by mutableStateOf("")
+    private var pickedAttachmentUris by mutableStateOf<List<String>>(emptyList())
     private var securityPromptActive = false
     var securityAuthenticated = false
 
@@ -283,6 +284,12 @@ class MainActivity : FragmentActivity() {
             }.onFailure { Toast.makeText(this, it.message ?: "Could not read the selected contact.", Toast.LENGTH_LONG).show() }
         }
     }
+    private val mediaPicker = registerForActivityResult(ActivityResultContracts.OpenMultipleDocuments()) { uris ->
+        if (uris.isNotEmpty()) {
+            uris.forEach { uri -> runCatching { contentResolver.takePersistableUriPermission(uri, android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION) } }
+            pickedAttachmentUris = (pickedAttachmentUris + uris.map { it.toString() }).distinct()
+        }
+    }
     private val smsPermission =
         registerForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
             if (granted) pendingSmsAction?.invoke()
@@ -322,6 +329,8 @@ class MainActivity : FragmentActivity() {
                 SchedulerScreen(
                     contacts = contacts,
                     pickedRecipientNumber = pickedRecipientNumber,
+                    pickedAttachmentUris = pickedAttachmentUris,
+                    onPickAttachments = { mediaPicker.launch(arrayOf("image/*", "video/*")) },
                     onPickRecipient = { recipientContactPicker.launch(null) },
                     onPickContact = { deviceContactPicker.launch(null) },
                     saveContact = { contact -> lifecycleScope.launch { AppDatabase.get(this@MainActivity).contactDao().insert(contact) } },
@@ -349,7 +358,7 @@ class MainActivity : FragmentActivity() {
                         }
                     },
                     onDismissImport = { csvImportPreview = emptyList() },
-                    save = { existingId, recipient, body, channel, scheduledAt, repeatRule, category ->
+                    save = { existingId, recipient, body, channel, scheduledAt, repeatRule, category, attachments ->
                         lifecycleScope.launch {
                             if (existingId != null) {
                                 val current = dao.getById(existingId)
@@ -362,6 +371,7 @@ class MainActivity : FragmentActivity() {
                                         scheduledAt = scheduledAt,
                                         repeatRule = repeatRule,
                                         category = category,
+                                        attachmentsJson = org.json.JSONArray(attachments).toString(),
                                         status = "SCHEDULED"
                                     ))
                                     MessageScheduler.schedule(this@MainActivity, existingId, scheduledAt)
@@ -373,7 +383,8 @@ class MainActivity : FragmentActivity() {
                                     channel = channel,
                                     scheduledAt = scheduledAt,
                                     repeatRule = repeatRule,
-                                    category = category
+                                    category = category,
+                                    attachmentsJson = org.json.JSONArray(attachments).toString()
                                 ))
                                 MessageScheduler.schedule(this@MainActivity, id, scheduledAt)
                             }
@@ -468,6 +479,8 @@ private fun SchedulerScreen(
     messages: List<MessageEntity>,
     contacts: List<ContactEntity>,
     pickedRecipientNumber: String,
+    pickedAttachmentUris: List<String>,
+    onPickAttachments: () -> Unit,
     onPickRecipient: () -> Unit,
     onPickContact: () -> Unit,
     saveContact: (ContactEntity) -> Unit,
@@ -934,12 +947,14 @@ private fun SchedulerScreen(
         Composer(
             initialMessage = editMessage,
             pickedRecipientNumber = pickedRecipientNumber,
+            pickedAttachmentUris = pickedAttachmentUris,
+            onPickAttachments = onPickAttachments,
             onPickRecipient = onPickRecipient,
             duplicateMode = duplicateMode,
             onClose = { showComposer = false; editMessage = null; duplicateMode = false },
             requestSmsPermission = requestSmsPermission,
-            onSave = { id, recipient, body, channel, scheduledAt, repeatRule, category ->
-                save(if (duplicateMode) null else id, recipient, body, channel, scheduledAt, repeatRule, category)
+            onSave = { id, recipient, body, channel, scheduledAt, repeatRule, category, attachments ->
+                save(if (duplicateMode) null else id, recipient, body, channel, scheduledAt, repeatRule, category, attachments)
                 showComposer = false
                 editMessage = null
                 duplicateMode = false
@@ -1005,6 +1020,8 @@ private fun BulkComposer(
     var date by remember { mutableStateOf(SimpleDateFormat("yyyy-MM-dd", Locale.US).format(Date(System.currentTimeMillis() + 3_600_000L))) }
     var time by remember { mutableStateOf(SimpleDateFormat("HH:mm", Locale.US).format(Date(System.currentTimeMillis() + 3_600_000L))) }
     var error by remember { mutableStateOf("") }
+    var attachments by remember(initialMessage?.id) { mutableStateOf(initialMessage?.attachmentsJson?.let { raw -> runCatching { org.json.JSONArray(raw).let { a -> (0 until a.length()).map { a.getString(it) } } }.getOrDefault(emptyList()) } ?: emptyList()) }
+    LaunchedEffect(pickedAttachmentUris) { attachments = (attachments + pickedAttachmentUris).distinct() }
     val configuration = androidx.compose.ui.platform.LocalConfiguration.current
     AlertDialog(
         modifier = Modifier.fillMaxWidth(0.94f).widthIn(max = 560.dp),
@@ -1222,11 +1239,13 @@ private fun MessageCard(message: MessageEntity) {
 private fun Composer(
     initialMessage: MessageEntity?,
     pickedRecipientNumber: String,
+    pickedAttachmentUris: List<String>,
+    onPickAttachments: () -> Unit,
     onPickRecipient: () -> Unit,
     duplicateMode: Boolean = false,
     onClose: () -> Unit,
     requestSmsPermission: (() -> Unit) -> Unit,
-    onSave: (Long?, String, String, String, Long, String, String) -> Unit
+    onSave: (Long?, String, String, String, Long, String, String, List<String>) -> Unit
 ) {
     var recipient by remember(initialMessage?.id) { mutableStateOf(initialMessage?.recipient ?: "") }
     LaunchedEffect(pickedRecipientNumber) { if (pickedRecipientNumber.isNotBlank()) recipient = pickedRecipientNumber }
@@ -1306,6 +1325,11 @@ private fun Composer(
                         Icon(Icons.Default.Contacts, contentDescription = "Choose contact")
                     }
                 }
+                OutlinedButton(onClick = onPickAttachments, modifier = Modifier.fillMaxWidth()) { Icon(Icons.Default.AttachFile, contentDescription = null); Spacer(Modifier.width(6.dp)); Text("Add photos or videos") }
+                if (attachments.isNotEmpty()) {
+                    Text("${attachments.size} attachment(s) selected", color = MaterialTheme.colorScheme.primary, fontSize = 12.sp)
+                    attachments.forEach { uri -> Row(verticalAlignment = Alignment.CenterVertically) { Text(uri.substringAfterLast("/"), modifier = Modifier.weight(1f), maxLines = 1); IconButton(onClick = { attachments = attachments - uri }) { Icon(Icons.Default.Close, contentDescription = "Remove attachment") } } }
+                }
                 OutlinedTextField(
                     value = body,
                     onValueChange = { body = it },
@@ -1313,6 +1337,16 @@ private fun Composer(
                     label = { Text("Message") },
                     minLines = 3
                 )
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+                    OutlinedButton(onClick = {
+                        val cal = java.util.Calendar.getInstance().apply { time = runCatching { SimpleDateFormat("yyyy-MM-dd", Locale.US).parse(date)!! }.getOrDefault(Date()) }
+                        android.app.DatePickerDialog(configuration.context, { _, y, m, d -> date = String.format(Locale.US, "%04d-%02d-%02d", y, m + 1, d) }, cal.get(java.util.Calendar.YEAR), cal.get(java.util.Calendar.MONTH), cal.get(java.util.Calendar.DAY_OF_MONTH)).show()
+                    }, modifier = Modifier.weight(1f)) { Icon(Icons.Default.CalendarMonth, contentDescription = null); Text("Choose date") }
+                    OutlinedButton(onClick = {
+                        val cal = java.util.Calendar.getInstance().apply { time = runCatching { SimpleDateFormat("HH:mm", Locale.US).parse(time)!! }.getOrDefault(Date()) }
+                        android.app.TimePickerDialog(configuration.context, { _, h, m -> time = String.format(Locale.US, "%02d:%02d", h, m) }, cal.get(java.util.Calendar.HOUR_OF_DAY), cal.get(java.util.Calendar.MINUTE), true).show()
+                    }, modifier = Modifier.weight(1f)) { Icon(Icons.Default.Schedule, contentDescription = null); Text("Choose time") }
+                }
                 OutlinedTextField(
                     value = date,
                     onValueChange = { date = it },
@@ -1348,7 +1382,7 @@ private fun Composer(
                             recipient.isBlank() || body.isBlank() -> error = "Enter recipient and message."
                             recipient.count { it.isDigit() } < 7 -> error = "Enter a valid phone number with country code where required."
                             scheduledAt <= System.currentTimeMillis() -> error = "Choose a future date and time."
-                            else -> onSave(initialMessage?.id, recipient.trim(), body.trim(), channel, scheduledAt, repeatRule, category)
+                            else -> onSave(initialMessage?.id, recipient.trim(), body.trim(), channel, scheduledAt, repeatRule, category, attachments)
                         }
                     } catch (_: Exception) {
                         error = "Enter a valid date and time."

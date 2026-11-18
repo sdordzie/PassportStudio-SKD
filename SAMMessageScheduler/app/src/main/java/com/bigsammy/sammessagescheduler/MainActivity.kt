@@ -431,7 +431,16 @@ class MainActivity : FragmentActivity() {
                                     ))
                                     if (triggerType == "LOCATION" && latitude != null && longitude != null) {
                                         runCatching { LocationGeofenceManager.register(this@MainActivity, existingId, latitude, longitude, radiusMeters) }
-                                            .onFailure { Toast.makeText(this@MainActivity, it.message ?: "Location permission is required.", Toast.LENGTH_LONG).show() }
+                                            .onSuccess { task ->
+                                                task.addOnSuccessListener {
+                                                    Toast.makeText(this@MainActivity, "Arrival reminder is active for $locationLabel.", Toast.LENGTH_LONG).show()
+                                                }.addOnFailureListener { failure ->
+                                                    Toast.makeText(this@MainActivity, failure.message ?: "Android could not activate the arrival reminder. Check Location permissions and Google Play services.", Toast.LENGTH_LONG).show()
+                                                }
+                                            }
+                                            .onFailure { failure ->
+                                                Toast.makeText(this@MainActivity, failure.message ?: "Location permission is required.", Toast.LENGTH_LONG).show()
+                                            }
                                     } else MessageScheduler.schedule(this@MainActivity, existingId, scheduledAt)
                                 }
                             } else {
@@ -451,7 +460,16 @@ class MainActivity : FragmentActivity() {
                                 ))
                                 if (triggerType == "LOCATION" && latitude != null && longitude != null) {
                                     runCatching { LocationGeofenceManager.register(this@MainActivity, id, latitude, longitude, radiusMeters) }
-                                        .onFailure { Toast.makeText(this@MainActivity, it.message ?: "Location permission is required.", Toast.LENGTH_LONG).show() }
+                                        .onSuccess { task ->
+                                            task.addOnSuccessListener {
+                                                Toast.makeText(this@MainActivity, "Arrival reminder is active for $locationLabel.", Toast.LENGTH_LONG).show()
+                                            }.addOnFailureListener { failure ->
+                                                Toast.makeText(this@MainActivity, failure.message ?: "Android could not activate the arrival reminder. Check Location permissions and Google Play services.", Toast.LENGTH_LONG).show()
+                                            }
+                                        }
+                                        .onFailure { failure ->
+                                            Toast.makeText(this@MainActivity, failure.message ?: "Location permission is required.", Toast.LENGTH_LONG).show()
+                                        }
                                 } else MessageScheduler.schedule(this@MainActivity, id, scheduledAt)
                             }
                         }

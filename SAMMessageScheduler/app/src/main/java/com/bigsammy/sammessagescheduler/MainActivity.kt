@@ -1063,6 +1063,35 @@ private fun SchedulerScreen(
                         }
                         if (channel == "SMS") requestSmsPermission(scheduleAll) else scheduleAll()
                     },
+                    onSendNow = { selected, body, channel ->
+                        if (channel == "SMS") {
+                            requestSmsPermission {
+                                var sent = 0
+                                var failed = 0
+                                val smsManager = if (Build.VERSION.SDK_INT >= 31) getSystemService(android.telephony.SmsManager::class.java) else @Suppress("DEPRECATION") android.telephony.SmsManager.getDefault()
+                                selected.forEach { contact ->
+                                    val personalised = body.replace("{name}", contact.name, ignoreCase = true)
+                                        .replace("{phone}", contact.phone, ignoreCase = true)
+                                    runCatching {
+                                        val parts = smsManager.divideMessage(personalised)
+                                        if (parts.size > 1) smsManager.sendMultipartTextMessage(contact.phone, null, parts, null, null)
+                                        else smsManager.sendTextMessage(contact.phone, null, personalised, null, null)
+                                    }.onSuccess { sent++ }.onFailure { failed++; android.util.Log.e("SAMBulkSMS", "SMS submission failed for ${contact.phone}", it) }
+                                }
+                                Toast.makeText(this@MainActivity, "SMS submitted: $sent • Failed: $failed. Delivery depends on your mobile network.", Toast.LENGTH_LONG).show()
+                            }
+                        } else {
+                            val contact = selected.firstOrNull() ?: return@SchedulerScreen
+                            val personalised = body.replace("{name}", contact.name, ignoreCase = true)
+                                .replace("{phone}", contact.phone, ignoreCase = true)
+                            val digits = contact.phone.filter { it.isDigit() }
+                            runCatching {
+                                val uri = android.net.Uri.parse("https://wa.me/$digits?text=${android.net.Uri.encode(personalised)}")
+                                val intent = android.content.Intent(android.content.Intent.ACTION_VIEW, uri)
+                                startActivity(android.content.Intent.createChooser(intent, "Continue with WhatsApp"))
+                            }.onFailure { Toast.makeText(this@MainActivity, "Could not open WhatsApp for ${contact.name}.", Toast.LENGTH_LONG).show() }
+                        }
+                    },
                     modifier = Modifier.padding(padding)
                 )
             }
@@ -1779,7 +1808,8 @@ private fun SchedulerScreen(
 private fun BulkComposer(
     contacts: List<ContactEntity>,
     onClose: () -> Unit,
-    onSchedule: (List<ContactEntity>, String, String, Long) -> Unit
+    onSchedule: (List<ContactEntity>, String, String, Long) -> Unit,
+    onSendNow: (List<ContactEntity>, String, String) -> Unit
 ) {
     var selectedIds by remember { mutableStateOf(contacts.map { it.id }.toSet()) }
     var body by remember { mutableStateOf("Hello {name}, ") }
@@ -1787,6 +1817,8 @@ private fun BulkComposer(
     var date by remember { mutableStateOf(SimpleDateFormat("yyyy-MM-dd", Locale.US).format(Date(System.currentTimeMillis() + 3_600_000L))) }
     var time by remember { mutableStateOf(SimpleDateFormat("HH:mm", Locale.US).format(Date(System.currentTimeMillis() + 3_600_000L))) }
     var error by remember { mutableStateOf("") }
+    var whatsappQueue by remember { mutableStateOf<List<ContactEntity>>(emptyList()) }
+    var whatsappIndex by remember { mutableIntStateOf(0) }
     val configuration = androidx.compose.ui.platform.LocalConfiguration.current
     val context = androidx.compose.ui.platform.LocalContext.current
     AlertDialog(
@@ -1823,11 +1855,45 @@ private fun BulkComposer(
                 OutlinedTextField(date, { date = it }, modifier = Modifier.fillMaxWidth(), label = { Text("Date (YYYY-MM-DD)") }, singleLine = true)
                 OutlinedTextField(time, { time = it }, modifier = Modifier.fillMaxWidth(), label = { Text("Time (24-hour HH:mm)") }, singleLine = true)
                 if (error.isNotBlank()) Text(error, color = MaterialTheme.colorScheme.error)
-                Text("Each recipient gets a separate scheduled message. WhatsApp requires you to review and tap Send when the chat opens.", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                if (channel == "WhatsApp") {
+                    Text("WhatsApp sends one chat at a time. Tap Open next chat, review the recipient and message, then tap Send in WhatsApp. Return here for the next contact.", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    if (whatsappQueue.isNotEmpty()) {
+                        Text("WhatsApp queue: ${whatsappIndex.coerceAtMost(whatsappQueue.size)} of ${whatsappQueue.size} opened", fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.primary)
+                        if (whatsappIndex < whatsappQueue.size) {
+                            Button(onClick = {
+                                onSendNow(listOf(whatsappQueue[whatsappIndex]), body.trim(), "WhatsApp")
+                                whatsappIndex++
+                            }, modifier = Modifier.fillMaxWidth()) { Text("Open next chat — ${whatsappQueue[whatsappIndex].name}") }
+                        } else Text("All selected chats have been opened. Sending is confirmed by you inside WhatsApp.", fontSize = 12.sp, color = MaterialTheme.colorScheme.secondary)
+                    }
+                } else {
+                    Text("SMS is submitted separately to each selected number. Carrier charges, network availability and message limits may apply.", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+                Text("Each recipient receives an individually personalised message. Use {name} and {phone} in the template.", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
         },
         confirmButton = {
-            Button(onClick = {
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                if (channel == "WhatsApp") {
+                    OutlinedButton(onClick = {
+                        val selected = contacts.filter { it.id in selectedIds }
+                        when {
+                            selected.isEmpty() -> error = "Select at least one contact."
+                            body.isBlank() -> error = "Enter a message."
+                            else -> { whatsappQueue = selected; whatsappIndex = 0; error = "" }
+                        }
+                    }) { Text(if (whatsappQueue.isEmpty()) "Prepare send now" else "Reset queue") }
+                } else {
+                    OutlinedButton(onClick = {
+                        val selected = contacts.filter { it.id in selectedIds }
+                        when {
+                            selected.isEmpty() -> error = "Select at least one contact."
+                            body.isBlank() -> error = "Enter a message."
+                            else -> onSendNow(selected, body.trim(), "SMS")
+                        }
+                    }) { Text("Send now") }
+                }
+                Button(onClick = {
                 try {
                     val at = SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.US).apply { isLenient = false }.parse("$date $time")!!.time
                     val selected = contacts.filter { it.id in selectedIds }
@@ -1839,6 +1905,7 @@ private fun BulkComposer(
                     }
                 } catch (_: Exception) { error = "Enter a valid date and time." }
             }) { Text("Schedule ${selectedIds.size}") }
+            }
         },
         dismissButton = { TextButton(onClick = onClose) { Text("Cancel") } }
     )
@@ -1857,6 +1924,7 @@ private fun ContactsPage(
     onRequestDeviceContacts: () -> Unit,
     onRefreshDeviceContacts: () -> Unit,
     onBulkSchedule: (List<ContactEntity>, String, String, Long) -> Unit,
+    onSendNow: (List<ContactEntity>, String, String) -> Unit,
     modifier: Modifier = Modifier
 ) {
     val context = androidx.compose.ui.platform.LocalContext.current
@@ -1929,7 +1997,7 @@ private fun ContactsPage(
         BulkComposer(activeContacts, onClose = { showBulkComposer = false }, onSchedule = { selected, body, channel, at ->
             onBulkSchedule(selected, body, channel, at)
             showBulkComposer = false
-        })
+        }, onSendNow = onSendNow)
     }
     if (showEditor) {
         var name by remember(editing?.id) { mutableStateOf(editing?.name ?: "") }

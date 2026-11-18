@@ -784,6 +784,7 @@ private fun SchedulerScreen(
     togglePause: (MessageEntity) -> Unit,
     retry: (MessageEntity) -> Unit
 ) {
+    val context = androidx.compose.ui.platform.LocalContext.current
     var page by remember { mutableStateOf("Home") }
     var showMoreMenu by remember { mutableStateOf(false) }
     var showComposer by remember { mutableStateOf(false) }
@@ -1068,7 +1069,8 @@ private fun SchedulerScreen(
                             requestSmsPermission {
                                 var sent = 0
                                 var failed = 0
-                                val smsManager = if (Build.VERSION.SDK_INT >= 31) getSystemService(android.telephony.SmsManager::class.java) else @Suppress("DEPRECATION") android.telephony.SmsManager.getDefault()
+                                @Suppress("DEPRECATION")
+                                val smsManager = if (Build.VERSION.SDK_INT >= 31) context.getSystemService(android.telephony.SmsManager::class.java) else android.telephony.SmsManager.getDefault()
                                 selected.forEach { contact ->
                                     val personalised = body.replace("{name}", contact.name, ignoreCase = true)
                                         .replace("{phone}", contact.phone, ignoreCase = true)
@@ -1081,15 +1083,19 @@ private fun SchedulerScreen(
                                 Toast.makeText(this@MainActivity, "SMS submitted: $sent • Failed: $failed. Delivery depends on your mobile network.", Toast.LENGTH_LONG).show()
                             }
                         } else {
-                            val contact = selected.firstOrNull() ?: return@SchedulerScreen
-                            val personalised = body.replace("{name}", contact.name, ignoreCase = true)
-                                .replace("{phone}", contact.phone, ignoreCase = true)
-                            val digits = contact.phone.filter { it.isDigit() }
-                            runCatching {
-                                val uri = android.net.Uri.parse("https://wa.me/$digits?text=${android.net.Uri.encode(personalised)}")
-                                val intent = android.content.Intent(android.content.Intent.ACTION_VIEW, uri)
-                                startActivity(android.content.Intent.createChooser(intent, "Continue with WhatsApp"))
-                            }.onFailure { Toast.makeText(this@MainActivity, "Could not open WhatsApp for ${contact.name}.", Toast.LENGTH_LONG).show() }
+                            val contact = selected.firstOrNull()
+                            if (contact == null) {
+                                Toast.makeText(context, "Select at least one contact first.", Toast.LENGTH_SHORT).show()
+                            } else {
+                                val personalised = body.replace("{name}", contact.name, ignoreCase = true)
+                                    .replace("{phone}", contact.phone, ignoreCase = true)
+                                val digits = contact.phone.filter { it.isDigit() }
+                                runCatching {
+                                    val uri = android.net.Uri.parse("https://wa.me/$digits?text=${android.net.Uri.encode(personalised)}")
+                                    val intent = android.content.Intent(android.content.Intent.ACTION_VIEW, uri)
+                                    context.startActivity(android.content.Intent.createChooser(intent, "Continue with WhatsApp"))
+                                }.onFailure { Toast.makeText(context, "Could not open WhatsApp for ${contact.name}.", Toast.LENGTH_LONG).show() }
+                            }
                         }
                     },
                     modifier = Modifier.padding(padding)

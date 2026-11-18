@@ -56,7 +56,6 @@ class MainActivity : FragmentActivity() {
     private var backupPassword: String = ""
     private var themeMode by mutableStateOf("System")
     private var pickedRecipientNumber by mutableStateOf("")
-    private var pickedAttachmentUris by mutableStateOf<List<String>>(emptyList())
     private var securityPromptActive = false
     var securityAuthenticated = false
 
@@ -284,7 +283,7 @@ class MainActivity : FragmentActivity() {
             }.onFailure { Toast.makeText(this, it.message ?: "Could not read the selected contact.", Toast.LENGTH_LONG).show() }
         }
     }
-    private val mediaPicker = registerForActivityResult(ActivityResultContracts.OpenMultipleDocuments()) { uris ->\n        if (uris.isNotEmpty()) {\n            uris.forEach { uri -> runCatching { contentResolver.takePersistableUriPermission(uri, android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION) } }\n            pickedAttachmentUris = (pickedAttachmentUris + uris.map { it.toString() }).distinct()\n        }\n    }\n    private val smsPermission =
+    private val smsPermission =
         registerForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
             if (granted) pendingSmsAction?.invoke()
             else Toast.makeText(this, "SMS permission is needed for scheduled SMS sending.", Toast.LENGTH_LONG).show()
@@ -322,7 +321,7 @@ class MainActivity : FragmentActivity() {
                 val contacts by AppDatabase.get(this@MainActivity).contactDao().observeAll().collectAsStateWithLifecycle(initialValue = emptyList())
                 SchedulerScreen(
                     contacts = contacts,
-                    pickedRecipientNumber = pickedRecipientNumber,\n                    pickedAttachmentUris = pickedAttachmentUris,\n                    onPickAttachments = { mediaPicker.launch(arrayOf("image/*", "video/*")) },
+                    pickedRecipientNumber = pickedRecipientNumber,
                     onPickRecipient = { recipientContactPicker.launch(null) },
                     onPickContact = { deviceContactPicker.launch(null) },
                     saveContact = { contact -> lifecycleScope.launch { AppDatabase.get(this@MainActivity).contactDao().insert(contact) } },
@@ -350,7 +349,7 @@ class MainActivity : FragmentActivity() {
                         }
                     },
                     onDismissImport = { csvImportPreview = emptyList() },
-                    save = { existingId, recipient, body, channel, scheduledAt, repeatRule, category, attachments ->
+                    save = { existingId, recipient, body, channel, scheduledAt, repeatRule, category ->
                         lifecycleScope.launch {
                             if (existingId != null) {
                                 val current = dao.getById(existingId)
@@ -939,8 +938,8 @@ private fun SchedulerScreen(
             duplicateMode = duplicateMode,
             onClose = { showComposer = false; editMessage = null; duplicateMode = false },
             requestSmsPermission = requestSmsPermission,
-            onSave = { id, recipient, body, channel, scheduledAt, repeatRule, category, attachments ->
-                save(if (duplicateMode) null else id, recipient, body, channel, scheduledAt, repeatRule, category, attachments)
+            onSave = { id, recipient, body, channel, scheduledAt, repeatRule, category ->
+                save(if (duplicateMode) null else id, recipient, body, channel, scheduledAt, repeatRule, category)
                 showComposer = false
                 editMessage = null
                 duplicateMode = false
@@ -1005,7 +1004,7 @@ private fun BulkComposer(
     var channel by remember { mutableStateOf("SMS") }
     var date by remember { mutableStateOf(SimpleDateFormat("yyyy-MM-dd", Locale.US).format(Date(System.currentTimeMillis() + 3_600_000L))) }
     var time by remember { mutableStateOf(SimpleDateFormat("HH:mm", Locale.US).format(Date(System.currentTimeMillis() + 3_600_000L))) }
-    var error by remember { mutableStateOf("") }\n    var attachments by remember(initialMessage?.id) { mutableStateOf(initialMessage?.attachmentsJson?.let { runCatching { org.json.JSONArray(it).let { a -> (0 until a.length()).map(a::getString) } }.getOrDefault(emptyList()) } ?: emptyList()) }\n    LaunchedEffect(pickedAttachmentUris) { attachments = (attachments + pickedAttachmentUris).distinct() }
+    var error by remember { mutableStateOf("") }
     val configuration = androidx.compose.ui.platform.LocalConfiguration.current
     AlertDialog(
         modifier = Modifier.fillMaxWidth(0.94f).widthIn(max = 560.dp),
@@ -1349,7 +1348,7 @@ private fun Composer(
                             recipient.isBlank() || body.isBlank() -> error = "Enter recipient and message."
                             recipient.count { it.isDigit() } < 7 -> error = "Enter a valid phone number with country code where required."
                             scheduledAt <= System.currentTimeMillis() -> error = "Choose a future date and time."
-                            else -> onSave(initialMessage?.id, recipient.trim(), body.trim(), channel, scheduledAt, repeatRule, category, attachments)
+                            else -> onSave(initialMessage?.id, recipient.trim(), body.trim(), channel, scheduledAt, repeatRule, category)
                         }
                     } catch (_: Exception) {
                         error = "Enter a valid date and time."

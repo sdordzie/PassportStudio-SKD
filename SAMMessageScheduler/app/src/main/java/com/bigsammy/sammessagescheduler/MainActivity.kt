@@ -1287,7 +1287,6 @@ private fun BulkComposer(
                 FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                     FilterChip(selected = channel == "SMS", onClick = { channel = "SMS" }, label = { Text("SMS") })
                     FilterChip(selected = channel == "WhatsApp", onClick = { channel = "WhatsApp" }, label = { Text("WhatsApp") })
-                    FilterChip(selected = channel == "Social", onClick = { channel = "Social"; if (recipient.isBlank()) recipient = "Social media" }, label = { Text("Social media") })
                 }
                 OutlinedTextField(date, { date = it }, modifier = Modifier.fillMaxWidth(), label = { Text("Date (YYYY-MM-DD)") }, singleLine = true)
                 OutlinedTextField(time, { time = it }, modifier = Modifier.fillMaxWidth(), label = { Text("Time (24-hour HH:mm)") }, singleLine = true)
@@ -1550,6 +1549,7 @@ private fun Composer(
                 ) {
                     FilterChip(selected = channel == "SMS", onClick = { channel = "SMS" }, label = { Text("SMS") })
                     FilterChip(selected = channel == "WhatsApp", onClick = { channel = "WhatsApp" }, label = { Text("WhatsApp") })
+                    FilterChip(selected = channel == "Social", onClick = { channel = "Social" }, label = { Text("Social media") })
                 }
                 if (channel == "Social") {
                     val socialTargets = listOf(

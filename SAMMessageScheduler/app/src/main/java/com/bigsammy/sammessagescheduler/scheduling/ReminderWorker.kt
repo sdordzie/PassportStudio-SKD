@@ -196,7 +196,13 @@ class ReminderWorker(context: Context, params: WorkerParameters) : CoroutineWork
                 val uri = Uri.parse("https://wa.me/$phone?text=$encoded")
                 val openChat = PendingIntent.getActivity(
                     applicationContext, id.toInt(),
-                    Intent(Intent.ACTION_VIEW, uri).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
+                    Intent(Intent.ACTION_VIEW, uri).apply {
+                        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                        if (item.whatsappPackage.isNotBlank()) setPackage(item.whatsappPackage)
+                    }.let { target ->
+                        if (item.whatsappPackage.isBlank()) Intent.createChooser(target, "Choose WhatsApp")
+                        else target
+                    },
                     PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
                 )
                 val next = nextOccurrence(item.scheduledAt, item.repeatRule)

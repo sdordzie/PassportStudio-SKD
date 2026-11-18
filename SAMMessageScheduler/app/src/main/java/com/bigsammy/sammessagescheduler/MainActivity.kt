@@ -1027,6 +1027,80 @@ private fun SchedulerScreen(
                             }
                         }
                     }
+                    var calendarMonth by remember { mutableLongStateOf(System.currentTimeMillis()) }
+                    var selectedCalendarDate by remember { mutableStateOf(SimpleDateFormat("yyyy-MM-dd", Locale.US).format(Date())) }
+                    val monthCalendar = java.util.Calendar.getInstance().apply {
+                        timeInMillis = calendarMonth
+                        set(java.util.Calendar.DAY_OF_MONTH, 1)
+                    }
+                    val monthTitle = SimpleDateFormat("MMMM yyyy", Locale.getDefault()).format(monthCalendar.time)
+                    val monthDays = monthCalendar.getActualMaximum(java.util.Calendar.DAY_OF_MONTH)
+                    val leadingBlanks = monthCalendar.get(java.util.Calendar.DAY_OF_WEEK) - 1
+                    val calendarCells = List(leadingBlanks) { 0 } + (1..monthDays).toList()
+                    val calendarRows = calendarCells.chunked(7).map { it + List(7 - it.size) { 0 } }
+                    val selectedDayPosts = socialPosts.filter {
+                        SimpleDateFormat("yyyy-MM-dd", Locale.US).format(Date(it.scheduledAt)) == selectedCalendarDate
+                    }
+                    Card(Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
+                        Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Text("Publishing calendar", fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface, modifier = Modifier.weight(1f))
+                                IconButton(onClick = {
+                                    val cal = java.util.Calendar.getInstance().apply { timeInMillis = calendarMonth; add(java.util.Calendar.MONTH, -1) }
+                                    calendarMonth = cal.timeInMillis
+                                }) { Icon(Icons.Default.ChevronLeft, contentDescription = "Previous month") }
+                                Text(monthTitle, fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.primary)
+                                IconButton(onClick = {
+                                    val cal = java.util.Calendar.getInstance().apply { timeInMillis = calendarMonth; add(java.util.Calendar.MONTH, 1) }
+                                    calendarMonth = cal.timeInMillis
+                                }) { Icon(Icons.Default.ChevronRight, contentDescription = "Next month") }
+                            }
+                            Row(Modifier.fillMaxWidth()) {
+                                listOf("S", "M", "T", "W", "T", "F", "S").forEach { day ->
+                                    Text(day, modifier = Modifier.weight(1f), textAlign = androidx.compose.ui.text.style.TextAlign.Center, fontSize = 11.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                }
+                            }
+                            calendarRows.forEach { week ->
+                                Row(Modifier.fillMaxWidth()) {
+                                    week.forEach { day ->
+                                        val dayKey = if (day == 0) "" else String.format(Locale.US, "%04d-%02d-%02d",
+                                            monthCalendar.get(java.util.Calendar.YEAR), monthCalendar.get(java.util.Calendar.MONTH) + 1, day)
+                                        val count = if (day == 0) 0 else socialPosts.count {
+                                            SimpleDateFormat("yyyy-MM-dd", Locale.US).format(Date(it.scheduledAt)) == dayKey
+                                        }
+                                        TextButton(
+                                            onClick = { if (day > 0) selectedCalendarDate = dayKey },
+                                            enabled = day > 0,
+                                            modifier = Modifier.weight(1f).heightIn(min = 42.dp),
+                                            contentPadding = PaddingValues(0.dp)
+                                        ) {
+                                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                                Text(if (day == 0) " " else day.toString(), fontWeight = if (selectedCalendarDate == dayKey) FontWeight.Bold else FontWeight.Normal, fontSize = 12.sp)
+                                                Text(if (count > 0) count.toString() else " ", fontSize = 9.sp, color = MaterialTheme.colorScheme.primary)
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                            HorizontalDivider()
+                            Text(selectedCalendarDate, fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onSurface)
+                            if (selectedDayPosts.isEmpty()) {
+                                Text("No social posts scheduled for this date.", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            } else {
+                                selectedDayPosts.forEach { post ->
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        Column(Modifier.weight(1f)) {
+                                            Text((listOf("Facebook" to "com.facebook.katana", "Instagram" to "com.instagram.android", "TikTok" to "com.zhiliaoapp.musically", "Snapchat" to "com.snapchat.android", "Telegram" to "org.telegram.messenger", "X" to "com.twitter.android", "LinkedIn" to "com.linkedin.android", "Pinterest" to "com.pinterest").firstOrNull { it.second == post.whatsappPackage }?.first ?: "Social post"),
+                                                fontWeight = FontWeight.Medium, fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurface)
+                                            Text(SimpleDateFormat("HH:mm", Locale.getDefault()).format(Date(post.scheduledAt)) + " • " + post.body,
+                                                maxLines = 2, fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                        }
+                                        TextButton(onClick = { editMessage = post; showComposer = true }) { Text("Edit") }
+                                    }
+                                }
+                            }
+                        }
+                    }
                     Text("SUPPORTED DESTINATIONS", fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
                     val destinations = listOf(
                         "Facebook" to "com.facebook.katana",

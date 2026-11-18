@@ -720,11 +720,12 @@ private fun SchedulerScreen(
         },
         bottomBar = {
             NavigationBar(containerColor = MaterialTheme.colorScheme.surface) {
-                listOf("Home", "Scheduled", "Calendar", "Contacts", "Settings").forEach { name ->
+                listOf("Home", "Scheduled", "Calendar", "Social", "Contacts", "Settings").forEach { name ->
                     val icon = when (name) {
                         "Home" -> Icons.Default.Home
                         "Scheduled" -> Icons.Default.Schedule
                         "Calendar" -> Icons.Default.CalendarMonth
+                        "Social" -> Icons.Default.Campaign
                         "Contacts" -> Icons.Default.Contacts
                         else -> Icons.Default.Settings
                     }
@@ -971,6 +972,108 @@ private fun SchedulerScreen(
                     if (messages.isEmpty()) {
                         item { Text("No messages scheduled yet.", color = MaterialTheme.colorScheme.onSurfaceVariant) }
                     }
+                }
+            }
+
+            "Social" -> {
+                val socialPosts = messages.filter { it.channel == "Social" }.sortedBy { it.scheduledAt }
+                val upcomingPosts = socialPosts.filter { it.status == "SCHEDULED" }
+                val waitingPosts = socialPosts.filter { it.status == "AWAITING_USER" }
+                val failedPosts = socialPosts.filter { it.status == "FAILED" || it.status == "PERMISSION_REQUIRED" }
+                Column(
+                    Modifier.padding(padding).fillMaxSize().verticalScroll(rememberScrollState()).padding(18.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    Text("Social Media Centre", fontSize = 24.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
+                    Text("Plan, prepare and track posts for your social channels.", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Card(
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer),
+                        shape = RoundedCornerShape(20.dp)
+                    ) {
+                        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Icon(Icons.Default.Campaign, contentDescription = null, tint = MaterialTheme.colorScheme.onPrimaryContainer)
+                                Spacer(Modifier.width(8.dp))
+                                Text("Publishing workspace", fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onPrimaryContainer)
+                            }
+                            Text("Prepare a post with a caption and media, choose a social app, then schedule when SAM should bring it up for review.", color = MaterialTheme.colorScheme.onPrimaryContainer)
+                            Button(onClick = { showComposer = true }, modifier = Modifier.fillMaxWidth()) {
+                                Icon(Icons.Default.Add, contentDescription = null)
+                                Spacer(Modifier.width(6.dp))
+                                Text("Create social post")
+                            }
+                        }
+                    }
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Stat("All posts", socialPosts.size.toString(), Modifier.weight(1f))
+                        Stat("Upcoming", upcomingPosts.size.toString(), Modifier.weight(1f))
+                        Stat("Needs review", waitingPosts.size.toString(), Modifier.weight(1f))
+                    }
+                    if (failedPosts.isNotEmpty()) {
+                        Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.errorContainer), modifier = Modifier.fillMaxWidth()) {
+                            Column(Modifier.padding(12.dp)) {
+                                Text("${failedPosts.size} post(s) need attention", fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onSurface)
+                                Text("Check the destination app, permissions and scheduled post details.", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            }
+                        }
+                    }
+                    Text("SUPPORTED DESTINATIONS", fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
+                    val destinations = listOf(
+                        "Facebook" to "com.facebook.katana",
+                        "Instagram" to "com.instagram.android",
+                        "TikTok" to "com.zhiliaoapp.musically",
+                        "Snapchat" to "com.snapchat.android",
+                        "Telegram" to "org.telegram.messenger",
+                        "X" to "com.twitter.android",
+                        "LinkedIn" to "com.linkedin.android",
+                        "Pinterest" to "com.pinterest"
+                    )
+                    destinations.chunked(2).forEach { pair ->
+                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            pair.forEach { (label, packageName) ->
+                                val installed = runCatching { androidx.core.content.ContextCompat.getPackageInfo(packageManager, packageName, 0) }.isSuccess
+                                Card(Modifier.weight(1f), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
+                                    Row(Modifier.padding(10.dp), verticalAlignment = Alignment.CenterVertically) {
+                                        Icon(if (installed) Icons.Default.CheckCircle else Icons.Default.Download, contentDescription = null, tint = if (installed) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(18.dp))
+                                        Spacer(Modifier.width(6.dp))
+                                        Column {
+                                            Text(label, fontWeight = FontWeight.Medium, fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurface)
+                                            Text(if (installed) "Installed" else "Not installed", fontSize = 10.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                        }
+                                    }
+                                }
+                            }
+                            if (pair.size == 1) Spacer(Modifier.weight(1f))
+                        }
+                    }
+                    Text("YOUR POST QUEUE", fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
+                    if (socialPosts.isEmpty()) {
+                        Card(Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
+                            Column(Modifier.padding(16.dp)) {
+                                Text("No social posts yet", fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onSurface)
+                                Text("Create your first post to start building your publishing calendar.", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            }
+                        }
+                    } else {
+                        socialPosts.forEach { post ->
+                            Card(Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
+                                Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        Text(destinations.firstOrNull { it.second == post.whatsappPackage }?.first ?: "Social app", fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f), color = MaterialTheme.colorScheme.onSurface)
+                                        Text(post.status.replace("_", " "), fontSize = 10.sp, color = MaterialTheme.colorScheme.primary)
+                                    }
+                                    Text(post.body, maxLines = 3, color = MaterialTheme.colorScheme.onSurface)
+                                    Text(SimpleDateFormat("EEE, dd MMM yyyy • HH:mm", Locale.getDefault()).format(Date(post.scheduledAt)), fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                    Row(horizontalArrangement = Arrangement.End, modifier = Modifier.fillMaxWidth()) {
+                                        TextButton(onClick = { editMessage = post; showComposer = true }) { Text("Edit") }
+                                        TextButton(onClick = { pendingRemoval = post }) { Text("Delete", color = MaterialTheme.colorScheme.error) }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    Text("Direct API publishing will be enabled only after the relevant platform developer approvals and secure account connections are configured. Until then, SAM uses assisted sharing and requires you to review and publish in the destination app.", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
             }
 

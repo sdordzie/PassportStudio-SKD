@@ -57,6 +57,8 @@ import java.util.Locale
 private data class WhatsAppAppOption(val packageName: String, val label: String)
 
 private val Purple = Color(0xFF6750A4)
+// Shared Compose state lets the settings screen refresh when the Activity resumes.
+private val permissionRefreshTick = mutableIntStateOf(0)
 
 class MainActivity : FragmentActivity() {
     private var backupPassword: String = ""
@@ -76,12 +78,9 @@ class MainActivity : FragmentActivity() {
     }
     private var securityPromptActive = false
     var securityAuthenticated = false
-    // Incremented whenever SAM returns to the foreground so permission UI re-reads Android's live state.
-    private var permissionRefreshTick by mutableIntStateOf(0)
-
     override fun onResume() {
         super.onResume()
-        permissionRefreshTick++
+        permissionRefreshTick.intValue++
         val prefs = getSharedPreferences("sam_app_security", android.content.Context.MODE_PRIVATE)
         if (prefs.getBoolean("biometric_enabled", false) && !securityAuthenticated && !securityPromptActive) authenticateForApp()
     }
@@ -981,7 +980,7 @@ private fun SchedulerScreen(
                     Text("Settings", fontSize = 24.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
                     val context = androidx.compose.ui.platform.LocalContext.current
                     // Reading this state makes the permission list recompose after returning from Android Settings.
-                    val permissionRefresh = permissionRefreshTick
+                    val permissionRefresh = permissionRefreshTick.intValue
                     Text("Permissions centre", fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onSurface, modifier = Modifier.padding(top = 16.dp))
                     Text("SAM requests sensitive access only when a feature needs it. Photos and videos can be selected using Android's system picker without broad gallery access.", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 12.sp)
                     val permissionRows = listOf(

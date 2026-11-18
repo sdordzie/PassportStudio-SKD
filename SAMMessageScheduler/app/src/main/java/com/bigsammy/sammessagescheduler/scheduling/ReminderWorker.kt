@@ -2,6 +2,7 @@ package com.bigsammy.sammessagescheduler.scheduling
 
 import android.Manifest
 import android.app.NotificationChannel
+import android.app.KeyguardManager
 import android.app.NotificationManager
 import android.app.PendingIntent
 import android.content.BroadcastReceiver
@@ -148,7 +149,7 @@ class ReminderWorker(context: Context, params: WorkerParameters) : CoroutineWork
                 }
                 postNotification(
                     id, "Your scheduled media message is ready",
-                    "Tap to choose an app and recipient. Review the message and attachments, then tap Send. Recipient: ${item.recipient}.",
+                    unlockAwareGuidance("Tap to choose an app and recipient. Review the message and attachments, then tap Send. Recipient: ${item.recipient}."),
                     openShare
                 )
             } else if (item.channel == "SMS") {
@@ -222,7 +223,7 @@ class ReminderWorker(context: Context, params: WorkerParameters) : CoroutineWork
                 } else {
                     dao.update(item.copy(status = "AWAITING_USER"))
                 }
-                postNotification(id, "Your social post is ready", "Tap to open the selected social app. Review your post and publish it there.", openSocial)
+                postNotification(id, "Your social post is ready", unlockAwareGuidance("Tap to open the selected social app. Review your post and publish it there."), openSocial)
             } else {
                 val phone = item.recipient.filter { it.isDigit() }
                 val encoded = URLEncoder.encode(item.body, "UTF-8")
@@ -245,7 +246,7 @@ class ReminderWorker(context: Context, params: WorkerParameters) : CoroutineWork
                 } else {
                     dao.update(item.copy(status = "AWAITING_USER"))
                 }
-                postNotification(id, "Your WhatsApp message is ready", "Tap to open WhatsApp with the recipient and message prepared. Review it and tap Send.", openChat)
+                postNotification(id, "Your WhatsApp message is ready", unlockAwareGuidance("Tap to open WhatsApp with the recipient and message prepared. Review it and tap Send."), openChat)
             }
             Result.success()
         } catch (e: SecurityException) {
@@ -296,6 +297,22 @@ class ReminderWorker(context: Context, params: WorkerParameters) : CoroutineWork
         }.timeInMillis
     }
 
+    /**
+     * Third-party apps cannot be unlocked or safely driven by SAM. If Android's
+     * keyguard is active, keep the prepared action behind a private notification;
+     * the user unlocks the device and explicitly taps to continue.
+     */
+    private fun unlockAwareGuidance(actionText: String): String {
+        val keyguard = applicationContext.getSystemService(Context.KEYGUARD_SERVICE) as? KeyguardManager
+        val deviceLocked = keyguard?.isKeyguardLocked == true
+        val unlockText = if (deviceLocked) {
+            " Your phone is locked. Unlock it first, then tap this notification to continue."
+        } else {
+            " If the destination app has its own App Lock, unlock it yourself when prompted."
+        }
+        return actionText + unlockText + " SAM cannot bypass device or app security, and the destination app may require you to confirm Send or Publish."
+    }
+
     private fun postNotification(id: Long, title: String, text: String, action: PendingIntent? = null) {
         val manager = applicationContext.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
         val channelId = "sam_scheduled_messages"
@@ -309,6 +326,8 @@ class ReminderWorker(context: Context, params: WorkerParameters) : CoroutineWork
             .setStyle(NotificationCompat.BigTextStyle().bigText(text))
             .setAutoCancel(true)
             .setPriority(NotificationCompat.PRIORITY_HIGH)
+            .setVisibility(NotificationCompat.VISIBILITY_PRIVATE)
+            .setCategory(NotificationCompat.CATEGORY_MESSAGE)
         if (action != null) builder.setContentIntent(action)
         manager.notify(id.toInt(), builder.build())
     }

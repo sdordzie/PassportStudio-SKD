@@ -258,8 +258,13 @@ class MainActivity : FragmentActivity() {
                         .put("birthday", contact.birthday).put("anniversary", contact.anniversary)
                         .put("createdAt", contact.createdAt))
                 }
+                val preferences = getSharedPreferences("sam_social_campaigns", android.content.Context.MODE_PRIVATE)
+                val templates = getSharedPreferences("sam_social_templates", android.content.Context.MODE_PRIVATE)
                 root.put("messages", array).put("contacts", contactArray)
-                val encrypted = BackupCrypto.encrypt(root.toString(), password.toCharArray())
+                    .put("campaigns", JSONArray(preferences.getString("campaigns", "[]") ?: "[]"))
+                    .put("captionTemplates", JSONArray(templates.getString("templates", "[]") ?: "[]"))
+                val passwordChars = password.toCharArray()
+                val encrypted = try { BackupCrypto.encrypt(root.toString(), passwordChars) } finally { passwordChars.fill('\u0000') }
                 contentResolver.openOutputStream(uri)?.bufferedWriter()?.use { it.write(encrypted) }
                     ?: error("Could not open backup file.")
                 Toast.makeText(this@MainActivity, "Encrypted cloud-compatible backup exported (messages and contacts).", Toast.LENGTH_LONG).show()
@@ -371,7 +376,7 @@ class MainActivity : FragmentActivity() {
                 for (index in 0 until contactArray.length()) {
                     val item = contactArray.getJSONObject(index)
                     restoredContacts += ContactEntity(
-                        id = item.optLong("id", 0L),
+                        id = 0L,
                         name = item.getString("name"),
                         phone = item.getString("phone"),
                         groupName = item.optString("groupName", "General"),
@@ -381,10 +386,29 @@ class MainActivity : FragmentActivity() {
                     )
                 }
                 if (restoredContacts.isNotEmpty()) database.contactDao().insertAll(restoredContacts)
+                root.optJSONArray("campaigns")?.let { campaigns ->
+                    getSharedPreferences("sam_social_campaigns", android.content.Context.MODE_PRIVATE)
+                        .edit().putString("campaigns", campaigns.toString()).apply()
+                }
+                root.optJSONArray("captionTemplates")?.let { templates ->
+                    getSharedPreferences("sam_social_templates", android.content.Context.MODE_PRIVATE)
+                        .edit().putString("templates", templates.toString()).apply()
+                }
                 val all = dao.getAllSnapshot()
                 all.filter { it.status == "SCHEDULED" && it.triggerType == "TIME" && it.scheduledAt > System.currentTimeMillis() }
                     .forEach { MessageScheduler.schedule(this@MainActivity, it.id, it.scheduledAt) }
-                Toast.makeText(this@MainActivity, "Backup restored: messages and contacts.", Toast.LENGTH_LONG).show()
+                all.filter { it.status == "SCHEDULED" && it.triggerType == "LOCATION" && it.latitude != null && it.longitude != null }
+                    .forEach { message ->
+                        val fine = ContextCompat.checkSelfPermission(this@MainActivity, Manifest.permission.ACCESS_FINE_LOCATION) == android.content.pm.PackageManager.PERMISSION_GRANTED
+                        val coarse = ContextCompat.checkSelfPermission(this@MainActivity, Manifest.permission.ACCESS_COARSE_LOCATION) == android.content.pm.PackageManager.PERMISSION_GRANTED
+                        val background = Build.VERSION.SDK_INT < 29 || ContextCompat.checkSelfPermission(this@MainActivity, Manifest.permission.ACCESS_BACKGROUND_LOCATION) == android.content.pm.PackageManager.PERMISSION_GRANTED
+                        if ((fine || coarse) && background) {
+                            runCatching {
+                                LocationGeofenceManager.register(this@MainActivity, message.id, message.latitude!!, message.longitude!!, message.radiusMeters)
+                            }.onFailure { android.util.Log.e("SAMRestore", "Could not restore arrival reminder ${message.id}", it) }
+                        }
+                    }
+                Toast.makeText(this@MainActivity, "Backup restored: messages, contacts, campaigns and captions.", Toast.LENGTH_LONG).show()
             }.onFailure { Toast.makeText(this@MainActivity, "Restore failed. Check the backup file.", Toast.LENGTH_LONG).show() }
         }
     }

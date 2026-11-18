@@ -1851,6 +1851,7 @@ private fun ContactsPage(
     onBulkSchedule: (List<ContactEntity>, String, String, Long) -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val context = androidx.compose.ui.platform.LocalContext.current
     var query by remember { mutableStateOf("") }
     var selectedGroup by remember { mutableStateOf("All") }
     var source by remember { mutableStateOf("Phone") }

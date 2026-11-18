@@ -1080,7 +1080,7 @@ private fun SchedulerScreen(
                                         else smsManager.sendTextMessage(contact.phone, null, personalised, null, null)
                                     }.onSuccess { sent++ }.onFailure { failed++; android.util.Log.e("SAMBulkSMS", "SMS submission failed for ${contact.phone}", it) }
                                 }
-                                Toast.makeText(this@MainActivity, "SMS submitted: $sent • Failed: $failed. Delivery depends on your mobile network.", Toast.LENGTH_LONG).show()
+                                Toast.makeText(context, "SMS submitted: $sent • Failed: $failed. Delivery depends on your mobile network.", Toast.LENGTH_LONG).show()
                             }
                         } else {
                             val contact = selected.firstOrNull()

@@ -223,7 +223,7 @@ class MainActivity : FragmentActivity() {
                 rows.forEach { item ->
                     array.put(JSONObject().put("recipient", item.recipient).put("body", item.body)
                         .put("channel", item.channel).put("scheduledAt", item.scheduledAt)
-                        .put("status", item.status).put("repeatRule", item.repeatRule).put("category", item.category).put("createdAt", item.createdAt)
+                        .put("status", item.status).put("deliveryStatus", item.deliveryStatus).put("repeatRule", item.repeatRule).put("category", item.category).put("createdAt", item.createdAt)
                         .put("attachmentsJson", item.attachmentsJson).put("triggerType", item.triggerType)
                         .put("latitude", item.latitude).put("longitude", item.longitude)
                         .put("radiusMeters", item.radiusMeters).put("locationLabel", item.locationLabel))
@@ -248,13 +248,13 @@ class MainActivity : FragmentActivity() {
             runCatching {
                 val rows = AppDatabase.get(this@MainActivity).messageDao().getAllSnapshot()
                 fun csv(value: String): String = "\"" + value.replace("\"", "\"\"") + "\""
-                val header = listOf("ID", "Recipient", "Message", "Channel", "Scheduled At", "Status", "Repeat Rule", "Created At", "Category")
+                val header = listOf("ID", "Recipient", "Message", "Channel", "Scheduled At", "Status", "Delivery Status", "Repeat Rule", "Created At", "Category")
                 val lines = mutableListOf(header.joinToString(","))
                 val formatter = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.US)
                 rows.forEach { item ->
                     lines += listOf(
                         item.id.toString(), csv(item.recipient), csv(item.body), csv(item.channel),
-                        csv(formatter.format(Date(item.scheduledAt))), csv(item.status), csv(item.repeatRule),
+                        csv(formatter.format(Date(item.scheduledAt))), csv(item.status), csv(item.deliveryStatus), csv(item.repeatRule),
                         csv(formatter.format(Date(item.createdAt))), csv(item.category)
                     ).joinToString(",")
                 }
@@ -330,7 +330,7 @@ class MainActivity : FragmentActivity() {
                     val item = array.getJSONObject(index)
                     restored += MessageEntity(recipient = item.getString("recipient"), body = item.getString("body"),
                         channel = item.getString("channel"), scheduledAt = item.getLong("scheduledAt"),
-                        status = item.optString("status", "SCHEDULED"), repeatRule = item.optString("repeatRule", "NONE"),
+                        status = item.optString("status", "SCHEDULED"), deliveryStatus = item.optString("deliveryStatus", "PENDING"), repeatRule = item.optString("repeatRule", "NONE"),
                         createdAt = item.optLong("createdAt", System.currentTimeMillis()), category = item.optString("category", "General"),
                         attachmentsJson = item.optString("attachmentsJson", "[]"), triggerType = item.optString("triggerType", "TIME"),
                         latitude = if (item.isNull("latitude")) null else item.optDouble("latitude"),

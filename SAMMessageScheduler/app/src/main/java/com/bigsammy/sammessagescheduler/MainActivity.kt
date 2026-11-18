@@ -1470,7 +1470,6 @@ private fun SchedulerScreen(
                         "Notifications" to android.Manifest.permission.POST_NOTIFICATIONS,
                         "Send SMS" to android.Manifest.permission.SEND_SMS,
                         "Receive SMS" to android.Manifest.permission.RECEIVE_SMS,
-                        "Camera" to android.Manifest.permission.CAMERA,
                         "Location (while using)" to android.Manifest.permission.ACCESS_FINE_LOCATION,
                         "Location (background)" to android.Manifest.permission.ACCESS_BACKGROUND_LOCATION
                     )

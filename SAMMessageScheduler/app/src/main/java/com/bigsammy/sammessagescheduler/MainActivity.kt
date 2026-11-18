@@ -1967,6 +1967,18 @@ private fun Composer(
     }
     val configuration = androidx.compose.ui.platform.LocalConfiguration.current
     val context = androidx.compose.ui.platform.LocalContext.current
+    val socialCampaignOptions = remember(context) {
+        runCatching {
+            val raw = context.getSharedPreferences("sam_social_campaigns", android.content.Context.MODE_PRIVATE).getString("campaigns", "[]") ?: "[]"
+            val array = JSONArray(raw)
+            (0 until array.length()).map { index ->
+                val item = array.getJSONObject(index)
+                item.optString("id") to item.optString("name")
+            }.filter { it.first.isNotBlank() && it.second.isNotBlank() }
+        }.getOrDefault(emptyList())
+    }
+    var selectedCampaignId by remember(initialMessage?.id) { mutableStateOf(initialMessage?.campaignId ?: "") }
+    var campaignMenuExpanded by remember { mutableStateOf(false) }
     val whatsappApps = remember(context.packageManager) {
         listOf("com.whatsapp" to "WhatsApp", "com.whatsapp.w4b" to "WhatsApp Business").mapNotNull { (packageName, fallbackLabel) ->
             runCatching {
@@ -2028,6 +2040,20 @@ private fun Composer(
                             }
                         }
                     }
+                    Text("Campaign", fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onSurface)
+                    Box {
+                        OutlinedButton(onClick = { campaignMenuExpanded = true }, modifier = Modifier.fillMaxWidth()) {
+                            Text(socialCampaignOptions.firstOrNull { it.first == selectedCampaignId }?.second ?: "No campaign", modifier = Modifier.weight(1f))
+                            Icon(Icons.Default.ArrowDropDown, contentDescription = "Choose campaign")
+                        }
+                        DropdownMenu(expanded = campaignMenuExpanded, onDismissRequest = { campaignMenuExpanded = false }) {
+                            DropdownMenuItem(text = { Text("No campaign") }, onClick = { selectedCampaignId = ""; campaignMenuExpanded = false })
+                            socialCampaignOptions.forEach { (id, name) ->
+                                DropdownMenuItem(text = { Text(name) }, trailingIcon = { if (selectedCampaignId == id) Icon(Icons.Default.Check, contentDescription = "Selected") }, onClick = { selectedCampaignId = id; campaignMenuExpanded = false })
+                            }
+                        }
+                    }
+                    if (socialCampaignOptions.isEmpty()) Text("Create a campaign in Social Centre first. You can still schedule this post without one.", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     Text("At the scheduled time SAM opens the selected app with your text and media ready. Review and publish inside that app. Direct publishing will activate only for accounts and platforms whose official API access has been approved and connected.", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
                 if (channel == "WhatsApp") {
@@ -2259,7 +2285,7 @@ private fun Composer(
                             triggerType == "TIME" && scheduledAt <= System.currentTimeMillis() -> error = "Choose a future date and time."
                             triggerType == "LOCATION" && ((latitudeText.toDoubleOrNull()?.let { it !in -90.0..90.0 } ?: true) || (longitudeText.toDoubleOrNull()?.let { it !in -180.0..180.0 } ?: true)) -> error = "Enter valid latitude and longitude coordinates."
                             triggerType == "LOCATION" && (radiusText.toFloatOrNull()?.let { it !in 100f..1000f } ?: true) -> error = "Arrival radius must be between 100 and 1000 metres."
-                            else -> onSave(initialMessage?.id, recipient.trim(), body.trim(), channel, scheduledAt, repeatRule, category, attachments, triggerType, latitudeText.toDoubleOrNull(), longitudeText.toDoubleOrNull(), radiusText.toFloatOrNull() ?: 150f, locationLabel.trim(), whatsappPackage)
+                            else -> onSave(initialMessage?.id, recipient.trim(), body.trim(), channel, scheduledAt, repeatRule, category, attachments, triggerType, latitudeText.toDoubleOrNull(), longitudeText.toDoubleOrNull(), radiusText.toFloatOrNull() ?: 150f, locationLabel.trim(), whatsappPackage, selectedCampaignId.takeIf { channel == "Social" && it.isNotBlank() })
                         }
                     } catch (_: Exception) {
                         error = "Enter a valid date and time."

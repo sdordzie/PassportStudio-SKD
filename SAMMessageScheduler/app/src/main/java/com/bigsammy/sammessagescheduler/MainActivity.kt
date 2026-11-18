@@ -413,12 +413,25 @@ class MainActivity : FragmentActivity() {
 
         AnniversaryReminderScheduler.ensureScheduled(this)
         val dao = AppDatabase.get(this).messageDao()
-        // Rebuild pending jobs from saved records whenever the app opens.
-        // This repairs delays after device clock/time-zone changes and catches overdue items.
+        // Rebuild pending time jobs and location geofences whenever SAM opens.
+        // This also repairs schedules after permission changes, app updates, and missed system events.
         lifecycleScope.launch {
             dao.getAllSnapshot()
-                .filter { it.status == "SCHEDULED" && it.triggerType == "TIME" }
-                .forEach { MessageScheduler.schedule(this@MainActivity, it.id, it.scheduledAt) }
+                .filter { it.status == "SCHEDULED" }
+                .forEach { message ->
+                    if (message.triggerType == "TIME") {
+                        MessageScheduler.schedule(this@MainActivity, message.id, message.scheduledAt)
+                    } else if (message.triggerType == "LOCATION" && message.latitude != null && message.longitude != null) {
+                        runCatching {
+                            LocationGeofenceManager.register(this@MainActivity, message.id, message.latitude, message.longitude, message.radiusMeters)
+                                .addOnFailureListener { failure ->
+                                    android.util.Log.e("SAMRestore", "Could not restore arrival reminder ${message.id}", failure)
+                                }
+                        }.onFailure { failure ->
+                            android.util.Log.w("SAMRestore", "Arrival reminder ${message.id} needs location permissions.", failure)
+                        }
+                    }
+                }
         }
         setContent {
             val systemDark = androidx.compose.foundation.isSystemInDarkTheme()
@@ -474,6 +487,7 @@ class MainActivity : FragmentActivity() {
                                 val current = dao.getById(existingId)
                                 if (current != null) {
                                     MessageScheduler.cancel(this@MainActivity, existingId)
+                                    if (current.triggerType == "LOCATION") LocationGeofenceManager.remove(this@MainActivity, existingId)
                                     dao.update(current.copy(
                                         recipient = recipient,
                                         body = body,
@@ -547,12 +561,14 @@ class MainActivity : FragmentActivity() {
                     remove = { id ->
                         lifecycleScope.launch {
                             MessageScheduler.cancel(this@MainActivity, id)
+                            LocationGeofenceManager.remove(this@MainActivity, id)
                             dao.delete(id)
                         }
                     },
                     complete = { message ->
                         lifecycleScope.launch {
                             MessageScheduler.cancel(this@MainActivity, message.id)
+                            LocationGeofenceManager.remove(this@MainActivity, message.id)
                             dao.update(message.copy(status = "COMPLETED"))
                         }
                     },
@@ -560,11 +576,29 @@ class MainActivity : FragmentActivity() {
                         lifecycleScope.launch {
                             if (message.status == "SCHEDULED") {
                                 MessageScheduler.cancel(this@MainActivity, message.id)
+                                if (message.triggerType == "LOCATION") LocationGeofenceManager.remove(this@MainActivity, message.id)
                                 dao.update(message.copy(status = "PAUSED"))
                             } else if (message.status == "PAUSED") {
-                                val resumeAt = maxOf(message.scheduledAt, System.currentTimeMillis() + 5_000L)
-                                dao.update(message.copy(status = "SCHEDULED", scheduledAt = resumeAt))
-                                MessageScheduler.schedule(this@MainActivity, message.id, resumeAt)
+                                if (message.triggerType == "LOCATION" && message.latitude != null && message.longitude != null) {
+                                    requestLocationPermissions {
+                                        runCatching {
+                                            LocationGeofenceManager.register(this@MainActivity, message.id, message.latitude, message.longitude, message.radiusMeters)
+                                                .addOnSuccessListener {
+                                                    lifecycleScope.launch { dao.update(message.copy(status = "SCHEDULED")) }
+                                                    Toast.makeText(this@MainActivity, "Arrival reminder resumed.", Toast.LENGTH_SHORT).show()
+                                                }
+                                                .addOnFailureListener { failure ->
+                                                    Toast.makeText(this@MainActivity, failure.message ?: "Could not resume arrival reminder.", Toast.LENGTH_LONG).show()
+                                                }
+                                        }.onFailure { failure ->
+                                            Toast.makeText(this@MainActivity, failure.message ?: "Location permission is required.", Toast.LENGTH_LONG).show()
+                                        }
+                                    }
+                                } else {
+                                    val resumeAt = maxOf(message.scheduledAt, System.currentTimeMillis() + 5_000L)
+                                    dao.update(message.copy(status = "SCHEDULED", scheduledAt = resumeAt))
+                                    MessageScheduler.schedule(this@MainActivity, message.id, resumeAt)
+                                }
                             }
                         }
                     },

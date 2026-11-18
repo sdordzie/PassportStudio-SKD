@@ -77,6 +77,8 @@ class MainActivity : FragmentActivity() {
     private var backupPassword: String = ""
     private var themeMode by mutableStateOf("System")
     private var pickedRecipientNumber by mutableStateOf("")
+    private var phoneContacts by mutableStateOf<List<ContactEntity>>(emptyList())
+    private var contactsPermissionGranted by mutableStateOf(false)
     private var pickedAttachmentUris by mutableStateOf<List<String>>(emptyList())
     private var pendingCaptureUri: android.net.Uri? = null
     private val captureLauncher = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
@@ -94,6 +96,8 @@ class MainActivity : FragmentActivity() {
     override fun onResume() {
         super.onResume()
         permissionRefreshTick.intValue++
+        contactsPermissionGranted = ContextCompat.checkSelfPermission(this, Manifest.permission.READ_CONTACTS) == android.content.pm.PackageManager.PERMISSION_GRANTED
+        if (contactsPermissionGranted) loadPhoneContacts()
         val prefs = getSharedPreferences("sam_app_security", android.content.Context.MODE_PRIVATE)
         if (prefs.getBoolean("biometric_enabled", false) && !securityAuthenticated && !securityPromptActive) authenticateForApp()
     }
@@ -166,6 +170,40 @@ class MainActivity : FragmentActivity() {
     }
     private val notificationPermission =
         registerForActivityResult(ActivityResultContracts.RequestPermission()) { }
+    private val deviceContactsPermission = registerForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+        contactsPermissionGranted = granted
+        if (granted) loadPhoneContacts() else Toast.makeText(this, "Phone contacts access was not granted. SAM contacts and the Android contact picker remain available.", Toast.LENGTH_LONG).show()
+    }
+    private fun requestDeviceContactsAccess() {
+        if (ContextCompat.checkSelfPermission(this, Manifest.permission.READ_CONTACTS) == android.content.pm.PackageManager.PERMISSION_GRANTED) {
+            contactsPermissionGranted = true
+            loadPhoneContacts()
+        } else deviceContactsPermission.launch(Manifest.permission.READ_CONTACTS)
+    }
+    private fun loadPhoneContacts() {
+        if (ContextCompat.checkSelfPermission(this, Manifest.permission.READ_CONTACTS) != android.content.pm.PackageManager.PERMISSION_GRANTED) {
+            contactsPermissionGranted = false; phoneContacts = emptyList(); return
+        }
+        lifecycleScope.launch {
+            phoneContacts = withContext(Dispatchers.IO) {
+                runCatching {
+                    val result = mutableListOf<ContactEntity>()
+                    val projection = arrayOf(ContactsContract.CommonDataKinds.Phone._ID, ContactsContract.CommonDataKinds.Phone.DISPLAY_NAME, ContactsContract.CommonDataKinds.Phone.NUMBER)
+                    contentResolver.query(ContactsContract.CommonDataKinds.Phone.CONTENT_URI, projection, null, null, "${ContactsContract.CommonDataKinds.Phone.DISPLAY_NAME} COLLATE NOCASE ASC")?.use { cursor ->
+                        val id = cursor.getColumnIndexOrThrow(ContactsContract.CommonDataKinds.Phone._ID)
+                        val name = cursor.getColumnIndexOrThrow(ContactsContract.CommonDataKinds.Phone.DISPLAY_NAME)
+                        val number = cursor.getColumnIndexOrThrow(ContactsContract.CommonDataKinds.Phone.NUMBER)
+                        while (cursor.moveToNext()) {
+                            val n = cursor.getString(name)?.trim().orEmpty()
+                            val p = cursor.getString(number)?.trim().orEmpty()
+                            if (n.isNotBlank() && p.count { it.isDigit() } >= 7) result += ContactEntity(id = -cursor.getLong(id), name = n, phone = p, groupName = "Phone contact")
+                        }
+                    }
+                    result.distinctBy { it.phone.filter(Char::isDigit) }
+                }.getOrElse { android.util.Log.e("SAMContacts", "Device contacts query failed", it); emptyList() }
+            }
+        }
+    }
     private val receiveSmsPermission =
         registerForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
             Toast.makeText(this, if (granted) "Incoming SMS permission granted." else "Incoming SMS permission denied.", Toast.LENGTH_LONG).show()
@@ -1003,6 +1041,10 @@ private fun SchedulerScreen(
             "Contacts" -> {
                 ContactsPage(
                     contacts, onPickContact, saveContact, updateContact, deleteContact,
+                    phoneContacts = phoneContacts,
+                    contactsPermissionGranted = contactsPermissionGranted,
+                    onRequestDeviceContacts = { requestDeviceContactsAccess() },
+                    onRefreshDeviceContacts = { loadPhoneContacts() },
                     onBulkSchedule = { selected, body, channel, scheduledAt ->
                         val scheduleAll = {
                             selected.forEach { contact ->
@@ -1802,31 +1844,51 @@ private fun ContactsPage(
     saveContact: (ContactEntity) -> Unit,
     updateContact: (ContactEntity) -> Unit,
     deleteContact: (Long) -> Unit,
+    phoneContacts: List<ContactEntity>,
+    contactsPermissionGranted: Boolean,
+    onRequestDeviceContacts: () -> Unit,
+    onRefreshDeviceContacts: () -> Unit,
     onBulkSchedule: (List<ContactEntity>, String, String, Long) -> Unit,
     modifier: Modifier = Modifier
 ) {
     var query by remember { mutableStateOf("") }
     var selectedGroup by remember { mutableStateOf("All") }
+    var source by remember { mutableStateOf("Phone") }
     var editing by remember { mutableStateOf<ContactEntity?>(null) }
     var showEditor by remember { mutableStateOf(false) }
     var deleting by remember { mutableStateOf<ContactEntity?>(null) }
     var showBulkComposer by remember { mutableStateOf(false) }
+    val activeContacts = if (source == "Phone") phoneContacts else contacts
     val groups = listOf("All") + contacts.map { it.groupName }.filter { it.isNotBlank() }.distinct().sorted()
-    val visible = contacts.filter { (selectedGroup == "All" || it.groupName == selectedGroup) && (query.isBlank() || it.name.contains(query, true) || it.phone.contains(query, true)) }
+    val visible = activeContacts.filter { (source == "Phone" || selectedGroup == "All" || it.groupName == selectedGroup) && (query.isBlank() || it.name.contains(query, true) || it.phone.contains(query, true)) }
     Column(modifier.fillMaxSize().padding(16.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Column(Modifier.weight(1f)) {
                 Text("Contact centre", fontSize = 24.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
-                Text("${contacts.size} saved contact(s)", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 12.sp)
+                Text(if (source == "Phone") "${phoneContacts.size} phone contact(s)" else "${contacts.size} SAM contact(s)", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 12.sp)
             }
-            OutlinedButton(onClick = onPickContact) { Icon(Icons.Default.ContactPhone, contentDescription = null); Spacer(Modifier.width(6.dp)); Text("From phone") }
+            if (source == "Phone") IconButton(onClick = if (contactsPermissionGranted) onRefreshDeviceContacts else onRequestDeviceContacts) { Icon(Icons.Default.Refresh, contentDescription = "Refresh phone contacts") }
+            else OutlinedButton(onClick = onPickContact) { Icon(Icons.Default.ContactPhone, contentDescription = null); Spacer(Modifier.width(6.dp)); Text("Import") }
         }
-        OutlinedTextField(query, { query = it }, modifier = Modifier.fillMaxWidth().padding(top = 12.dp), label = { Text("Search contacts") }, singleLine = true)
-        FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.fillMaxWidth().padding(vertical = 10.dp)) {
+        Row(Modifier.fillMaxWidth().padding(top = 12.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            FilterChip(selected = source == "Phone", onClick = { source = "Phone"; query = "" }, label = { Text("Phone contacts") })
+            FilterChip(selected = source == "SAM", onClick = { source = "SAM"; query = ""; selectedGroup = "All" }, label = { Text("SAM contacts") })
+        }
+        if (source == "Phone" && !contactsPermissionGranted) Card(Modifier.fillMaxWidth().padding(top = 8.dp), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.secondaryContainer)) {
+            Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text("Allow SAM to read your phone contacts", fontWeight = FontWeight.SemiBold)
+                Text("This read-only access lets you search and select phone contacts for scheduled messages. SAM cannot edit or delete your phone address book.", fontSize = 12.sp)
+                Button(onClick = onRequestDeviceContacts) { Text("Grant contacts access") }
+                TextButton(onClick = onPickContact) { Text("Choose one contact without full access") }
+            }
+        }
+        OutlinedTextField(query, { query = it }, modifier = Modifier.fillMaxWidth().padding(top = 10.dp), label = { Text("Search contacts") }, singleLine = true, enabled = source == "SAM" || contactsPermissionGranted)
+        if (source == "SAM") FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.fillMaxWidth().padding(vertical = 10.dp)) {
             groups.forEach { group -> FilterChip(selected = selectedGroup == group, onClick = { selectedGroup = group }, label = { Text(group) }) }
         }
-        if (visible.isEmpty()) {
-            Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { Text(if (contacts.isEmpty()) "No contacts saved yet. Add one from your phone." else "No contacts match your search.", color = MaterialTheme.colorScheme.onSurfaceVariant) }
+        if (source == "Phone" && !contactsPermissionGranted) { Spacer(Modifier.height(8.dp)) }
+        else if (visible.isEmpty()) {
+            Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { Text(if (query.isNotBlank()) "No contacts match your search." else if (source == "Phone") "No phone contacts with saved numbers were found." else "No contacts saved in SAM yet. Import one from your phone.", color = MaterialTheme.colorScheme.onSurfaceVariant) }
         } else {
             LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 items(visible, key = { it.id }) { contact ->
@@ -1837,22 +1899,25 @@ private fun ContactsPage(
                                 Text(contact.phone, color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 13.sp)
                                 Text(contact.groupName, color = MaterialTheme.colorScheme.primary, fontSize = 11.sp)
                             }
-                            TextButton(onClick = { editing = contact; showEditor = true }) { Text("Edit") }
-                            TextButton(onClick = { deleting = contact }) { Text("Delete", color = MaterialTheme.colorScheme.error) }
+                            if (source == "Phone") TextButton(onClick = { saveContact(contact.copy(id = 0L)); Toast.makeText(context, "Contact copied into SAM.", Toast.LENGTH_SHORT).show() }) { Text("Save to SAM") }
+                            else {
+                                TextButton(onClick = { editing = contact; showEditor = true }) { Text("Edit") }
+                                TextButton(onClick = { deleting = contact }) { Text("Delete", color = MaterialTheme.colorScheme.error) }
+                            }
                         }
                     }
                 }
             }
         }
-        OutlinedButton(onClick = { showBulkComposer = true }, modifier = Modifier.fillMaxWidth().padding(top = 10.dp), enabled = contacts.isNotEmpty()) {
+        OutlinedButton(onClick = { showBulkComposer = true }, modifier = Modifier.fillMaxWidth().padding(top = 10.dp), enabled = activeContacts.isNotEmpty()) {
             Icon(Icons.Default.Campaign, contentDescription = null); Spacer(Modifier.width(8.dp)); Text("Create bulk message")
         }
-        Button(onClick = { editing = null; showEditor = true }, modifier = Modifier.fillMaxWidth().padding(top = 8.dp)) {
+        if (source == "SAM") Button(onClick = { editing = null; showEditor = true }, modifier = Modifier.fillMaxWidth().padding(top = 8.dp)) {
             Icon(Icons.Default.PersonAdd, contentDescription = null); Spacer(Modifier.width(8.dp)); Text("Add contact")
         }
     }
     if (showBulkComposer) {
-        BulkComposer(contacts, onClose = { showBulkComposer = false }, onSchedule = { selected, body, channel, at ->
+        BulkComposer(activeContacts, onClose = { showBulkComposer = false }, onSchedule = { selected, body, channel, at ->
             onBulkSchedule(selected, body, channel, at)
             showBulkComposer = false
         })

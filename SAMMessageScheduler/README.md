@@ -156,3 +156,14 @@ Target SDK: 35
 - Android restricts background apps from arbitrarily opening other apps. SAM therefore uses a notification tap as the supported user-controlled launch path rather than forcing an unexpected foreground launch.
 - Accessibility-based auto-clicking of Send is intentionally not included: it is not a safe or generally Play-policy-compliant way to automate third-party messaging apps.
 - Version code: 52; version name: 6.11.0.
+
+
+## Phase 26 — Smart Unlock & Continue (v6.12.0)
+- Due WhatsApp, WhatsApp Business, media-share and social-post notifications now include a clearly labelled **Unlock & continue** action.
+- Tapping the action is an explicit user interaction. Android controls whether the device keyguard must be authenticated before the destination activity can open.
+- If the destination app has its own App Lock, that app remains responsible for its own authentication prompt.
+- SAM does not request, collect, transmit or store the phone PIN, pattern, password, biometric data, WhatsApp App Lock code or any other third-party credential.
+- The notification body remains private on the lock screen. Users can also tap the notification itself; both entry points invoke the same prepared hand-off.
+- The final Send or Publish step remains inside the destination app. A successful hand-off is not treated as proof that a message was sent or published.
+- This is not remote unlocking or unattended third-party app control. Android keyguard, background-launch, app-lock and manufacturer policies remain authoritative.
+- Version code: 53; version name: 6.12.0.

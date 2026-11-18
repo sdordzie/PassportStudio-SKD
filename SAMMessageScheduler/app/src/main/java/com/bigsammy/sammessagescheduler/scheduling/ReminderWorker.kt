@@ -124,6 +124,7 @@ class ReminderWorker(context: Context, params: WorkerParameters) : CoroutineWork
                 // does not provide a dependable carrier-independent MMS send operation.
                 val share = Intent(Intent.ACTION_SEND_MULTIPLE).apply {
                     type = "*/*"
+                    if (item.channel == "WhatsApp" && item.whatsappPackage.isNotBlank()) setPackage(item.whatsappPackage)
                     putParcelableArrayListExtra(Intent.EXTRA_STREAM, ArrayList(attachmentUris))
                     putExtra(Intent.EXTRA_TEXT, item.body)
                     addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_ACTIVITY_NEW_TASK)

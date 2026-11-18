@@ -10,15 +10,16 @@ import androidx.core.content.ContextCompat
 import com.google.android.gms.location.Geofence
 import com.google.android.gms.location.GeofencingRequest
 import com.google.android.gms.location.LocationServices
+import com.google.android.gms.tasks.Task
 
 object LocationGeofenceManager {
-    fun register(context: Context, messageId: Long, latitude: Double, longitude: Double, radiusMeters: Float) {
+    fun register(context: Context, messageId: Long, latitude: Double, longitude: Double, radiusMeters: Float): Task<Void> {
         val fine = ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED
         val coarse = ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED
         val background = Build.VERSION.SDK_INT < 29 ||
             ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_BACKGROUND_LOCATION) == PackageManager.PERMISSION_GRANTED
         require(fine || coarse) { "Location permission is required for an arrival reminder." }
-        require(background) { "Allow background location for reliable arrival reminders when SAM is closed." }
+        require(background) { "Allow Location access all the time in Android Settings to use arrival reminders while SAM is closed." }
         val geofence = Geofence.Builder()
             .setRequestId(messageId.toString())
             .setCircularRegion(latitude, longitude, radiusMeters.coerceIn(100f, 1000f))
@@ -30,7 +31,7 @@ object LocationGeofenceManager {
             .setInitialTrigger(GeofencingRequest.INITIAL_TRIGGER_ENTER)
             .addGeofence(geofence)
             .build()
-        LocationServices.getGeofencingClient(context).addGeofences(request, pendingIntent(context))
+        return LocationServices.getGeofencingClient(context).addGeofences(request, pendingIntent(context))
     }
 
     fun remove(context: Context, messageId: Long) {

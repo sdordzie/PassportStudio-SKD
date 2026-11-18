@@ -7,7 +7,7 @@ import androidx.room.RoomDatabase
 import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
 
-@Database(entities = [MessageEntity::class, ContactEntity::class], version = 6, exportSchema = false)
+@Database(entities = [MessageEntity::class, ContactEntity::class], version = 7, exportSchema = false)
 abstract class AppDatabase : RoomDatabase() {
     abstract fun messageDao(): MessageDao
     abstract fun contactDao(): ContactDao
@@ -46,6 +46,17 @@ abstract class AppDatabase : RoomDatabase() {
             }
         }
 
+        private val MIGRATION_6_7 = object : Migration(6, 7) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE scheduled_messages ADD COLUMN attachmentsJson TEXT NOT NULL DEFAULT '[]'")
+                db.execSQL("ALTER TABLE scheduled_messages ADD COLUMN triggerType TEXT NOT NULL DEFAULT 'TIME'")
+                db.execSQL("ALTER TABLE scheduled_messages ADD COLUMN latitude REAL")
+                db.execSQL("ALTER TABLE scheduled_messages ADD COLUMN longitude REAL")
+                db.execSQL("ALTER TABLE scheduled_messages ADD COLUMN radiusMeters REAL NOT NULL DEFAULT 150")
+                db.execSQL("ALTER TABLE scheduled_messages ADD COLUMN locationLabel TEXT NOT NULL DEFAULT ''")
+            }
+        }
+
         @Volatile private var INSTANCE: AppDatabase? = null
 
         fun get(context: Context): AppDatabase = INSTANCE ?: synchronized(this) {
@@ -53,7 +64,7 @@ abstract class AppDatabase : RoomDatabase() {
                 context.applicationContext,
                 AppDatabase::class.java,
                 "sam_message_scheduler.db"
-            ).addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6).build().also { INSTANCE = it }
+            ).addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7).build().also { INSTANCE = it }
         }
     }
 }

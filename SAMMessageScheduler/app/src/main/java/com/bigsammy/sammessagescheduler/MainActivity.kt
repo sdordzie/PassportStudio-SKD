@@ -536,6 +536,10 @@ class MainActivity : FragmentActivity() {
                 val contacts by AppDatabase.get(this@MainActivity).contactDao().observeAll().collectAsStateWithLifecycle(initialValue = emptyList())
                 SchedulerScreen(
                     contacts = contacts,
+                    phoneContacts = phoneContacts,
+                    contactsPermissionGranted = contactsPermissionGranted,
+                    onRequestDeviceContacts = { requestDeviceContactsAccess() },
+                    onRefreshDeviceContacts = { loadPhoneContacts() },
                     pickedRecipientNumber = pickedRecipientNumber,
                     pickedAttachmentUris = pickedAttachmentUris,
                     onPickAttachments = { mediaPicker.launch(arrayOf("image/*", "video/*", "audio/*")) },
@@ -750,6 +754,10 @@ private fun parseCsv(content: String): List<List<String>> {
 private fun SchedulerScreen(
     messages: List<MessageEntity>,
     contacts: List<ContactEntity>,
+    phoneContacts: List<ContactEntity>,
+    contactsPermissionGranted: Boolean,
+    onRequestDeviceContacts: () -> Unit,
+    onRefreshDeviceContacts: () -> Unit,
     pickedRecipientNumber: String,
     pickedAttachmentUris: List<String>,
     onPickAttachments: () -> Unit,

@@ -54,6 +54,8 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 
+private data class WhatsAppAppOption(val packageName: String, val label: String)
+
 private val Purple = Color(0xFF6750A4)
 
 class MainActivity : FragmentActivity() {
@@ -226,7 +228,8 @@ class MainActivity : FragmentActivity() {
                         .put("status", item.status).put("deliveryStatus", item.deliveryStatus).put("repeatRule", item.repeatRule).put("category", item.category).put("createdAt", item.createdAt)
                         .put("attachmentsJson", item.attachmentsJson).put("triggerType", item.triggerType)
                         .put("latitude", item.latitude).put("longitude", item.longitude)
-                        .put("radiusMeters", item.radiusMeters).put("locationLabel", item.locationLabel))
+                        .put("radiusMeters", item.radiusMeters).put("locationLabel", item.locationLabel)
+                        .put("whatsappPackage", item.whatsappPackage))
                 }
                 val contactArray = JSONArray()
                 contacts.forEach { contact ->
@@ -335,7 +338,8 @@ class MainActivity : FragmentActivity() {
                         attachmentsJson = item.optString("attachmentsJson", "[]"), triggerType = item.optString("triggerType", "TIME"),
                         latitude = if (item.isNull("latitude")) null else item.optDouble("latitude"),
                         longitude = if (item.isNull("longitude")) null else item.optDouble("longitude"),
-                        radiusMeters = item.optDouble("radiusMeters", 150.0).toFloat(), locationLabel = item.optString("locationLabel", ""))
+                        radiusMeters = item.optDouble("radiusMeters", 150.0).toFloat(), locationLabel = item.optString("locationLabel", ""),
+                        whatsappPackage = item.optString("whatsappPackage", ""))
                 }
                 val database = AppDatabase.get(this@MainActivity)
                 val dao = database.messageDao()
@@ -480,7 +484,7 @@ class MainActivity : FragmentActivity() {
                         }
                     },
                     onDismissImport = { csvImportPreview = emptyList() },
-                    save = { existingId, recipient, body, channel, scheduledAt, repeatRule, category, attachments, triggerType, latitude, longitude, radiusMeters, locationLabel ->
+                    save = { existingId, recipient, body, channel, scheduledAt, repeatRule, category, attachments, triggerType, latitude, longitude, radiusMeters, locationLabel, whatsappPackage ->
                         val persistSchedule: () -> Unit = {
                             lifecycleScope.launch {
                             if (existingId != null) {
@@ -501,6 +505,7 @@ class MainActivity : FragmentActivity() {
                                         longitude = longitude,
                                         radiusMeters = radiusMeters,
                                         locationLabel = locationLabel,
+                                        whatsappPackage = if (channel == "WhatsApp") whatsappPackage else "",
                                         status = "SCHEDULED"
                                     ))
                                     if (triggerType == "LOCATION" && latitude != null && longitude != null) {
@@ -530,7 +535,8 @@ class MainActivity : FragmentActivity() {
                                     latitude = latitude,
                                     longitude = longitude,
                                     radiusMeters = radiusMeters,
-                                    locationLabel = locationLabel
+                                    locationLabel = locationLabel,
+                                    whatsappPackage = if (channel == "WhatsApp") whatsappPackage else ""
                                 ))
                                 if (triggerType == "LOCATION" && latitude != null && longitude != null) {
                                     runCatching { LocationGeofenceManager.register(this@MainActivity, id, latitude, longitude, radiusMeters) }
@@ -1163,8 +1169,8 @@ private fun SchedulerScreen(
             duplicateMode = duplicateMode,
             onClose = { showComposer = false; editMessage = null; duplicateMode = false },
             requestSmsPermission = requestSmsPermission,
-            onSave = { id, recipient, body, channel, scheduledAt, repeatRule, category, attachments, triggerType, latitude, longitude, radiusMeters, locationLabel ->
-                save(if (duplicateMode) null else id, recipient, body, channel, scheduledAt, repeatRule, category, attachments, triggerType, latitude, longitude, radiusMeters, locationLabel)
+            onSave = { id, recipient, body, channel, scheduledAt, repeatRule, category, attachments, triggerType, latitude, longitude, radiusMeters, locationLabel, whatsappPackage ->
+                save(if (duplicateMode) null else id, recipient, body, channel, scheduledAt, repeatRule, category, attachments, triggerType, latitude, longitude, radiusMeters, locationLabel, whatsappPackage)
                 showComposer = false
                 editMessage = null
                 duplicateMode = false
@@ -1456,12 +1462,14 @@ private fun Composer(
     duplicateMode: Boolean = false,
     onClose: () -> Unit,
     requestSmsPermission: (() -> Unit) -> Unit,
-    onSave: (Long?, String, String, String, Long, String, String, List<String>, String, Double?, Double?, Float, String) -> Unit
+    onSave: (Long?, String, String, String, Long, String, String, List<String>, String, Double?, Double?, Float, String, String) -> Unit
 ) {
     var recipient by remember(initialMessage?.id) { mutableStateOf(initialMessage?.recipient ?: "") }
     LaunchedEffect(pickedRecipientNumber) { if (pickedRecipientNumber.isNotBlank()) recipient = pickedRecipientNumber }
     var body by remember(initialMessage?.id) { mutableStateOf(initialMessage?.body ?: "") }
     var channel by remember(initialMessage?.id) { mutableStateOf(initialMessage?.channel ?: "SMS") }
+    var whatsappPackage by remember(initialMessage?.id) { mutableStateOf(initialMessage?.whatsappPackage ?: "") }
+    var whatsappMenuExpanded by remember { mutableStateOf(false) }
     var date by remember(initialMessage?.id) { mutableStateOf(initialMessage?.let { SimpleDateFormat("yyyy-MM-dd", Locale.US).format(Date(it.scheduledAt)) } ?: SimpleDateFormat("yyyy-MM-dd", Locale.US).format(Date(System.currentTimeMillis() + 3600000))) }
     var time by remember(initialMessage?.id) { mutableStateOf(initialMessage?.let { SimpleDateFormat("HH:mm", Locale.US).format(Date(it.scheduledAt)) } ?: SimpleDateFormat("HH:mm", Locale.US).format(Date(System.currentTimeMillis() + 3600000))) }
     var repeatRule by remember(initialMessage?.id) { mutableStateOf(initialMessage?.repeatRule ?: "NONE") }
@@ -1492,6 +1500,15 @@ private fun Composer(
     }
     val configuration = androidx.compose.ui.platform.LocalConfiguration.current
     val context = androidx.compose.ui.platform.LocalContext.current
+    val whatsappApps = remember(context.packageManager) {
+        listOf("com.whatsapp" to "WhatsApp", "com.whatsapp.w4b" to "WhatsApp Business").mapNotNull { (packageName, fallbackLabel) ->
+            runCatching {
+                val appInfo = context.packageManager.getApplicationInfo(packageName, 0)
+                WhatsAppAppOption(packageName, context.packageManager.getApplicationLabel(appInfo).toString().ifBlank { fallbackLabel })
+            }.getOrNull()
+        }
+    }
+    val selectedWhatsAppMissing = whatsappPackage.isNotBlank() && whatsappApps.none { it.packageName == whatsappPackage }
 
     AlertDialog(
         modifier = Modifier.fillMaxWidth(0.94f).widthIn(max = 560.dp),
@@ -1512,6 +1529,35 @@ private fun Composer(
                 ) {
                     FilterChip(selected = channel == "SMS", onClick = { channel = "SMS" }, label = { Text("SMS") })
                     FilterChip(selected = channel == "WhatsApp", onClick = { channel = "WhatsApp" }, label = { Text("WhatsApp") })
+                }
+                if (channel == "WhatsApp") {
+                    Text("WhatsApp application", fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onSurface)
+                    Box {
+                        OutlinedButton(onClick = { whatsappMenuExpanded = true }, modifier = Modifier.fillMaxWidth()) {
+                            Icon(Icons.Default.Chat, contentDescription = null)
+                            Spacer(Modifier.width(8.dp))
+                            Text(whatsappApps.firstOrNull { it.packageName == whatsappPackage }?.label ?: "Ask every time", modifier = Modifier.weight(1f))
+                            Icon(Icons.Default.ArrowDropDown, contentDescription = "Choose WhatsApp application")
+                        }
+                        DropdownMenu(expanded = whatsappMenuExpanded, onDismissRequest = { whatsappMenuExpanded = false }) {
+                            DropdownMenuItem(text = { Text("Ask every time") }, onClick = { whatsappPackage = ""; whatsappMenuExpanded = false })
+                            whatsappApps.forEach { app ->
+                                DropdownMenuItem(
+                                    text = { Text(app.label) },
+                                    leadingIcon = { Icon(Icons.Default.Chat, contentDescription = null) },
+                                    trailingIcon = { if (whatsappPackage == app.packageName) Icon(Icons.Default.Check, contentDescription = "Selected") },
+                                    onClick = { whatsappPackage = app.packageName; whatsappMenuExpanded = false }
+                                )
+                            }
+                        }
+                    }
+                    if (whatsappApps.isEmpty()) {
+                        Text("No supported WhatsApp app was detected. Install WhatsApp or WhatsApp Business, or choose Ask every time to let Android handle the link.", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                    if (selectedWhatsAppMissing) {
+                        Text("Your previously selected WhatsApp app is no longer available. Choose another app or Ask every time.", fontSize = 12.sp, color = MaterialTheme.colorScheme.error)
+                    }
+                    Text("The selected app will be opened when this reminder is due. You will still review and send the message yourself.", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
                 Text("Quick templates", fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onSurface)
                 FlowRow(
@@ -1691,7 +1737,7 @@ private fun Composer(
                             triggerType == "TIME" && scheduledAt <= System.currentTimeMillis() -> error = "Choose a future date and time."
                             triggerType == "LOCATION" && ((latitudeText.toDoubleOrNull()?.let { it !in -90.0..90.0 } ?: true) || (longitudeText.toDoubleOrNull()?.let { it !in -180.0..180.0 } ?: true)) -> error = "Enter valid latitude and longitude coordinates."
                             triggerType == "LOCATION" && (radiusText.toFloatOrNull()?.let { it !in 100f..1000f } ?: true) -> error = "Arrival radius must be between 100 and 1000 metres."
-                            else -> onSave(initialMessage?.id, recipient.trim(), body.trim(), channel, scheduledAt, repeatRule, category, attachments, triggerType, latitudeText.toDoubleOrNull(), longitudeText.toDoubleOrNull(), radiusText.toFloatOrNull() ?: 150f, locationLabel.trim())
+                            else -> onSave(initialMessage?.id, recipient.trim(), body.trim(), channel, scheduledAt, repeatRule, category, attachments, triggerType, latitudeText.toDoubleOrNull(), longitudeText.toDoubleOrNull(), radiusText.toFloatOrNull() ?: 150f, locationLabel.trim(), whatsappPackage)
                         }
                     } catch (_: Exception) {
                         error = "Enter a valid date and time."

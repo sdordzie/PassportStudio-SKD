@@ -606,7 +606,7 @@ class MainActivity : FragmentActivity() {
                         val scheduleAgain: () -> Unit = {
                             lifecycleScope.launch {
                                 val nextAttempt = System.currentTimeMillis() + 30_000L
-                                dao.update(message.copy(status = "SCHEDULED", scheduledAt = nextAttempt))
+                                dao.update(message.copy(status = "SCHEDULED", deliveryStatus = "PENDING", scheduledAt = nextAttempt))
                                 MessageScheduler.schedule(this@MainActivity, message.id, nextAttempt)
                             }
                             Unit

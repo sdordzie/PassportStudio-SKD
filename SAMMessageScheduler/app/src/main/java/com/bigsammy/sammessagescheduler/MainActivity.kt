@@ -43,6 +43,7 @@ import com.bigsammy.sammessagescheduler.data.AppDatabase
 import com.bigsammy.sammessagescheduler.data.MessageEntity
 import com.bigsammy.sammessagescheduler.data.ContactEntity
 import com.bigsammy.sammessagescheduler.scheduling.MessageScheduler
+import com.bigsammy.sammessagescheduler.scheduling.LocationGeofenceManager
 import com.bigsammy.sammessagescheduler.scheduling.AnniversaryReminderScheduler
 import com.bigsammy.sammessagescheduler.security.BackupCrypto
 import kotlinx.coroutines.launch
@@ -397,7 +398,7 @@ class MainActivity : FragmentActivity() {
                         }
                     },
                     onDismissImport = { csvImportPreview = emptyList() },
-                    save = { existingId, recipient, body, channel, scheduledAt, repeatRule, category, attachments ->
+                    save = { existingId, recipient, body, channel, scheduledAt, repeatRule, category, attachments, triggerType, latitude, longitude, radiusMeters, locationLabel ->
                         lifecycleScope.launch {
                             if (existingId != null) {
                                 val current = dao.getById(existingId)
@@ -411,9 +412,17 @@ class MainActivity : FragmentActivity() {
                                         repeatRule = repeatRule,
                                         category = category,
                                         attachmentsJson = org.json.JSONArray(attachments).toString(),
+                                        triggerType = triggerType,
+                                        latitude = latitude,
+                                        longitude = longitude,
+                                        radiusMeters = radiusMeters,
+                                        locationLabel = locationLabel,
                                         status = "SCHEDULED"
                                     ))
-                                    MessageScheduler.schedule(this@MainActivity, existingId, scheduledAt)
+                                    if (triggerType == "LOCATION" && latitude != null && longitude != null) {
+                                        runCatching { LocationGeofenceManager.register(this@MainActivity, existingId, latitude, longitude, radiusMeters) }
+                                            .onFailure { Toast.makeText(this@MainActivity, it.message ?: "Location permission is required.", Toast.LENGTH_LONG).show() }
+                                    } else MessageScheduler.schedule(this@MainActivity, existingId, scheduledAt)
                                 }
                             } else {
                                 val id = dao.insert(MessageEntity(
@@ -423,9 +432,17 @@ class MainActivity : FragmentActivity() {
                                     scheduledAt = scheduledAt,
                                     repeatRule = repeatRule,
                                     category = category,
-                                    attachmentsJson = org.json.JSONArray(attachments).toString()
+                                    attachmentsJson = org.json.JSONArray(attachments).toString(),
+                                    triggerType = triggerType,
+                                    latitude = latitude,
+                                    longitude = longitude,
+                                    radiusMeters = radiusMeters,
+                                    locationLabel = locationLabel
                                 ))
-                                MessageScheduler.schedule(this@MainActivity, id, scheduledAt)
+                                if (triggerType == "LOCATION" && latitude != null && longitude != null) {
+                                    runCatching { LocationGeofenceManager.register(this@MainActivity, id, latitude, longitude, radiusMeters) }
+                                        .onFailure { Toast.makeText(this@MainActivity, it.message ?: "Location permission is required.", Toast.LENGTH_LONG).show() }
+                                } else MessageScheduler.schedule(this@MainActivity, id, scheduledAt)
                             }
                         }
                     },
@@ -1020,8 +1037,8 @@ private fun SchedulerScreen(
             duplicateMode = duplicateMode,
             onClose = { showComposer = false; editMessage = null; duplicateMode = false },
             requestSmsPermission = requestSmsPermission,
-            onSave = { id, recipient, body, channel, scheduledAt, repeatRule, category, attachments ->
-                save(if (duplicateMode) null else id, recipient, body, channel, scheduledAt, repeatRule, category, attachments)
+            onSave = { id, recipient, body, channel, scheduledAt, repeatRule, category, attachments, triggerType, latitude, longitude, radiusMeters, locationLabel ->
+                save(if (duplicateMode) null else id, recipient, body, channel, scheduledAt, repeatRule, category, attachments, triggerType, latitude, longitude, radiusMeters, locationLabel)
                 showComposer = false
                 editMessage = null
                 duplicateMode = false
@@ -1313,7 +1330,7 @@ private fun Composer(
     duplicateMode: Boolean = false,
     onClose: () -> Unit,
     requestSmsPermission: (() -> Unit) -> Unit,
-    onSave: (Long?, String, String, String, Long, String, String, List<String>) -> Unit
+    onSave: (Long?, String, String, String, Long, String, String, List<String>, String, Double?, Double?, Float, String) -> Unit
 ) {
     var recipient by remember(initialMessage?.id) { mutableStateOf(initialMessage?.recipient ?: "") }
     LaunchedEffect(pickedRecipientNumber) { if (pickedRecipientNumber.isNotBlank()) recipient = pickedRecipientNumber }
@@ -1323,6 +1340,11 @@ private fun Composer(
     var time by remember(initialMessage?.id) { mutableStateOf(initialMessage?.let { SimpleDateFormat("HH:mm", Locale.US).format(Date(it.scheduledAt)) } ?: SimpleDateFormat("HH:mm", Locale.US).format(Date(System.currentTimeMillis() + 3600000))) }
     var repeatRule by remember(initialMessage?.id) { mutableStateOf(initialMessage?.repeatRule ?: "NONE") }
     var category by remember(initialMessage?.id) { mutableStateOf(initialMessage?.category ?: "General") }
+    var triggerType by remember(initialMessage?.id) { mutableStateOf(initialMessage?.triggerType ?: "TIME") }
+    var latitudeText by remember(initialMessage?.id) { mutableStateOf(initialMessage?.latitude?.toString() ?: "") }
+    var longitudeText by remember(initialMessage?.id) { mutableStateOf(initialMessage?.longitude?.toString() ?: "") }
+    var radiusText by remember(initialMessage?.id) { mutableStateOf(initialMessage?.radiusMeters?.toInt()?.toString() ?: "150") }
+    var locationLabel by remember(initialMessage?.id) { mutableStateOf(initialMessage?.locationLabel ?: "") }
     var error by remember { mutableStateOf("") }
     var attachments by remember(initialMessage?.id) {
         mutableStateOf(
@@ -1381,6 +1403,20 @@ private fun Composer(
                     listOf("General", "Personal", "Family", "Work", "School", "Business", "Bulk", "Birthday", "Reminder").forEach { value ->
                         FilterChip(selected = category == value, onClick = { category = value }, label = { Text(value, fontSize = 11.sp) })
                     }
+                }
+                Text("Schedule trigger", fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onSurface)
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    FilterChip(selected = triggerType == "TIME", onClick = { triggerType = "TIME" }, label = { Text("Date & time") })
+                    FilterChip(selected = triggerType == "LOCATION", onClick = { triggerType = "LOCATION" }, label = { Text("When I arrive") })
+                }
+                if (triggerType == "LOCATION") {
+                    Text("Enter the destination coordinates. Location access must be enabled for SAM, including background access, so Android can detect arrival.", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    OutlinedTextField(locationLabel, { locationLabel = it }, label = { Text("Place name (optional)") }, singleLine = true, modifier = Modifier.fillMaxWidth())
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        OutlinedTextField(latitudeText, { latitudeText = it }, label = { Text("Latitude") }, modifier = Modifier.weight(1f), singleLine = true)
+                        OutlinedTextField(longitudeText, { longitudeText = it }, label = { Text("Longitude") }, modifier = Modifier.weight(1f), singleLine = true)
+                    }
+                    OutlinedTextField(radiusText, { radiusText = it }, label = { Text("Arrival radius (metres, 100–1000)") }, modifier = Modifier.fillMaxWidth(), singleLine = true)
                 }
                 Text("Repeat", fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onSurface)
                 FlowRow(
@@ -1474,8 +1510,10 @@ private fun Composer(
                         when {
                             recipient.isBlank() || body.isBlank() -> error = "Enter recipient and message."
                             recipient.count { it.isDigit() } < 7 -> error = "Enter a valid phone number with country code where required."
-                            scheduledAt <= System.currentTimeMillis() -> error = "Choose a future date and time."
-                            else -> onSave(initialMessage?.id, recipient.trim(), body.trim(), channel, scheduledAt, repeatRule, category, attachments)
+                            triggerType == "TIME" && scheduledAt <= System.currentTimeMillis() -> error = "Choose a future date and time."
+                            triggerType == "LOCATION" && (latitudeText.toDoubleOrNull() !in -90.0..90.0 || longitudeText.toDoubleOrNull() !in -180.0..180.0) -> error = "Enter valid latitude and longitude coordinates."
+                            triggerType == "LOCATION" && radiusText.toFloatOrNull() !in 100f..1000f -> error = "Arrival radius must be between 100 and 1000 metres."
+                            else -> onSave(initialMessage?.id, recipient.trim(), body.trim(), channel, scheduledAt, repeatRule, category, attachments, triggerType, latitudeText.toDoubleOrNull(), longitudeText.toDoubleOrNull(), radiusText.toFloatOrNull() ?: 150f, locationLabel.trim())
                         }
                     } catch (_: Exception) {
                         error = "Enter a valid date and time."

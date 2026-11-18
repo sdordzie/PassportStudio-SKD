@@ -124,7 +124,7 @@ class ReminderWorker(context: Context, params: WorkerParameters) : CoroutineWork
                 // does not provide a dependable carrier-independent MMS send operation.
                 val share = Intent(Intent.ACTION_SEND_MULTIPLE).apply {
                     type = "*/*"
-                    if (item.channel == "WhatsApp" && item.whatsappPackage.isNotBlank()) setPackage(item.whatsappPackage)
+                    if ((item.channel == "WhatsApp" || item.channel == "Social") && item.whatsappPackage.isNotBlank()) setPackage(item.whatsappPackage)
                     putParcelableArrayListExtra(Intent.EXTRA_STREAM, ArrayList(attachmentUris))
                     putExtra(Intent.EXTRA_TEXT, item.body)
                     addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_ACTIVITY_NEW_TASK)
@@ -191,6 +191,30 @@ class ReminderWorker(context: Context, params: WorkerParameters) : CoroutineWork
                 if (parts.size > 1) sms.sendMultipartTextMessage(item.recipient, null, parts, sentIntents, deliveredIntents)
                 else sms.sendTextMessage(item.recipient, null, item.body, sentIntents.first(), deliveredIntents.first())
                 postNotification(id, "SMS submitted", "Android accepted the SMS request for ${item.recipient}. Delivery updates will appear when the network reports them.")
+            } else if (item.channel == "Social") {
+                val share = Intent(Intent.ACTION_SEND).apply {
+                    type = "text/plain"
+                    putExtra(Intent.EXTRA_TEXT, item.body)
+                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                    if (item.whatsappPackage.isNotBlank()) setPackage(item.whatsappPackage)
+                }
+                val target = if (share.resolveActivity(applicationContext.packageManager) != null) share
+                    else Intent.createChooser(Intent(Intent.ACTION_SEND).apply {
+                        type = "text/plain"
+                        putExtra(Intent.EXTRA_TEXT, item.body)
+                    }, "Share social post")
+                val openSocial = PendingIntent.getActivity(
+                    applicationContext, id.toInt(), target.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
+                    PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+                )
+                val next = nextOccurrence(item.scheduledAt, item.repeatRule)
+                if (next != null) {
+                    dao.update(item.copy(scheduledAt = next, status = "SCHEDULED"))
+                    MessageScheduler.schedule(applicationContext, id, next)
+                } else {
+                    dao.update(item.copy(status = "AWAITING_USER"))
+                }
+                postNotification(id, "Your social post is ready", "Tap to open the selected social app. Review your post and publish it there.", openSocial)
             } else {
                 val phone = item.recipient.filter { it.isDigit() }
                 val encoded = URLEncoder.encode(item.body, "UTF-8")

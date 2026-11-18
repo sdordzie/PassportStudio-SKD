@@ -287,7 +287,7 @@ class MainActivity : FragmentActivity() {
                 }
                 if (restoredContacts.isNotEmpty()) database.contactDao().insertAll(restoredContacts)
                 val all = dao.getAllSnapshot()
-                all.filter { it.status == "SCHEDULED" && it.scheduledAt > System.currentTimeMillis() }
+                all.filter { it.status == "SCHEDULED" && it.triggerType == "TIME" && it.scheduledAt > System.currentTimeMillis() }
                     .forEach { MessageScheduler.schedule(this@MainActivity, it.id, it.scheduledAt) }
                 Toast.makeText(this@MainActivity, "Backup restored: messages and contacts.", Toast.LENGTH_LONG).show()
             }.onFailure { Toast.makeText(this@MainActivity, "Restore failed. Check the backup file.", Toast.LENGTH_LONG).show() }
@@ -348,7 +348,7 @@ class MainActivity : FragmentActivity() {
         // This repairs delays after device clock/time-zone changes and catches overdue items.
         lifecycleScope.launch {
             dao.getAllSnapshot()
-                .filter { it.status == "SCHEDULED" }
+                .filter { it.status == "SCHEDULED" && it.triggerType == "TIME" }
                 .forEach { MessageScheduler.schedule(this@MainActivity, it.id, it.scheduledAt) }
         }
         setContent {

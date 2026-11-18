@@ -55,6 +55,14 @@ import java.util.Date
 import java.util.Locale
 
 private data class WhatsAppAppOption(val packageName: String, val label: String)
+private data class SocialCampaign(
+    val id: String,
+    val name: String,
+    val objective: String,
+    val startAt: Long,
+    val endAt: Long,
+    val platforms: List<String>
+)
 
 private val Purple = Color(0xFF6750A4)
 // Shared Compose state lets the settings screen refresh when the Activity resumes.
@@ -1047,6 +1055,133 @@ private fun SchedulerScreen(
                             }
                             if (pair.size == 1) Spacer(Modifier.weight(1f))
                         }
+                    }
+                    val campaignPlatforms = listOf("Facebook", "Instagram", "TikTok", "Snapchat", "Telegram", "X", "LinkedIn", "Pinterest", "WhatsApp")
+                    var socialCampaigns by remember {
+                        mutableStateOf(runCatching {
+                            val raw = appContext.getSharedPreferences("sam_social_campaigns", android.content.Context.MODE_PRIVATE)
+                                .getString("campaigns", "[]") ?: "[]"
+                            val array = JSONArray(raw)
+                            (0 until array.length()).map { index ->
+                                val item = array.getJSONObject(index)
+                                val platforms = item.optJSONArray("platforms") ?: JSONArray()
+                                SocialCampaign(
+                                    item.optString("id"), item.optString("name"), item.optString("objective"),
+                                    item.optLong("startAt"), item.optLong("endAt"),
+                                    (0 until platforms.length()).map { platforms.optString(it) }
+                                )
+                            }
+                        }.getOrDefault(emptyList()) )
+                    }
+                    var campaignDialog by remember { mutableStateOf(false) }
+                    var campaignName by remember { mutableStateOf("") }
+                    var campaignObjective by remember { mutableStateOf("") }
+                    var campaignStart by remember { mutableStateOf(SimpleDateFormat("yyyy-MM-dd", Locale.US).format(Date())) }
+                    var campaignEnd by remember { mutableStateOf(SimpleDateFormat("yyyy-MM-dd", Locale.US).format(Date(System.currentTimeMillis() + 7L * 86400000L))) }
+                    var selectedCampaignPlatforms by remember { mutableStateOf(setOf("Facebook", "Instagram")) }
+                    var campaignError by remember { mutableStateOf("") }
+                    fun persistCampaigns(items: List<SocialCampaign>) {
+                        val array = JSONArray()
+                        items.forEach { item ->
+                            val platformArray = JSONArray()
+                            item.platforms.forEach { platformArray.put(it) }
+                            array.put(JSONObject().put("id", item.id).put("name", item.name)
+                                .put("objective", item.objective).put("startAt", item.startAt)
+                                .put("endAt", item.endAt).put("platforms", platformArray))
+                        }
+                        appContext.getSharedPreferences("sam_social_campaigns", android.content.Context.MODE_PRIVATE)
+                            .edit().putString("campaigns", array.toString()).apply()
+                        socialCampaigns = items
+                    }
+                    Card(Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
+                        Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Column(Modifier.weight(1f)) {
+                                    Text("Campaign planner", fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
+                                    Text("Organise campaign goals, dates and intended platforms.", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                }
+                                IconButton(onClick = {
+                                    campaignName = ""; campaignObjective = ""
+                                    campaignStart = SimpleDateFormat("yyyy-MM-dd", Locale.US).format(Date())
+                                    campaignEnd = SimpleDateFormat("yyyy-MM-dd", Locale.US).format(Date(System.currentTimeMillis() + 7L * 86400000L))
+                                    selectedCampaignPlatforms = setOf("Facebook", "Instagram")
+                                    campaignError = ""; campaignDialog = true
+                                }) { Icon(Icons.Default.Add, contentDescription = "Create campaign") }
+                            }
+                            if (socialCampaigns.isEmpty()) {
+                                Text("No campaigns planned. Create one to organise your next promotion, school announcement or business campaign.", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            } else {
+                                socialCampaigns.sortedBy { it.startAt }.forEach { campaign ->
+                                    HorizontalDivider()
+                                    val now = System.currentTimeMillis()
+                                    val stateLabel = when {
+                                        now < campaign.startAt -> "UPCOMING"
+                                        now > campaign.endAt -> "COMPLETED"
+                                        else -> "ACTIVE"
+                                    }
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                                            Text(campaign.name, fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onSurface)
+                                            Text(campaign.objective, fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                            Text(SimpleDateFormat("dd MMM yyyy", Locale.getDefault()).format(Date(campaign.startAt)) +
+                                                " – " + SimpleDateFormat("dd MMM yyyy", Locale.getDefault()).format(Date(campaign.endAt)),
+                                                fontSize = 10.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                            Text(campaign.platforms.joinToString(" • "), fontSize = 10.sp, color = MaterialTheme.colorScheme.primary)
+                                            Text(stateLabel, fontSize = 10.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.secondary)
+                                        }
+                                        IconButton(onClick = { persistCampaigns(socialCampaigns.filterNot { it.id == campaign.id }) }) {
+                                            Icon(Icons.Default.DeleteOutline, contentDescription = "Delete campaign", tint = MaterialTheme.colorScheme.error)
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    if (campaignDialog) {
+                        AlertDialog(
+                            onDismissRequest = { campaignDialog = false },
+                            title = { Text("Create social campaign") },
+                            text = {
+                                Column(Modifier.fillMaxWidth().heightIn(max = 520.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                    OutlinedTextField(campaignName, { campaignName = it }, label = { Text("Campaign name") }, singleLine = true, modifier = Modifier.fillMaxWidth())
+                                    OutlinedTextField(campaignObjective, { campaignObjective = it }, label = { Text("Campaign objective") }, minLines = 2, modifier = Modifier.fillMaxWidth())
+                                    OutlinedTextField(campaignStart, { campaignStart = it }, label = { Text("Start date (YYYY-MM-DD)") }, singleLine = true, modifier = Modifier.fillMaxWidth())
+                                    OutlinedTextField(campaignEnd, { campaignEnd = it }, label = { Text("End date (YYYY-MM-DD)") }, singleLine = true, modifier = Modifier.fillMaxWidth())
+                                    Text("Target platforms", fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onSurface)
+                                    campaignPlatforms.forEach { platform ->
+                                        Row(verticalAlignment = Alignment.CenterVertically) {
+                                            Checkbox(checked = platform in selectedCampaignPlatforms, onCheckedChange = { checked ->
+                                                selectedCampaignPlatforms = if (checked) selectedCampaignPlatforms + platform else selectedCampaignPlatforms - platform
+                                            })
+                                            Text(platform, fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurface)
+                                        }
+                                    }
+                                    if (campaignError.isNotBlank()) Text(campaignError, color = MaterialTheme.colorScheme.error, fontSize = 12.sp)
+                                }
+                            },
+                            confirmButton = {
+                                TextButton(onClick = {
+                                    val formatter = SimpleDateFormat("yyyy-MM-dd", Locale.US).apply { isLenient = false }
+                                    val start = runCatching { formatter.parse(campaignStart.trim())?.time }.getOrNull()
+                                    val end = runCatching { formatter.parse(campaignEnd.trim())?.time?.plus(86399999L) }.getOrNull()
+                                    when {
+                                        campaignName.isBlank() || campaignObjective.isBlank() -> campaignError = "Enter a campaign name and objective."
+                                        socialCampaigns.any { it.name.equals(campaignName.trim(), true) } -> campaignError = "A campaign with this name already exists."
+                                        start == null || end == null -> campaignError = "Enter valid dates in YYYY-MM-DD format."
+                                        end < start -> campaignError = "End date must be on or after the start date."
+                                        selectedCampaignPlatforms.isEmpty() -> campaignError = "Select at least one target platform."
+                                        else -> {
+                                            persistCampaigns(socialCampaigns + SocialCampaign(
+                                                java.util.UUID.randomUUID().toString(), campaignName.trim(), campaignObjective.trim(),
+                                                start, end, campaignPlatforms.filter { it in selectedCampaignPlatforms }
+                                            ))
+                                            campaignDialog = false
+                                        }
+                                    }
+                                }) { Text("Save campaign") }
+                            },
+                            dismissButton = { TextButton(onClick = { campaignDialog = false }) { Text("Cancel") } }
+                        )
                     }
                     var captionTemplates by remember {
                         mutableStateOf(runCatching {

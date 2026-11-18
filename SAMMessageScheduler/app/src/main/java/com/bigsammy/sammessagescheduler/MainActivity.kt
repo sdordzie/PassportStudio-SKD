@@ -976,6 +976,7 @@ private fun SchedulerScreen(
             }
 
             "Social" -> {
+                val appContext = androidx.compose.ui.platform.LocalContext.current
                 val socialPosts = messages.filter { it.channel == "Social" }.sortedBy { it.scheduledAt }
                 val upcomingPosts = socialPosts.filter { it.status == "SCHEDULED" }
                 val waitingPosts = socialPosts.filter { it.status == "AWAITING_USER" }
@@ -1032,7 +1033,7 @@ private fun SchedulerScreen(
                     destinations.chunked(2).forEach { pair ->
                         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                             pair.forEach { (label, packageName) ->
-                                val installed = runCatching { androidx.core.content.ContextCompat.getPackageInfo(packageManager, packageName, 0) }.isSuccess
+                                val installed = runCatching { appContext.packageManager.getPackageInfo(packageName, 0) }.isSuccess
                                 Card(Modifier.weight(1f), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
                                     Row(Modifier.padding(10.dp), verticalAlignment = Alignment.CenterVertically) {
                                         Icon(if (installed) Icons.Default.CheckCircle else Icons.Default.Download, contentDescription = null, tint = if (installed) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(18.dp))

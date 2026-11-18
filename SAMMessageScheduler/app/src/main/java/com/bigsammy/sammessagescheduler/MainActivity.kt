@@ -3,6 +3,7 @@ package com.bigsammy.sammessagescheduler
 import android.Manifest
 import android.os.Build
 import android.os.Bundle
+import android.location.Geocoder
 import android.provider.ContactsContract
 import org.json.JSONArray
 import org.json.JSONObject
@@ -46,7 +47,9 @@ import com.bigsammy.sammessagescheduler.scheduling.MessageScheduler
 import com.bigsammy.sammessagescheduler.scheduling.LocationGeofenceManager
 import com.bigsammy.sammessagescheduler.scheduling.AnniversaryReminderScheduler
 import com.bigsammy.sammessagescheduler.security.BackupCrypto
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -1354,6 +1357,10 @@ private fun Composer(
     var longitudeText by remember(initialMessage?.id) { mutableStateOf(initialMessage?.longitude?.toString() ?: "") }
     var radiusText by remember(initialMessage?.id) { mutableStateOf(initialMessage?.radiusMeters?.toInt()?.toString() ?: "150") }
     var locationLabel by remember(initialMessage?.id) { mutableStateOf(initialMessage?.locationLabel ?: "") }
+    var locationSearch by remember(initialMessage?.id) { mutableStateOf(initialMessage?.locationLabel ?: "") }
+    var isSearchingLocation by remember { mutableStateOf(false) }
+    var locationSearchMessage by remember { mutableStateOf("") }
+    val locationSearchScope = rememberCoroutineScope()
     var error by remember { mutableStateOf("") }
     var attachments by remember(initialMessage?.id) {
         mutableStateOf(
@@ -1419,8 +1426,56 @@ private fun Composer(
                     FilterChip(selected = triggerType == "LOCATION", onClick = { triggerType = "LOCATION" }, label = { Text("When I arrive") })
                 }
                 if (triggerType == "LOCATION") {
-                    Text("Enter the destination coordinates. Location access must be enabled for SAM, including background access, so Android can detect arrival.", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    OutlinedTextField(locationLabel, { locationLabel = it }, label = { Text("Place name (optional)") }, singleLine = true, modifier = Modifier.fillMaxWidth())
+                    Text("Search for a destination to fill in its coordinates. Place lookup may require an internet connection and availability of Android's geocoder. You can still enter coordinates manually.", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    OutlinedTextField(
+                        value = locationSearch,
+                        onValueChange = { locationSearch = it; locationSearchMessage = "" },
+                        label = { Text("Search place or address") },
+                        placeholder = { Text("e.g. Kejetia Market, Kumasi") },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    Button(
+                        onClick = {
+                            val query = locationSearch.trim()
+                            if (query.length < 3) {
+                                locationSearchMessage = "Enter at least 3 characters to search."
+                            } else {
+                                isSearchingLocation = true
+                                locationSearchMessage = "Searching for the place…"
+                                locationSearchScope.launch {
+                                    val result = withContext(Dispatchers.IO) {
+                                        runCatching {
+                                            @Suppress("DEPRECATION")
+                                            Geocoder(context, Locale.getDefault()).getFromLocationName(query, 1)
+                                        }.getOrNull()?.firstOrNull()
+                                    }
+                                    isSearchingLocation = false
+                                    if (result != null) {
+                                        latitudeText = result.latitude.toString()
+                                        longitudeText = result.longitude.toString()
+                                        locationLabel = result.getAddressLine(0) ?: query
+                                        locationSearch = locationLabel
+                                        locationSearchMessage = "Location found. Confirm the coordinates below."
+                                    } else {
+                                        locationSearchMessage = "No result found. Check the spelling or enter coordinates manually."
+                                    }
+                                }
+                            }
+                        },
+                        enabled = !isSearchingLocation,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        if (isSearchingLocation) {
+                            CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp)
+                            Spacer(Modifier.width(8.dp))
+                        }
+                        Text(if (isSearchingLocation) "Searching…" else "Find destination")
+                    }
+                    if (locationSearchMessage.isNotBlank()) {
+                        Text(locationSearchMessage, fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                    OutlinedTextField(locationLabel, { locationLabel = it }, label = { Text("Selected place / address") }, singleLine = true, modifier = Modifier.fillMaxWidth())
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         OutlinedTextField(latitudeText, { latitudeText = it }, label = { Text("Latitude") }, modifier = Modifier.weight(1f), singleLine = true)
                         OutlinedTextField(longitudeText, { longitudeText = it }, label = { Text("Longitude") }, modifier = Modifier.weight(1f), singleLine = true)

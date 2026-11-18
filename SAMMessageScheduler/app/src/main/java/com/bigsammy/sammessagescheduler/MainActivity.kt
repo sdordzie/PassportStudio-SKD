@@ -784,6 +784,7 @@ private fun SchedulerScreen(
                 Column(Modifier.padding(padding).fillMaxSize()
                     .verticalScroll(rememberScrollState()).padding(18.dp)) {
                     Text("Settings", fontSize = 24.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
+                    val context = androidx.compose.ui.platform.LocalContext.current
                     Text("Permissions centre", fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onSurface, modifier = Modifier.padding(top = 16.dp))
                     Text("SAM requests sensitive access only when a feature needs it. Photos and videos can be selected using Android's system picker without broad gallery access.", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 12.sp)
                     val permissionRows = listOf(
@@ -808,7 +809,6 @@ private fun SchedulerScreen(
                         val intent = android.content.Intent(android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS, android.net.Uri.parse("package:" + context.packageName))
                         context.startActivity(intent)
                     }, modifier = Modifier.fillMaxWidth()) { Icon(Icons.Default.Security, contentDescription = null); Spacer(Modifier.width(6.dp)); Text("Manage SAM permissions") }
-                    val context = androidx.compose.ui.platform.LocalContext.current
                     val quietPrefs = remember { context.getSharedPreferences("sam_quiet_hours", android.content.Context.MODE_PRIVATE) }
                     var quietEnabled by remember { mutableStateOf(quietPrefs.getBoolean("enabled", false)) }
                     var quietStart by remember { mutableStateOf(quietPrefs.getString("start", "22:00") ?: "22:00") }

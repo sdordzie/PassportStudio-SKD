@@ -703,6 +703,7 @@ private fun SchedulerScreen(
     retry: (MessageEntity) -> Unit
 ) {
     var page by remember { mutableStateOf("Home") }
+    var showMoreMenu by remember { mutableStateOf(false) }
     var showComposer by remember { mutableStateOf(false) }
     var editMessage by remember { mutableStateOf<MessageEntity?>(null) }
     var duplicateMode by remember { mutableStateOf(false) }
@@ -727,22 +728,50 @@ private fun SchedulerScreen(
             }
         },
         bottomBar = {
-            NavigationBar(containerColor = MaterialTheme.colorScheme.surface) {
-                listOf("Home", "Scheduled", "Calendar", "Social", "Contacts", "Settings").forEach { name ->
-                    val icon = when (name) {
-                        "Home" -> Icons.Default.Home
-                        "Scheduled" -> Icons.Default.Schedule
-                        "Calendar" -> Icons.Default.CalendarMonth
-                        "Social" -> Icons.Default.Campaign
-                        "Contacts" -> Icons.Default.Contacts
-                        else -> Icons.Default.Settings
-                    }
+            NavigationBar(
+                containerColor = MaterialTheme.colorScheme.surface,
+                contentColor = MaterialTheme.colorScheme.onSurface,
+                tonalElevation = 4.dp,
+                windowInsets = NavigationBarDefaults.windowInsets
+            ) {
+                val primaryTabs = listOf(
+                    "Home" to Icons.Default.Home,
+                    "Scheduled" to Icons.Default.Schedule,
+                    "Calendar" to Icons.Default.CalendarMonth,
+                    "Social" to Icons.Default.Campaign
+                )
+                primaryTabs.forEach { (name, icon) ->
                     NavigationBarItem(
                         selected = page == name,
-                        onClick = { page = name },
-                        icon = { Icon(icon, contentDescription = name) },
-                        label = { Text(name, fontSize = 10.sp) }
+                        onClick = { page = name; showMoreMenu = false },
+                        icon = { Icon(icon, contentDescription = name, modifier = Modifier.size(21.dp)) },
+                        label = { Text(name, fontSize = 11.sp, maxLines = 1, softWrap = false) },
+                        alwaysShowLabel = true
                     )
+                }
+                Box {
+                    NavigationBarItem(
+                        selected = page == "Contacts" || page == "Settings",
+                        onClick = { showMoreMenu = true },
+                        icon = { Icon(Icons.Default.MoreHoriz, contentDescription = "More", modifier = Modifier.size(21.dp)) },
+                        label = { Text("More", fontSize = 11.sp, maxLines = 1, softWrap = false) },
+                        alwaysShowLabel = true
+                    )
+                    DropdownMenu(
+                        expanded = showMoreMenu,
+                        onDismissRequest = { showMoreMenu = false }
+                    ) {
+                        DropdownMenuItem(
+                            text = { Text("Contacts") },
+                            leadingIcon = { Icon(Icons.Default.Contacts, contentDescription = null) },
+                            onClick = { page = "Contacts"; showMoreMenu = false }
+                        )
+                        DropdownMenuItem(
+                            text = { Text("Settings") },
+                            leadingIcon = { Icon(Icons.Default.Settings, contentDescription = null) },
+                            onClick = { page = "Settings"; showMoreMenu = false }
+                        )
+                    }
                 }
             }
         },

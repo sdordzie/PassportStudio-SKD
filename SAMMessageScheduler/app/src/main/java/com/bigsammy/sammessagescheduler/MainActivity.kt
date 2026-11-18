@@ -1687,15 +1687,37 @@ private fun Composer(
                         Icon(Icons.Default.Contacts, contentDescription = "Choose contact")
                     }
                 }
-                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    OutlinedButton(onClick = onCapturePhoto, modifier = Modifier.weight(1f)) {
-                        Icon(Icons.Default.PhotoCamera, contentDescription = null); Spacer(Modifier.width(4.dp)); Text("Photo", fontSize = 12.sp)
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    OutlinedButton(
+                        onClick = onCapturePhoto,
+                        modifier = Modifier.weight(1f).heightIn(min = 48.dp),
+                        contentPadding = PaddingValues(horizontal = 6.dp, vertical = 8.dp)
+                    ) {
+                        Icon(Icons.Default.PhotoCamera, contentDescription = null, modifier = Modifier.size(18.dp))
+                        Spacer(Modifier.width(5.dp))
+                        Text("Photo", fontSize = 11.sp, maxLines = 1, softWrap = false)
                     }
-                    OutlinedButton(onClick = onCaptureVideo, modifier = Modifier.weight(1f)) {
-                        Icon(Icons.Default.Videocam, contentDescription = null); Spacer(Modifier.width(4.dp)); Text("Video", fontSize = 12.sp)
+                    OutlinedButton(
+                        onClick = onCaptureVideo,
+                        modifier = Modifier.weight(1f).heightIn(min = 48.dp),
+                        contentPadding = PaddingValues(horizontal = 6.dp, vertical = 8.dp)
+                    ) {
+                        Icon(Icons.Default.Videocam, contentDescription = null, modifier = Modifier.size(18.dp))
+                        Spacer(Modifier.width(5.dp))
+                        Text("Video", fontSize = 11.sp, maxLines = 1, softWrap = false)
                     }
-                    OutlinedButton(onClick = onPickAttachments, modifier = Modifier.weight(1f)) {
-                        Icon(Icons.Default.AttachFile, contentDescription = null); Spacer(Modifier.width(4.dp)); Text("Media", fontSize = 12.sp)
+                    OutlinedButton(
+                        onClick = onPickAttachments,
+                        modifier = Modifier.weight(1f).heightIn(min = 48.dp),
+                        contentPadding = PaddingValues(horizontal = 6.dp, vertical = 8.dp)
+                    ) {
+                        Icon(Icons.Default.AttachFile, contentDescription = null, modifier = Modifier.size(18.dp))
+                        Spacer(Modifier.width(5.dp))
+                        Text("Media", fontSize = 11.sp, maxLines = 1, softWrap = false)
                     }
                 }
                 if (attachments.isNotEmpty()) {

@@ -145,3 +145,14 @@ Target SDK: 35
 - Use Settings → Cloud backup to create a password-protected full backup before moving SAM to another phone. Restore it with the same password.
 - Build version code: 25; version name: 6.1.0.
 - Release verification is based on the GitHub Actions Android build. Real-device SMS, WhatsApp hand-off, biometric prompts, notification timing and manufacturer battery behaviour still require testing on supported devices.
+
+
+## Phase 25 — Unlock-aware scheduled message hand-off (v6.11.0)
+- SMS continues to use Android's SMS service directly when the user has granted the required permission; it does not need to open another messaging app.
+- WhatsApp, WhatsApp Business and social destinations use an explicit notification hand-off with the message or post prepared for the selected destination.
+- The hand-off notification now checks whether Android's device keyguard is active and gives the user the correct unlock-first instruction.
+- Third-party hand-off notifications are private on the lock screen; message content is not exposed in the lock-screen notification preview.
+- SAM never attempts to bypass the phone PIN, password, biometric, or another app's App Lock. The user must unlock the device/app and confirm Send or Publish where required.
+- Android restricts background apps from arbitrarily opening other apps. SAM therefore uses a notification tap as the supported user-controlled launch path rather than forcing an unexpected foreground launch.
+- Accessibility-based auto-clicking of Send is intentionally not included: it is not a safe or generally Play-policy-compliant way to automate third-party messaging apps.
+- Version code: 52; version name: 6.11.0.

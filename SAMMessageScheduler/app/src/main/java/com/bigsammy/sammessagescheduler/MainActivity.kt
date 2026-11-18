@@ -76,9 +76,12 @@ class MainActivity : FragmentActivity() {
     }
     private var securityPromptActive = false
     var securityAuthenticated = false
+    // Incremented whenever SAM returns to the foreground so permission UI re-reads Android's live state.
+    private var permissionRefreshTick by mutableIntStateOf(0)
 
     override fun onResume() {
         super.onResume()
+        permissionRefreshTick++
         val prefs = getSharedPreferences("sam_app_security", android.content.Context.MODE_PRIVATE)
         if (prefs.getBoolean("biometric_enabled", false) && !securityAuthenticated && !securityPromptActive) authenticateForApp()
     }
@@ -977,6 +980,8 @@ private fun SchedulerScreen(
                     .verticalScroll(rememberScrollState()).padding(18.dp)) {
                     Text("Settings", fontSize = 24.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
                     val context = androidx.compose.ui.platform.LocalContext.current
+                    // Reading this state makes the permission list recompose after returning from Android Settings.
+                    val permissionRefresh = permissionRefreshTick
                     Text("Permissions centre", fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onSurface, modifier = Modifier.padding(top = 16.dp))
                     Text("SAM requests sensitive access only when a feature needs it. Photos and videos can be selected using Android's system picker without broad gallery access.", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 12.sp)
                     val permissionRows = listOf(
@@ -988,7 +993,20 @@ private fun SchedulerScreen(
                         "Location (background)" to android.Manifest.permission.ACCESS_BACKGROUND_LOCATION
                     )
                     permissionRows.forEach { (label, permission) ->
-                        val granted = androidx.core.content.ContextCompat.checkSelfPermission(context, permission) == android.content.pm.PackageManager.PERMISSION_GRANTED
+                        // Android may grant approximate location only; that is still valid foreground access.
+                        val granted = when (permission) {
+                            android.Manifest.permission.ACCESS_FINE_LOCATION ->
+                                androidx.core.content.ContextCompat.checkSelfPermission(context, android.Manifest.permission.ACCESS_FINE_LOCATION) == android.content.pm.PackageManager.PERMISSION_GRANTED ||
+                                    androidx.core.content.ContextCompat.checkSelfPermission(context, android.Manifest.permission.ACCESS_COARSE_LOCATION) == android.content.pm.PackageManager.PERMISSION_GRANTED
+                            android.Manifest.permission.ACCESS_BACKGROUND_LOCATION ->
+                                android.os.Build.VERSION.SDK_INT < 29 ||
+                                    androidx.core.content.ContextCompat.checkSelfPermission(context, permission) == android.content.pm.PackageManager.PERMISSION_GRANTED
+                            android.Manifest.permission.POST_NOTIFICATIONS ->
+                                android.os.Build.VERSION.SDK_INT < 33 ||
+                                    androidx.core.content.ContextCompat.checkSelfPermission(context, permission) == android.content.pm.PackageManager.PERMISSION_GRANTED
+                            else ->
+                                androidx.core.content.ContextCompat.checkSelfPermission(context, permission) == android.content.pm.PackageManager.PERMISSION_GRANTED
+                        }
                         Row(Modifier.fillMaxWidth().padding(vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
                             Column(Modifier.weight(1f)) {
                                 Text(label, color = MaterialTheme.colorScheme.onSurface, fontSize = 13.sp)

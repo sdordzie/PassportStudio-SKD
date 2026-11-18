@@ -251,14 +251,14 @@ class MainActivity : FragmentActivity() {
             runCatching {
                 val rows = AppDatabase.get(this@MainActivity).messageDao().getAllSnapshot()
                 fun csv(value: String): String = "\"" + value.replace("\"", "\"\"") + "\""
-                val header = listOf("ID", "Recipient", "Message", "Channel", "Scheduled At", "Status", "Delivery Status", "Repeat Rule", "Created At", "Category")
+                val header = listOf("ID", "Recipient", "Message", "Channel", "Scheduled At", "Status", "Delivery Status", "Repeat Rule", "Created At", "Category", "WhatsApp App")
                 val lines = mutableListOf(header.joinToString(","))
                 val formatter = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.US)
                 rows.forEach { item ->
                     lines += listOf(
                         item.id.toString(), csv(item.recipient), csv(item.body), csv(item.channel),
                         csv(formatter.format(Date(item.scheduledAt))), csv(item.status), csv(item.deliveryStatus), csv(item.repeatRule),
-                        csv(formatter.format(Date(item.createdAt))), csv(item.category)
+                        csv(formatter.format(Date(item.createdAt))), csv(item.category), csv(item.whatsappPackage)
                     ).joinToString(",")
                 }
                 contentResolver.openOutputStream(uri)?.bufferedWriter()?.use { writer ->
@@ -285,6 +285,7 @@ class MainActivity : FragmentActivity() {
                 val channelIndex = header.indexOf("channel")
                 val dateIndex = header.indexOf("scheduled at")
                 val repeatIndex = header.indexOf("repeat rule")
+                val whatsappAppIndex = header.indexOf("whatsapp app")
                 require(recipientIndex >= 0 && bodyIndex >= 0 && channelIndex >= 0 && dateIndex >= 0) {
                     "Required columns: Recipient, Message, Channel and Scheduled At."
                 }
@@ -304,7 +305,8 @@ class MainActivity : FragmentActivity() {
                         require(scheduledAt > System.currentTimeMillis())
                         MessageEntity(recipient = recipient, body = body,
                             channel = if (channel.equals("SMS", true)) "SMS" else "WhatsApp",
-                            scheduledAt = scheduledAt, repeatRule = repeat, category = row.getOrElse(header.indexOf("category")) { "General" }.ifBlank { "General" })
+                            scheduledAt = scheduledAt, repeatRule = repeat, category = row.getOrElse(header.indexOf("category")) { "General" }.ifBlank { "General" },
+                            whatsappPackage = if (channel.equals("WhatsApp", true) && whatsappAppIndex >= 0) row.getOrElse(whatsappAppIndex) { "" }.trim() else "")
                     }.getOrElse { invalid++; null }
                 }
                 require(valid.isNotEmpty()) { "No valid future messages were found in this CSV." }

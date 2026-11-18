@@ -523,10 +523,8 @@ private fun parseCsv(content: String): List<List<String>> {
             c == '"' && quoted && i + 1 < content.length && content[i + 1] == '"' -> { cell.append('"'); i++ }
             c == '"' -> quoted = !quoted
             c == ',' && !quoted -> { row += cell.toString(); cell.setLength(0) }
-            (c == '
-' || c == '\r') && !quoted -> {
-                if (c == '\r' && i + 1 < content.length && content[i + 1] == '
-') i++
+            (c == '\n' || c == '\r') && !quoted -> {
+                if (c == '\r' && i + 1 < content.length && content[i + 1] == '\n') i++
                 row += cell.toString(); cell.setLength(0)
                 if (row.any { it.isNotBlank() }) result += row.toList()
                 row.clear()

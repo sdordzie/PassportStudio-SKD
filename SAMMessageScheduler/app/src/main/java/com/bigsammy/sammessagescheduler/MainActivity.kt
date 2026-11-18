@@ -1048,6 +1048,92 @@ private fun SchedulerScreen(
                             if (pair.size == 1) Spacer(Modifier.weight(1f))
                         }
                     }
+                    var captionTemplates by remember {
+                        mutableStateOf(runCatching {
+                            val saved = appContext.getSharedPreferences("sam_social_templates", android.content.Context.MODE_PRIVATE)
+                                .getString("templates", "[]") ?: "[]"
+                            val array = JSONArray(saved)
+                            (0 until array.length()).map { index ->
+                                val item = array.getJSONObject(index)
+                                item.optString("name") to item.optString("caption")
+                            }
+                        }.getOrDefault(emptyList()))
+                    }
+                    var templateDialog by remember { mutableStateOf(false) }
+                    var templateName by remember { mutableStateOf("") }
+                    var templateCaption by remember { mutableStateOf("") }
+                    var templateError by remember { mutableStateOf("") }
+                    fun persistCaptionTemplates(items: List<Pair<String, String>>) {
+                        val array = JSONArray()
+                        items.forEach { (name, caption) ->
+                            array.put(JSONObject().put("name", name).put("caption", caption))
+                        }
+                        appContext.getSharedPreferences("sam_social_templates", android.content.Context.MODE_PRIVATE)
+                            .edit().putString("templates", array.toString()).apply()
+                        captionTemplates = items
+                    }
+                    Card(Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
+                        Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Column(Modifier.weight(1f)) {
+                                    Text("Caption library", fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
+                                    Text("Save reusable captions and campaign copy on this device.", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                }
+                                IconButton(onClick = { templateName = ""; templateCaption = ""; templateError = ""; templateDialog = true }) {
+                                    Icon(Icons.Default.Add, contentDescription = "Add caption template")
+                                }
+                            }
+                            if (captionTemplates.isEmpty()) {
+                                Text("No saved captions yet. Add a reusable caption for announcements, promotions or campaigns.", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            } else {
+                                captionTemplates.forEachIndexed { index, item ->
+                                    HorizontalDivider()
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                                            Text(item.first, fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onSurface)
+                                            Text(item.second, maxLines = 2, fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                        }
+                                        IconButton(onClick = {
+                                            val clipboard = appContext.getSystemService(android.content.Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
+                                            clipboard.setPrimaryClip(android.content.ClipData.newPlainText(item.first, item.second))
+                                            Toast.makeText(appContext, "Caption copied. Paste it into your post.", Toast.LENGTH_SHORT).show()
+                                        }) { Icon(Icons.Default.ContentCopy, contentDescription = "Copy caption") }
+                                        IconButton(onClick = { persistCaptionTemplates(captionTemplates.filterIndexed { i, _ -> i != index }) }) {
+                                            Icon(Icons.Default.DeleteOutline, contentDescription = "Delete caption", tint = MaterialTheme.colorScheme.error)
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    if (templateDialog) {
+                        AlertDialog(
+                            onDismissRequest = { templateDialog = false },
+                            title = { Text("Save caption template") },
+                            text = {
+                                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                    OutlinedTextField(templateName, { templateName = it }, label = { Text("Template name") }, singleLine = true)
+                                    OutlinedTextField(templateCaption, { templateCaption = it }, label = { Text("Caption text") }, minLines = 4)
+                                    if (templateError.isNotBlank()) Text(templateError, color = MaterialTheme.colorScheme.error, fontSize = 12.sp)
+                                }
+                            },
+                            confirmButton = {
+                                TextButton(onClick = {
+                                    val name = templateName.trim()
+                                    val caption = templateCaption.trim()
+                                    when {
+                                        name.isBlank() || caption.isBlank() -> templateError = "Enter both a name and caption."
+                                        captionTemplates.any { it.first.equals(name, true) } -> templateError = "A template with this name already exists."
+                                        else -> {
+                                            persistCaptionTemplates(captionTemplates + (name to caption))
+                                            templateDialog = false
+                                        }
+                                    }
+                                }) { Text("Save template") }
+                            },
+                            dismissButton = { TextButton(onClick = { templateDialog = false }) { Text("Cancel") } }
+                        )
+                    }
                     Text("YOUR POST QUEUE", fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
                     if (socialPosts.isEmpty()) {
                         Card(Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {

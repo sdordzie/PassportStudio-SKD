@@ -244,7 +244,7 @@ class MainActivity : FragmentActivity() {
                         .put("attachmentsJson", item.attachmentsJson).put("triggerType", item.triggerType)
                         .put("latitude", item.latitude).put("longitude", item.longitude)
                         .put("radiusMeters", item.radiusMeters).put("locationLabel", item.locationLabel)
-                        .put("whatsappPackage", item.whatsappPackage))
+                        .put("whatsappPackage", item.whatsappPackage).put("campaignId", item.campaignId))
                 }
                 val contactArray = JSONArray()
                 contacts.forEach { contact ->
@@ -356,7 +356,7 @@ class MainActivity : FragmentActivity() {
                         latitude = if (item.isNull("latitude")) null else item.optDouble("latitude"),
                         longitude = if (item.isNull("longitude")) null else item.optDouble("longitude"),
                         radiusMeters = item.optDouble("radiusMeters", 150.0).toFloat(), locationLabel = item.optString("locationLabel", ""),
-                        whatsappPackage = item.optString("whatsappPackage", ""))
+                        whatsappPackage = item.optString("whatsappPackage", ""), campaignId = item.optString("campaignId").takeIf { it.isNotBlank() })
                 }
                 val database = AppDatabase.get(this@MainActivity)
                 val dao = database.messageDao()
@@ -501,7 +501,7 @@ class MainActivity : FragmentActivity() {
                         }
                     },
                     onDismissImport = { csvImportPreview = emptyList() },
-                    save = { existingId, recipient, body, channel, scheduledAt, repeatRule, category, attachments, triggerType, latitude, longitude, radiusMeters, locationLabel, whatsappPackage ->
+                    save = { existingId, recipient, body, channel, scheduledAt, repeatRule, category, attachments, triggerType, latitude, longitude, radiusMeters, locationLabel, whatsappPackage, campaignId ->
                         val persistSchedule: () -> Unit = {
                             lifecycleScope.launch {
                             if (existingId != null) {
@@ -523,6 +523,7 @@ class MainActivity : FragmentActivity() {
                                         radiusMeters = radiusMeters,
                                         locationLabel = locationLabel,
                                         whatsappPackage = if (channel == "WhatsApp" || channel == "Social") whatsappPackage else "",
+                                         campaignId = if (channel == "Social") campaignId else null,
                                         status = "SCHEDULED"
                                     ))
                                     if (triggerType == "LOCATION" && latitude != null && longitude != null) {
@@ -700,7 +701,7 @@ private fun SchedulerScreen(
     invalidImportCount: Int,
     onConfirmImport: () -> Unit,
     onDismissImport: () -> Unit,
-    save: (Long?, String, String, String, Long, String, String, List<String>, String, Double?, Double?, Float, String, String) -> Unit,
+    save: (Long?, String, String, String, Long, String, String, List<String>, String, Double?, Double?, Float, String, String, String?) -> Unit,
     requestSmsPermission: (() -> Unit) -> Unit,
     remove: (Long) -> Unit,
     complete: (MessageEntity) -> Unit,
@@ -1634,8 +1635,8 @@ private fun SchedulerScreen(
             duplicateMode = duplicateMode,
             onClose = { showComposer = false; editMessage = null; duplicateMode = false },
             requestSmsPermission = requestSmsPermission,
-            onSave = { id, recipient, body, channel, scheduledAt, repeatRule, category, attachments, triggerType, latitude, longitude, radiusMeters, locationLabel, whatsappPackage ->
-                save(if (duplicateMode) null else id, recipient, body, channel, scheduledAt, repeatRule, category, attachments, triggerType, latitude, longitude, radiusMeters, locationLabel, whatsappPackage)
+            onSave = { id, recipient, body, channel, scheduledAt, repeatRule, category, attachments, triggerType, latitude, longitude, radiusMeters, locationLabel, whatsappPackage, campaignId ->
+                save(if (duplicateMode) null else id, recipient, body, channel, scheduledAt, repeatRule, category, attachments, triggerType, latitude, longitude, radiusMeters, locationLabel, whatsappPackage, campaignId)
                 showComposer = false
                 editMessage = null
                 duplicateMode = false
@@ -1927,7 +1928,7 @@ private fun Composer(
     duplicateMode: Boolean = false,
     onClose: () -> Unit,
     requestSmsPermission: (() -> Unit) -> Unit,
-    onSave: (Long?, String, String, String, Long, String, String, List<String>, String, Double?, Double?, Float, String, String) -> Unit
+    onSave: (Long?, String, String, String, Long, String, String, List<String>, String, Double?, Double?, Float, String, String, String?) -> Unit
 ) {
     var recipient by remember(initialMessage?.id) { mutableStateOf(initialMessage?.recipient ?: "") }
     LaunchedEffect(pickedRecipientNumber) { if (pickedRecipientNumber.isNotBlank()) recipient = pickedRecipientNumber }

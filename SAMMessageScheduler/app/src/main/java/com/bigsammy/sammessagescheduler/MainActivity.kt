@@ -1047,6 +1047,7 @@ private fun BulkComposer(
     var attachments by remember(initialMessage?.id) { mutableStateOf(initialMessage?.attachmentsJson?.let { raw -> runCatching { org.json.JSONArray(raw).let { a -> (0 until a.length()).map { a.getString(it) } } }.getOrDefault(emptyList()) } ?: emptyList()) }
     LaunchedEffect(pickedAttachmentUris) { attachments = (attachments + pickedAttachmentUris).distinct() }
     val configuration = androidx.compose.ui.platform.LocalConfiguration.current
+    val context = androidx.compose.ui.platform.LocalContext.current
     AlertDialog(
         modifier = Modifier.fillMaxWidth(0.94f).widthIn(max = 560.dp),
         properties = DialogProperties(usePlatformDefaultWidth = false),
@@ -1364,7 +1365,7 @@ private fun Composer(
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
                     OutlinedButton(onClick = {
                         val cal = java.util.Calendar.getInstance().apply { time = runCatching { SimpleDateFormat("yyyy-MM-dd", Locale.US).parse(date)!! }.getOrDefault(Date()) }
-                        android.app.DatePickerDialog(configuration.context, { _, y, m, d -> date = String.format(Locale.US, "%04d-%02d-%02d", y, m + 1, d) }, cal.get(java.util.Calendar.YEAR), cal.get(java.util.Calendar.MONTH), cal.get(java.util.Calendar.DAY_OF_MONTH)).show()
+                        android.app.DatePickerDialog(context, { _, y, m, d -> date = String.format(Locale.US, "%04d-%02d-%02d", y, m + 1, d) }, cal.get(java.util.Calendar.YEAR), cal.get(java.util.Calendar.MONTH), cal.get(java.util.Calendar.DAY_OF_MONTH)).show()
                     }, modifier = Modifier.weight(1f)) { Icon(Icons.Default.CalendarMonth, contentDescription = null); Text("Choose date") }
                     OutlinedButton(onClick = {
                         val cal = java.util.Calendar.getInstance().apply { time = runCatching { SimpleDateFormat("HH:mm", Locale.US).parse(time)!! }.getOrDefault(Date()) }

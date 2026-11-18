@@ -553,7 +553,7 @@ private fun SchedulerScreen(
     invalidImportCount: Int,
     onConfirmImport: () -> Unit,
     onDismissImport: () -> Unit,
-    save: (Long?, String, String, String, Long, String, String, List<String>) -> Unit,
+    save: (Long?, String, String, String, Long, String, String, List<String>, String, Double?, Double?, Float, String) -> Unit,
     requestSmsPermission: (() -> Unit) -> Unit,
     remove: (Long) -> Unit,
     complete: (MessageEntity) -> Unit,
@@ -1511,8 +1511,8 @@ private fun Composer(
                             recipient.isBlank() || body.isBlank() -> error = "Enter recipient and message."
                             recipient.count { it.isDigit() } < 7 -> error = "Enter a valid phone number with country code where required."
                             triggerType == "TIME" && scheduledAt <= System.currentTimeMillis() -> error = "Choose a future date and time."
-                            triggerType == "LOCATION" && (latitudeText.toDoubleOrNull() !in -90.0..90.0 || longitudeText.toDoubleOrNull() !in -180.0..180.0) -> error = "Enter valid latitude and longitude coordinates."
-                            triggerType == "LOCATION" && radiusText.toFloatOrNull() !in 100f..1000f -> error = "Arrival radius must be between 100 and 1000 metres."
+                            triggerType == "LOCATION" && ((latitudeText.toDoubleOrNull()?.let { it !in -90.0..90.0 } ?: true) || (longitudeText.toDoubleOrNull()?.let { it !in -180.0..180.0 } ?: true)) -> error = "Enter valid latitude and longitude coordinates."
+                            triggerType == "LOCATION" && (radiusText.toFloatOrNull()?.let { it !in 100f..1000f } ?: true) -> error = "Arrival radius must be between 100 and 1000 metres."
                             else -> onSave(initialMessage?.id, recipient.trim(), body.trim(), channel, scheduledAt, repeatRule, category, attachments, triggerType, latitudeText.toDoubleOrNull(), longitudeText.toDoubleOrNull(), radiusText.toFloatOrNull() ?: 150f, locationLabel.trim())
                         }
                     } catch (_: Exception) {

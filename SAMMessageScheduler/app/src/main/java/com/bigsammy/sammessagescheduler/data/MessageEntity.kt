@@ -20,5 +20,6 @@ data class MessageEntity(
     val latitude: Double? = null,
     val longitude: Double? = null,
     val radiusMeters: Float = 150f,
-    val locationLabel: String = ""
+    val locationLabel: String = "",
+    val whatsappPackage: String = ""
 )

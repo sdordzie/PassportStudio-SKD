@@ -57,6 +57,17 @@ class MainActivity : FragmentActivity() {
     private var themeMode by mutableStateOf("System")
     private var pickedRecipientNumber by mutableStateOf("")
     private var pickedAttachmentUris by mutableStateOf<List<String>>(emptyList())
+    private var pendingCaptureUri: android.net.Uri? = null
+    private val captureLauncher = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
+        val uri = pendingCaptureUri
+        pendingCaptureUri = null
+        if (result.resultCode == RESULT_OK && uri != null) {
+            pickedAttachmentUris = (pickedAttachmentUris + uri.toString()).distinct()
+            Toast.makeText(this, "Media captured and attached.", Toast.LENGTH_SHORT).show()
+        } else if (uri != null) {
+            runCatching { contentResolver.delete(uri, null, null) }
+        }
+    }
     private var securityPromptActive = false
     var securityAuthenticated = false
 
@@ -69,6 +80,32 @@ class MainActivity : FragmentActivity() {
     override fun onPause() {
         super.onPause()
         securityAuthenticated = false
+    }
+
+    private fun captureMedia(video: Boolean) {
+        val collection = if (video) android.provider.MediaStore.Video.Media.EXTERNAL_CONTENT_URI
+            else android.provider.MediaStore.Images.Media.EXTERNAL_CONTENT_URI
+        val values = android.content.ContentValues().apply {
+            put(android.provider.MediaStore.MediaColumns.DISPLAY_NAME, "SAM_MEDIA_" + System.currentTimeMillis() + if (video) ".mp4" else ".jpg")
+            put(android.provider.MediaStore.MediaColumns.MIME_TYPE, if (video) "video/mp4" else "image/jpeg")
+        }
+        val uri = runCatching { contentResolver.insert(collection, values) }.getOrNull()
+        if (uri == null) {
+            Toast.makeText(this, "Could not prepare a media file for capture.", Toast.LENGTH_LONG).show()
+            return
+        }
+        val intent = android.content.Intent(if (video) android.provider.MediaStore.ACTION_VIDEO_CAPTURE else android.provider.MediaStore.ACTION_IMAGE_CAPTURE).apply {
+            putExtra(android.provider.MediaStore.EXTRA_OUTPUT, uri)
+            clipData = android.content.ClipData.newRawUri("SAM media output", uri)
+            addFlags(android.content.Intent.FLAG_GRANT_WRITE_URI_PERMISSION or android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        }
+        if (intent.resolveActivity(packageManager) == null) {
+            contentResolver.delete(uri, null, null)
+            Toast.makeText(this, "No compatible camera app is available.", Toast.LENGTH_LONG).show()
+            return
+        }
+        pendingCaptureUri = uri
+        captureLauncher.launch(intent)
     }
 
     fun authenticateForApp() {
@@ -331,6 +368,8 @@ class MainActivity : FragmentActivity() {
                     pickedRecipientNumber = pickedRecipientNumber,
                     pickedAttachmentUris = pickedAttachmentUris,
                     onPickAttachments = { mediaPicker.launch(arrayOf("image/*", "video/*")) },
+                    onCapturePhoto = { captureMedia(false) },
+                    onCaptureVideo = { captureMedia(true) },
                     onPickRecipient = { recipientContactPicker.launch(null) },
                     onPickContact = { deviceContactPicker.launch(null) },
                     saveContact = { contact -> lifecycleScope.launch { AppDatabase.get(this@MainActivity).contactDao().insert(contact) } },
@@ -481,6 +520,8 @@ private fun SchedulerScreen(
     pickedRecipientNumber: String,
     pickedAttachmentUris: List<String>,
     onPickAttachments: () -> Unit,
+    onCapturePhoto: () -> Unit,
+    onCaptureVideo: () -> Unit,
     onPickRecipient: () -> Unit,
     onPickContact: () -> Unit,
     saveContact: (ContactEntity) -> Unit,
@@ -973,6 +1014,8 @@ private fun SchedulerScreen(
             pickedRecipientNumber = pickedRecipientNumber,
             pickedAttachmentUris = pickedAttachmentUris,
             onPickAttachments = onPickAttachments,
+            onCapturePhoto = onCapturePhoto,
+            onCaptureVideo = onCaptureVideo,
             onPickRecipient = onPickRecipient,
             duplicateMode = duplicateMode,
             onClose = { showComposer = false; editMessage = null; duplicateMode = false },
@@ -1264,6 +1307,8 @@ private fun Composer(
     pickedRecipientNumber: String,
     pickedAttachmentUris: List<String>,
     onPickAttachments: () -> Unit,
+    onCapturePhoto: () -> Unit,
+    onCaptureVideo: () -> Unit,
     onPickRecipient: () -> Unit,
     duplicateMode: Boolean = false,
     onClose: () -> Unit,
@@ -1363,7 +1408,17 @@ private fun Composer(
                         Icon(Icons.Default.Contacts, contentDescription = "Choose contact")
                     }
                 }
-                OutlinedButton(onClick = onPickAttachments, modifier = Modifier.fillMaxWidth()) { Icon(Icons.Default.AttachFile, contentDescription = null); Spacer(Modifier.width(6.dp)); Text("Add photos or videos") }
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    OutlinedButton(onClick = onCapturePhoto, modifier = Modifier.weight(1f)) {
+                        Icon(Icons.Default.PhotoCamera, contentDescription = null); Spacer(Modifier.width(4.dp)); Text("Photo", fontSize = 12.sp)
+                    }
+                    OutlinedButton(onClick = onCaptureVideo, modifier = Modifier.weight(1f)) {
+                        Icon(Icons.Default.Videocam, contentDescription = null); Spacer(Modifier.width(4.dp)); Text("Video", fontSize = 12.sp)
+                    }
+                    OutlinedButton(onClick = onPickAttachments, modifier = Modifier.weight(1f)) {
+                        Icon(Icons.Default.AttachFile, contentDescription = null); Spacer(Modifier.width(4.dp)); Text("Gallery", fontSize = 12.sp)
+                    }
+                }
                 if (attachments.isNotEmpty()) {
                     Text("${attachments.size} attachment(s) selected", color = MaterialTheme.colorScheme.primary, fontSize = 12.sp)
                     attachments.forEach { uri -> Row(verticalAlignment = Alignment.CenterVertically) { Text(uri.substringAfterLast("/"), modifier = Modifier.weight(1f), maxLines = 1); IconButton(onClick = { attachments = attachments - uri }) { Icon(Icons.Default.Close, contentDescription = "Remove attachment") } } }

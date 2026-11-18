@@ -554,7 +554,8 @@ class MainActivity : FragmentActivity() {
                                     longitude = longitude,
                                     radiusMeters = radiusMeters,
                                     locationLabel = locationLabel,
-                                    whatsappPackage = if (channel == "WhatsApp" || channel == "Social") whatsappPackage else ""
+                                    whatsappPackage = if (channel == "WhatsApp" || channel == "Social") whatsappPackage else "",
+                                     campaignId = if (channel == "Social") campaignId else null
                                 ))
                                 if (triggerType == "LOCATION" && latitude != null && longitude != null) {
                                     runCatching { LocationGeofenceManager.register(this@MainActivity, id, latitude, longitude, radiusMeters) }

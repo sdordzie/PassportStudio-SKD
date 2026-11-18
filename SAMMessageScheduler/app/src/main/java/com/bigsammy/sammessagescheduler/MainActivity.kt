@@ -784,6 +784,30 @@ private fun SchedulerScreen(
                 Column(Modifier.padding(padding).fillMaxSize()
                     .verticalScroll(rememberScrollState()).padding(18.dp)) {
                     Text("Settings", fontSize = 24.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
+                    Text("Permissions centre", fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onSurface, modifier = Modifier.padding(top = 16.dp))
+                    Text("SAM requests sensitive access only when a feature needs it. Photos and videos can be selected using Android's system picker without broad gallery access.", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 12.sp)
+                    val permissionRows = listOf(
+                        "Notifications" to android.Manifest.permission.POST_NOTIFICATIONS,
+                        "Send SMS" to android.Manifest.permission.SEND_SMS,
+                        "Receive SMS" to android.Manifest.permission.RECEIVE_SMS,
+                        "Camera" to android.Manifest.permission.CAMERA,
+                        "Location (while using)" to android.Manifest.permission.ACCESS_FINE_LOCATION,
+                        "Location (background)" to android.Manifest.permission.ACCESS_BACKGROUND_LOCATION
+                    )
+                    permissionRows.forEach { (label, permission) ->
+                        val granted = androidx.core.content.ContextCompat.checkSelfPermission(context, permission) == android.content.pm.PackageManager.PERMISSION_GRANTED
+                        Row(Modifier.fillMaxWidth().padding(vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+                            Column(Modifier.weight(1f)) {
+                                Text(label, color = MaterialTheme.colorScheme.onSurface, fontSize = 13.sp)
+                                Text(if (granted) "Allowed" else "Not allowed", color = if (granted) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 11.sp)
+                            }
+                            Icon(if (granted) Icons.Default.CheckCircle else Icons.Default.Info, contentDescription = null, tint = if (granted) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
+                    }
+                    OutlinedButton(onClick = {
+                        val intent = android.content.Intent(android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS, android.net.Uri.parse("package:" + context.packageName))
+                        context.startActivity(intent)
+                    }, modifier = Modifier.fillMaxWidth()) { Icon(Icons.Default.Security, contentDescription = null); Spacer(Modifier.width(6.dp)); Text("Manage SAM permissions") }
                     val context = androidx.compose.ui.platform.LocalContext.current
                     val quietPrefs = remember { context.getSharedPreferences("sam_quiet_hours", android.content.Context.MODE_PRIVATE) }
                     var quietEnabled by remember { mutableStateOf(quietPrefs.getBoolean("enabled", false)) }

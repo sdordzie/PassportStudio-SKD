@@ -749,29 +749,27 @@ private fun SchedulerScreen(
                         alwaysShowLabel = true
                     )
                 }
-                Box {
-                    NavigationBarItem(
-                        selected = page == "Contacts" || page == "Settings",
-                        onClick = { showMoreMenu = true },
-                        icon = { Icon(Icons.Default.MoreHoriz, contentDescription = "More", modifier = Modifier.size(21.dp)) },
-                        label = { Text("More", fontSize = 11.sp, maxLines = 1, softWrap = false) },
-                        alwaysShowLabel = true
+                NavigationBarItem(
+                    selected = page == "Contacts" || page == "Settings",
+                    onClick = { showMoreMenu = true },
+                    icon = { Icon(Icons.Default.MoreHoriz, contentDescription = "More", modifier = Modifier.size(21.dp)) },
+                    label = { Text("More", fontSize = 11.sp, maxLines = 1, softWrap = false) },
+                    alwaysShowLabel = true
+                )
+                DropdownMenu(
+                    expanded = showMoreMenu,
+                    onDismissRequest = { showMoreMenu = false }
+                ) {
+                    DropdownMenuItem(
+                        text = { Text("Contacts") },
+                        leadingIcon = { Icon(Icons.Default.Contacts, contentDescription = null) },
+                        onClick = { page = "Contacts"; showMoreMenu = false }
                     )
-                    DropdownMenu(
-                        expanded = showMoreMenu,
-                        onDismissRequest = { showMoreMenu = false }
-                    ) {
-                        DropdownMenuItem(
-                            text = { Text("Contacts") },
-                            leadingIcon = { Icon(Icons.Default.Contacts, contentDescription = null) },
-                            onClick = { page = "Contacts"; showMoreMenu = false }
-                        )
-                        DropdownMenuItem(
-                            text = { Text("Settings") },
-                            leadingIcon = { Icon(Icons.Default.Settings, contentDescription = null) },
-                            onClick = { page = "Settings"; showMoreMenu = false }
-                        )
-                    }
+                    DropdownMenuItem(
+                        text = { Text("Settings") },
+                        leadingIcon = { Icon(Icons.Default.Settings, contentDescription = null) },
+                        onClick = { page = "Settings"; showMoreMenu = false }
+                    )
                 }
             }
         },

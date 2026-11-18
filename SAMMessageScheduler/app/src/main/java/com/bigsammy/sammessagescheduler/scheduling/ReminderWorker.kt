@@ -119,7 +119,7 @@ class ReminderWorker(context: Context, params: WorkerParameters) : CoroutineWork
                 }
             }.getOrDefault(emptyList())
 
-            if (attachmentUris.isNotEmpty()) {
+            if (attachmentUris.isNotEmpty() && item.channel != "Social") {
                 // Media messages use a user-confirmed share flow; Android's public SMS API
                 // does not provide a dependable carrier-independent MMS send operation.
                 val share = Intent(Intent.ACTION_SEND_MULTIPLE).apply {
@@ -192,17 +192,25 @@ class ReminderWorker(context: Context, params: WorkerParameters) : CoroutineWork
                 else sms.sendTextMessage(item.recipient, null, item.body, sentIntents.first(), deliveredIntents.first())
                 postNotification(id, "SMS submitted", "Android accepted the SMS request for ${item.recipient}. Delivery updates will appear when the network reports them.")
             } else if (item.channel == "Social") {
-                val share = Intent(Intent.ACTION_SEND).apply {
-                    type = "text/plain"
+                // Preserve photo/video attachments for social destinations. The destination app
+                // receives read access and the user completes the final review/publish step.
+                val share = if (attachmentUris.isNotEmpty()) {
+                    Intent(Intent.ACTION_SEND_MULTIPLE).apply {
+                        type = "*/*"
+                        putParcelableArrayListExtra(Intent.EXTRA_STREAM, ArrayList(attachmentUris))
+                        clipData = android.content.ClipData.newUri(
+                            applicationContext.contentResolver, "SAM social post media", attachmentUris.first()
+                        ).also { clip -> attachmentUris.drop(1).forEach { clip.addItem(android.content.ClipData.Item(it)) } }
+                    }
+                } else {
+                    Intent(Intent.ACTION_SEND).apply { type = "text/plain" }
+                }.apply {
                     putExtra(Intent.EXTRA_TEXT, item.body)
-                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_GRANT_READ_URI_PERMISSION)
                     if (item.whatsappPackage.isNotBlank()) setPackage(item.whatsappPackage)
                 }
                 val target = if (share.resolveActivity(applicationContext.packageManager) != null) share
-                    else Intent.createChooser(Intent(Intent.ACTION_SEND).apply {
-                        type = "text/plain"
-                        putExtra(Intent.EXTRA_TEXT, item.body)
-                    }, "Share social post")
+                    else Intent.createChooser(share.apply { setPackage(null) }, "Share social post")
                 val openSocial = PendingIntent.getActivity(
                     applicationContext, id.toInt(), target.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
                     PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE

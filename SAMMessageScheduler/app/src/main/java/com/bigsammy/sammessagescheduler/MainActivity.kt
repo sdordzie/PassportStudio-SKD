@@ -1235,6 +1235,9 @@ private fun SchedulerScreen(
                                                 fontSize = 10.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                                             Text(campaign.platforms.joinToString(" • "), fontSize = 10.sp, color = MaterialTheme.colorScheme.primary)
                                             Text(stateLabel, fontSize = 10.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.secondary)
+                                             val campaignPosts = messages.filter { it.channel == "Social" && it.campaignId == campaign.id }
+                                             val scheduledCampaignPosts = campaignPosts.count { it.status == "SCHEDULED" }
+                                             Text("${campaignPosts.size} linked post(s) • $scheduledCampaignPosts scheduled • ${campaignPosts.size - scheduledCampaignPosts} processed", fontSize = 10.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                                         }
                                         IconButton(onClick = { persistCampaigns(socialCampaigns.filterNot { it.id == campaign.id }) }) {
                                             Icon(Icons.Default.DeleteOutline, contentDescription = "Delete campaign", tint = MaterialTheme.colorScheme.error)

@@ -41,4 +41,5 @@ jobs:
           if-no-files-found: error
           retention-days: 30
 
-# Trigger APK rebuild after the Kotlin parser correction.
+# Build SAM Message Scheduler APK on main updates.
+# Rebuild requested after Contact Centre 6.13.0 merge.

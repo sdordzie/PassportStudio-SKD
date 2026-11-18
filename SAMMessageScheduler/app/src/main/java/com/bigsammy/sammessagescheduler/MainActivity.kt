@@ -538,8 +538,8 @@ class MainActivity : FragmentActivity() {
                     contacts = contacts,
                     phoneContacts = phoneContacts,
                     contactsPermissionGranted = contactsPermissionGranted,
-                    onRequestDeviceContacts = onRequestDeviceContacts,
-                    onRefreshDeviceContacts = onRefreshDeviceContacts,
+                    onRequestDeviceContacts = { requestDeviceContactsAccess() },
+                    onRefreshDeviceContacts = { loadPhoneContacts() },
                     pickedRecipientNumber = pickedRecipientNumber,
                     pickedAttachmentUris = pickedAttachmentUris,
                     onPickAttachments = { mediaPicker.launch(arrayOf("image/*", "video/*", "audio/*")) },
@@ -1051,8 +1051,8 @@ private fun SchedulerScreen(
                     contacts, onPickContact, saveContact, updateContact, deleteContact,
                     phoneContacts = phoneContacts,
                     contactsPermissionGranted = contactsPermissionGranted,
-                    onRequestDeviceContacts = { requestDeviceContactsAccess() },
-                    onRefreshDeviceContacts = { loadPhoneContacts() },
+                    onRequestDeviceContacts = onRequestDeviceContacts,
+                    onRefreshDeviceContacts = onRefreshDeviceContacts,
                     onBulkSchedule = { selected, body, channel, scheduledAt ->
                         val scheduleAll = {
                             selected.forEach { contact ->

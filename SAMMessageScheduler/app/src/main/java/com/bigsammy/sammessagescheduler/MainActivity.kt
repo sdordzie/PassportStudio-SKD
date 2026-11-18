@@ -144,8 +144,13 @@ class MainActivity : FragmentActivity() {
             }
             override fun onAuthenticationError(errorCode: Int, errString: CharSequence) {
                 securityPromptActive = false
-                if (errorCode != BiometricPrompt.ERROR_USER_CANCELED && errorCode != BiometricPrompt.ERROR_NEGATIVE_BUTTON) {
-                    Toast.makeText(this@MainActivity, "App authentication was not completed.", Toast.LENGTH_LONG).show()
+                if (!securityAuthenticated && getSharedPreferences("sam_app_security", android.content.Context.MODE_PRIVATE)
+                        .getBoolean("biometric_enabled", false)) {
+                    if (errorCode != BiometricPrompt.ERROR_USER_CANCELED && errorCode != BiometricPrompt.ERROR_NEGATIVE_BUTTON) {
+                        Toast.makeText(this@MainActivity, "App authentication was not completed.", Toast.LENGTH_LONG).show()
+                    }
+                    // Do not leave protected content visible after a cancelled or failed unlock.
+                    finish()
                 }
             }
             override fun onAuthenticationFailed() {
@@ -253,8 +258,13 @@ class MainActivity : FragmentActivity() {
                         .put("birthday", contact.birthday).put("anniversary", contact.anniversary)
                         .put("createdAt", contact.createdAt))
                 }
+                val preferences = getSharedPreferences("sam_social_campaigns", android.content.Context.MODE_PRIVATE)
+                val templates = getSharedPreferences("sam_social_templates", android.content.Context.MODE_PRIVATE)
                 root.put("messages", array).put("contacts", contactArray)
-                val encrypted = BackupCrypto.encrypt(root.toString(), password.toCharArray())
+                    .put("campaigns", JSONArray(preferences.getString("campaigns", "[]") ?: "[]"))
+                    .put("captionTemplates", JSONArray(templates.getString("templates", "[]") ?: "[]"))
+                val passwordChars = password.toCharArray()
+                val encrypted = try { BackupCrypto.encrypt(root.toString(), passwordChars) } finally { passwordChars.fill('\u0000') }
                 contentResolver.openOutputStream(uri)?.bufferedWriter()?.use { it.write(encrypted) }
                     ?: error("Could not open backup file.")
                 Toast.makeText(this@MainActivity, "Encrypted cloud-compatible backup exported (messages and contacts).", Toast.LENGTH_LONG).show()
@@ -315,7 +325,7 @@ class MainActivity : FragmentActivity() {
                         val repeat = if (repeatIndex >= 0) row.getOrElse(repeatIndex) { "NONE" }.trim().uppercase(Locale.US) else "NONE"
                         require(recipient.isNotBlank() && body.isNotBlank())
                         require(recipient.count { it.isDigit() } >= 7)
-                        require(channel.equals("SMS", true) || channel.equals("WhatsApp", true))
+                        require(channel.equals("SMS", true) || channel.equals("WhatsApp", true) || channel.equals("Social", true))
                         require(repeat in listOf("NONE", "DAILY", "WEEKLY", "MONTHLY", "YEARLY"))
                         require(scheduledAt > System.currentTimeMillis())
                         MessageEntity(recipient = recipient, body = body,
@@ -366,7 +376,7 @@ class MainActivity : FragmentActivity() {
                 for (index in 0 until contactArray.length()) {
                     val item = contactArray.getJSONObject(index)
                     restoredContacts += ContactEntity(
-                        id = item.optLong("id", 0L),
+                        id = 0L,
                         name = item.getString("name"),
                         phone = item.getString("phone"),
                         groupName = item.optString("groupName", "General"),
@@ -376,10 +386,29 @@ class MainActivity : FragmentActivity() {
                     )
                 }
                 if (restoredContacts.isNotEmpty()) database.contactDao().insertAll(restoredContacts)
+                root.optJSONArray("campaigns")?.let { campaigns ->
+                    getSharedPreferences("sam_social_campaigns", android.content.Context.MODE_PRIVATE)
+                        .edit().putString("campaigns", campaigns.toString()).apply()
+                }
+                root.optJSONArray("captionTemplates")?.let { templates ->
+                    getSharedPreferences("sam_social_templates", android.content.Context.MODE_PRIVATE)
+                        .edit().putString("templates", templates.toString()).apply()
+                }
                 val all = dao.getAllSnapshot()
                 all.filter { it.status == "SCHEDULED" && it.triggerType == "TIME" && it.scheduledAt > System.currentTimeMillis() }
                     .forEach { MessageScheduler.schedule(this@MainActivity, it.id, it.scheduledAt) }
-                Toast.makeText(this@MainActivity, "Backup restored: messages and contacts.", Toast.LENGTH_LONG).show()
+                all.filter { it.status == "SCHEDULED" && it.triggerType == "LOCATION" && it.latitude != null && it.longitude != null }
+                    .forEach { message ->
+                        val fine = ContextCompat.checkSelfPermission(this@MainActivity, Manifest.permission.ACCESS_FINE_LOCATION) == android.content.pm.PackageManager.PERMISSION_GRANTED
+                        val coarse = ContextCompat.checkSelfPermission(this@MainActivity, Manifest.permission.ACCESS_COARSE_LOCATION) == android.content.pm.PackageManager.PERMISSION_GRANTED
+                        val background = Build.VERSION.SDK_INT < 29 || ContextCompat.checkSelfPermission(this@MainActivity, Manifest.permission.ACCESS_BACKGROUND_LOCATION) == android.content.pm.PackageManager.PERMISSION_GRANTED
+                        if ((fine || coarse) && background) {
+                            runCatching {
+                                LocationGeofenceManager.register(this@MainActivity, message.id, message.latitude!!, message.longitude!!, message.radiusMeters)
+                            }.onFailure { android.util.Log.e("SAMRestore", "Could not restore arrival reminder ${message.id}", it) }
+                        }
+                    }
+                Toast.makeText(this@MainActivity, "Backup restored: messages, contacts, campaigns and captions.", Toast.LENGTH_LONG).show()
             }.onFailure { Toast.makeText(this@MainActivity, "Restore failed. Check the backup file.", Toast.LENGTH_LONG).show() }
         }
     }
@@ -1238,7 +1267,10 @@ private fun SchedulerScreen(
                                             Text(stateLabel, fontSize = 10.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.secondary)
                                              val campaignPosts = messages.filter { it.channel == "Social" && it.campaignId == campaign.id }
                                              val scheduledCampaignPosts = campaignPosts.count { it.status == "SCHEDULED" }
-                                             Text("${campaignPosts.size} linked post(s) • $scheduledCampaignPosts scheduled • ${campaignPosts.size - scheduledCampaignPosts} processed", fontSize = 10.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                             val awaitingCampaignPosts = campaignPosts.count { it.status == "AWAITING_USER" }
+                                             val failedCampaignPosts = campaignPosts.count { it.status == "FAILED" || it.status == "PERMISSION_REQUIRED" }
+                                             val completedCampaignPosts = campaignPosts.count { it.status == "COMPLETED" || it.status == "SENT" }
+                                             Text("${campaignPosts.size} linked • $scheduledCampaignPosts scheduled • $awaitingCampaignPosts awaiting review • $completedCampaignPosts completed • $failedCampaignPosts failed", fontSize = 10.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                                         }
                                         IconButton(onClick = { persistCampaigns(socialCampaigns.filterNot { it.id == campaign.id }) }) {
                                             Icon(Icons.Default.DeleteOutline, contentDescription = "Delete campaign", tint = MaterialTheme.colorScheme.error)
@@ -1596,7 +1628,7 @@ private fun SchedulerScreen(
                         visualTransformation = if (backupPasswordVisible) androidx.compose.ui.text.input.VisualTransformation.None else androidx.compose.ui.text.input.PasswordVisualTransformation(),
                         trailingIcon = { IconButton(onClick = { backupPasswordVisible = !backupPasswordVisible }) { Icon(if (backupPasswordVisible) Icons.Default.VisibilityOff else Icons.Default.Visibility, contentDescription = "Toggle password visibility") } }
                     )
-                    Text("Full encrypted backup includes messages, categories, contacts, groups, birthdays and anniversaries. Choose Google Drive or another cloud-storage provider in the Android file picker. Restore on another device using the same password. Existing message-only backups remain supported.", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 11.sp)
+                    Text("Full encrypted backup includes messages, contacts, birthdays, anniversaries, social campaigns and saved captions. Choose Google Drive or another cloud-storage provider in the Android file picker. Restore on another device using the same password. Existing message-only backups remain supported.", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 11.sp)
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth().padding(vertical = 10.dp)) {
                         OutlinedButton(onClick = { if (backupPasswordInput.length < 8) securityMessage = "Set a backup password of at least 8 characters." else onBackup(backupPasswordInput) }, modifier = Modifier.weight(1f)) { Text("Cloud backup") }
                         Button(onClick = { if (backupPasswordInput.length < 8) securityMessage = "Enter the password used for this backup." else onRestore(backupPasswordInput) }, modifier = Modifier.weight(1f)) { Text("Restore cloud backup") }

@@ -167,3 +167,15 @@ Target SDK: 35
 - The final Send or Publish step remains inside the destination app. A successful hand-off is not treated as proof that a message was sent or published.
 - This is not remote unlocking or unattended third-party app control. Android keyguard, background-launch, app-lock and manufacturer policies remain authoritative.
 - Version code: 53; version name: 6.12.0.
+
+
+## Phase 27 — Persistent SMS attempt history and reporting (v6.17.0)
+- Added a Room-backed message-attempt audit table for SMS submission results and per-part sent/delivery callbacks.
+- Each SMS retry and recurring send receives a unique attempt ID and distinct PendingIntent identity, preventing late callbacks from an earlier attempt from changing the current attempt's status.
+- Callback records are idempotent per message, attempt, event type and SMS part.
+- Failed callbacks retain the Android result code and a human-readable diagnostic; successful submission is explicitly distinguished from carrier-confirmed delivery.
+- The Home dashboard shows recent SMS attempt events and outcomes.
+- Message search now includes processing status and delivery status, so searching for "failed", "delivered" or "sent" can find matching records.
+- Encrypted backups now include attempt history and restore records against the newly restored message IDs. Existing version 3 backups remain compatible.
+- Room migration 9→10 adds the attempt-history table and indexes without deleting existing messages.
+- Version code: 58; version name: 6.17.0.

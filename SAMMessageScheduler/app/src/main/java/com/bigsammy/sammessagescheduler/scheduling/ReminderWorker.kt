@@ -244,7 +244,7 @@ class ReminderWorker(context: Context, params: WorkerParameters) : CoroutineWork
                 try {
                     if (parts.size > 1) sms.sendMultipartTextMessage(item.recipient, null, parts, sentIntents, deliveredIntents)
                     else sms.sendTextMessage(item.recipient, null, item.body, sentIntents.first(), deliveredIntents.first())
-                    dao.messageAttemptDao().insert(
+                    AppDatabase.get(applicationContext).messageAttemptDao().insert(
                         MessageAttemptEntity(
                             messageId = id,
                             attemptId = attemptId,
@@ -256,7 +256,7 @@ class ReminderWorker(context: Context, params: WorkerParameters) : CoroutineWork
                         )
                     )
                 } catch (sendError: Exception) {
-                    dao.messageAttemptDao().insert(
+                    AppDatabase.get(applicationContext).messageAttemptDao().insert(
                         MessageAttemptEntity(
                             messageId = id,
                             attemptId = attemptId,

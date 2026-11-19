@@ -279,16 +279,24 @@ class MainActivity : FragmentActivity() {
                 val database = AppDatabase.get(this@MainActivity)
                 val rows = database.messageDao().getAllSnapshot()
                 val contacts = database.contactDao().getAllSnapshot()
-                val root = JSONObject().put("format", "SAM_MESSAGE_SCHEDULER_BACKUP").put("version", 3)
+                val attemptRows = database.messageAttemptDao().getAllSnapshot()
+                val root = JSONObject().put("format", "SAM_MESSAGE_SCHEDULER_BACKUP").put("version", 4)
                 val array = JSONArray()
                 rows.forEach { item ->
-                    array.put(JSONObject().put("recipient", item.recipient).put("body", item.body)
+                    array.put(JSONObject().put("id", item.id).put("recipient", item.recipient).put("body", item.body)
                         .put("channel", item.channel).put("scheduledAt", item.scheduledAt)
                         .put("status", item.status).put("deliveryStatus", item.deliveryStatus).put("repeatRule", item.repeatRule).put("category", item.category).put("createdAt", item.createdAt)
                         .put("attachmentsJson", item.attachmentsJson).put("triggerType", item.triggerType)
                         .put("latitude", item.latitude).put("longitude", item.longitude)
                         .put("radiusMeters", item.radiusMeters).put("locationLabel", item.locationLabel)
                         .put("whatsappPackage", item.whatsappPackage).put("campaignId", item.campaignId))
+                }
+                val attemptArray = JSONArray()
+                attemptRows.forEach { attempt ->
+                    attemptArray.put(JSONObject().put("messageId", attempt.messageId).put("attemptId", attempt.attemptId)
+                        .put("recipient", attempt.recipient).put("channel", attempt.channel).put("eventType", attempt.eventType)
+                        .put("partIndex", attempt.partIndex).put("partCount", attempt.partCount).put("outcome", attempt.outcome)
+                        .put("resultCode", attempt.resultCode).put("detail", attempt.detail).put("occurredAt", attempt.occurredAt))
                 }
                 val contactArray = JSONArray()
                 contacts.forEach { contact ->
@@ -299,7 +307,7 @@ class MainActivity : FragmentActivity() {
                 }
                 val preferences = getSharedPreferences("sam_social_campaigns", android.content.Context.MODE_PRIVATE)
                 val templates = getSharedPreferences("sam_social_templates", android.content.Context.MODE_PRIVATE)
-                root.put("messages", array).put("contacts", contactArray)
+                root.put("messages", array).put("contacts", contactArray).put("attempts", attemptArray)
                     .put("campaigns", JSONArray(preferences.getString("campaigns", "[]") ?: "[]"))
                     .put("captionTemplates", JSONArray(templates.getString("templates", "[]") ?: "[]"))
                 val passwordChars = password.toCharArray()
@@ -394,10 +402,12 @@ class MainActivity : FragmentActivity() {
                 val root = JSONObject(decrypted)
                 require(root.optString("format") == "SAM_MESSAGE_SCHEDULER_BACKUP") { "Invalid SAM backup file." }
                 val array = root.getJSONArray("messages")
-                val restored = mutableListOf<MessageEntity>()
+                val database = AppDatabase.get(this@MainActivity)
+                val dao = database.messageDao()
+                val restoredIdMap = mutableMapOf<Long, Long>()
                 for (index in 0 until array.length()) {
                     val item = array.getJSONObject(index)
-                    restored += MessageEntity(recipient = item.getString("recipient"), body = item.getString("body"),
+                    val restoredMessage = MessageEntity(recipient = item.getString("recipient"), body = item.getString("body"),
                         channel = item.getString("channel"), scheduledAt = item.getLong("scheduledAt"),
                         status = item.optString("status", "SCHEDULED"), deliveryStatus = item.optString("deliveryStatus", "PENDING"), repeatRule = item.optString("repeatRule", "NONE"),
                         createdAt = item.optLong("createdAt", System.currentTimeMillis()), category = item.optString("category", "General"),
@@ -406,10 +416,28 @@ class MainActivity : FragmentActivity() {
                         longitude = if (item.isNull("longitude")) null else item.optDouble("longitude"),
                         radiusMeters = item.optDouble("radiusMeters", 150.0).toFloat(), locationLabel = item.optString("locationLabel", ""),
                         whatsappPackage = item.optString("whatsappPackage", ""), campaignId = item.optString("campaignId").takeIf { it.isNotBlank() })
+                    val newId = dao.insert(restoredMessage)
+                    val oldId = item.optLong("id", -1L)
+                    if (oldId > 0L) restoredIdMap[oldId] = newId
                 }
-                val database = AppDatabase.get(this@MainActivity)
-                val dao = database.messageDao()
-                dao.insertAll(restored)
+                val attemptArray = root.optJSONArray("attempts") ?: JSONArray()
+                for (index in 0 until attemptArray.length()) {
+                    val item = attemptArray.getJSONObject(index)
+                    val newMessageId = restoredIdMap[item.optLong("messageId", -1L)] ?: continue
+                    database.messageAttemptDao().insert(MessageAttemptEntity(
+                        messageId = newMessageId,
+                        attemptId = item.optString("attemptId", "restored_$index"),
+                        recipient = item.optString("recipient", ""),
+                        channel = item.optString("channel", "SMS"),
+                        eventType = item.optString("eventType", "RESTORED_EVENT"),
+                        partIndex = item.optInt("partIndex", -1),
+                        partCount = item.optInt("partCount", 1),
+                        outcome = item.optString("outcome", "UNKNOWN"),
+                        resultCode = item.optInt("resultCode", 0),
+                        detail = item.optString("detail", ""),
+                        occurredAt = item.optLong("occurredAt", System.currentTimeMillis())
+                    ))
+                }
                 val restoredContacts = mutableListOf<ContactEntity>()
                 val contactArray = root.optJSONArray("contacts") ?: JSONArray()
                 for (index in 0 until contactArray.length()) {

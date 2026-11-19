@@ -149,11 +149,13 @@ class ReminderWorker(context: Context, params: WorkerParameters) : CoroutineWork
                 } else {
                     dao.update(item.copy(status = "AWAITING_USER"))
                 }
-                postNotification(
-                    id, "Your scheduled media message is ready",
-                    unlockAwareGuidance("Tap to choose an app and recipient. Review the message and attachments, then tap Send. Recipient: ${item.recipient}."),
-                    openShare
-                )
+                runCatching {
+                    postNotification(
+                        id, "Your scheduled media message is ready",
+                        unlockAwareGuidance("Tap to choose an app and recipient. Review the message and attachments, then tap Send. Recipient: ${item.recipient}."),
+                        openShare
+                    )
+                }.onFailure { android.util.Log.w("SAMReminderWorker", "Media hand-off is ready but its notification could not be shown for message $id", it) }
             } else if (item.channel == "SMS") {
                 if (ContextCompat.checkSelfPermission(applicationContext, Manifest.permission.SEND_SMS) != PackageManager.PERMISSION_GRANTED) {
                     dao.update(item.copy(status = "PERMISSION_REQUIRED"))
@@ -229,7 +231,9 @@ class ReminderWorker(context: Context, params: WorkerParameters) : CoroutineWork
                 } else {
                     dao.update(item.copy(status = "AWAITING_USER"))
                 }
-                postNotification(id, "Your social post is ready", unlockAwareGuidance("Tap to open the selected social app. Review your post and publish it there."), openSocial)
+                runCatching {
+                    postNotification(id, "Your social post is ready", unlockAwareGuidance("Tap to open the selected social app. Review your post and publish it there."), openSocial)
+                }.onFailure { android.util.Log.w("SAMReminderWorker", "Social hand-off is ready but its notification could not be shown for message $id", it) }
             } else {
                 val phone = item.recipient.filter { it.isDigit() }
                 val encoded = URLEncoder.encode(item.body, "UTF-8")
@@ -252,7 +256,9 @@ class ReminderWorker(context: Context, params: WorkerParameters) : CoroutineWork
                 } else {
                     dao.update(item.copy(status = "AWAITING_USER"))
                 }
-                postNotification(id, "Your WhatsApp message is ready", unlockAwareGuidance("Tap to open WhatsApp with the recipient and message prepared. Review it and tap Send."), openChat)
+                runCatching {
+                    postNotification(id, "Your WhatsApp message is ready", unlockAwareGuidance("Tap to open WhatsApp with the recipient and message prepared. Review it and tap Send."), openChat)
+                }.onFailure { android.util.Log.w("SAMReminderWorker", "WhatsApp hand-off is ready but its notification could not be shown for message $id", it) }
             }
             Result.success()
         } catch (e: SecurityException) {

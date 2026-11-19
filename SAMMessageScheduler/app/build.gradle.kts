@@ -11,8 +11,8 @@ android {
         applicationId = "com.bigsammy.sammessagescheduler"
         minSdk = 26
         targetSdk = 35
-        versionCode = 57
-        versionName = "6.16.0"
+        versionCode = 58
+        versionName = "6.17.0"
     }
     buildFeatures { compose = true }
     compileOptions {

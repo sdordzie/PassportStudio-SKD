@@ -75,7 +75,7 @@ class SmsStatusReceiver : BroadcastReceiver() {
                     )
                 )
 
-                val key = "message_${id}_${attemptId}"
+                val key = if (attemptId.startsWith("legacy_")) "message_$id" else "message_${id}_${attemptId}"
                 val aggregateAndCurrent = synchronized(SmsStatusReceiver::class.java) {
                     val state = runCatching { org.json.JSONObject(prefs.getString(key, "{}") ?: "{}") }
                         .getOrDefault(org.json.JSONObject())

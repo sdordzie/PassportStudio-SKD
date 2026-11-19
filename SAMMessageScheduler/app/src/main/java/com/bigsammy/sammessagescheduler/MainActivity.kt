@@ -923,7 +923,7 @@ private fun SchedulerScreen(
                     }
 
                     val totalCount = messages.size
-                    val completedCount = messages.count { it.status == "COMPLETED" || it.status == "SENT" }
+                    val completedCount = messages.count { it.status == "COMPLETED" || (it.status == "SENT" && it.deliveryStatus !in listOf("SEND_FAILED", "DELIVERY_FAILED")) }
                     val failedCount = messages.count { it.status in listOf("FAILED", "PERMISSION_REQUIRED") || it.deliveryStatus in listOf("SEND_FAILED", "DELIVERY_FAILED") }
                     val deliveredCount = messages.count { it.deliveryStatus == "DELIVERED" }
                     val smsCount = messages.count { it.channel == "SMS" }
@@ -940,10 +940,10 @@ private fun SchedulerScreen(
                                 Stat("Failed", failedCount.toString(), Modifier.weight(1f))
                                 Stat("Delivered", deliveredCount.toString(), Modifier.weight(1f))
                             }
-                            Text("Completion rate", fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onSurface)
+                            Text("Processing completion", fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onSurface)
                             val completionRate = if (totalCount == 0) 0f else completedCount.toFloat() / totalCount.toFloat()
                             LinearProgressIndicator(progress = completionRate, modifier = Modifier.fillMaxWidth(), color = MaterialTheme.colorScheme.primary)
-                            Text("${(completionRate * 100).toInt()}% completed • $completedCount of $totalCount messages", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            Text("${(completionRate * 100).toInt()}% processed • $completedCount of $totalCount messages (excludes failed delivery records)", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                             Text("Channel distribution", fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onSurface)
                             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) { Text("SMS", color = MaterialTheme.colorScheme.onSurfaceVariant); Text("$smsCount", fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onSurface) }
                             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) { Text("WhatsApp", color = MaterialTheme.colorScheme.onSurfaceVariant); Text("$whatsappCount", fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onSurface) }
@@ -968,7 +968,7 @@ private fun SchedulerScreen(
                 val visibleMessages = messages.filter { message ->
                     (statusFilter == "ALL" ||
                         (statusFilter == "FAILED" && (message.status in listOf("FAILED", "PERMISSION_REQUIRED") || message.deliveryStatus in listOf("SEND_FAILED", "DELIVERY_FAILED"))) ||
-                        (statusFilter == "SENT" && message.status == "SENT") ||
+                        (statusFilter == "SENT" && message.status == "SENT" && message.deliveryStatus !in listOf("SEND_FAILED", "DELIVERY_FAILED")) ||
                         message.status == statusFilter ||
                         (statusFilter == "ATTENTION" && (message.status in listOf("FAILED", "PERMISSION_REQUIRED", "AWAITING_USER") || message.deliveryStatus in listOf("SEND_FAILED", "DELIVERY_FAILED"))) ||
                         (statusFilter == "DELIVERED" && message.deliveryStatus == "DELIVERED") ||
@@ -1037,7 +1037,7 @@ private fun SchedulerScreen(
                                                 TextButton(onClick = { togglePause(message) }) { Text("Resume") }
                                                 TextButton(onClick = { editMessage = message; showComposer = true }) { Text("Edit") }
                                             }
-                                            if (message.status in listOf("FAILED", "PERMISSION_REQUIRED", "AWAITING_USER")) {
+                                            if (message.status in listOf("FAILED", "PERMISSION_REQUIRED", "AWAITING_USER") || message.deliveryStatus in listOf("SEND_FAILED", "DELIVERY_FAILED")) {
                                                 TextButton(onClick = { retry(message) }) { Text("Retry") }
                                             }
                                             TextButton(onClick = { pendingRemoval = message }) { Text("Cancel", color = MaterialTheme.colorScheme.error) }

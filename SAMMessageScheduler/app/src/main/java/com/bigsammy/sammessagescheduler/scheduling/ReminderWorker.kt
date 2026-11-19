@@ -17,6 +17,7 @@ import androidx.core.content.ContextCompat
 import androidx.work.CoroutineWorker
 import androidx.work.WorkerParameters
 import com.bigsammy.sammessagescheduler.data.AppDatabase
+import com.bigsammy.sammessagescheduler.data.MessageAttemptEntity
 import java.net.URLEncoder
 import java.util.Calendar
 import kotlinx.coroutines.launch
@@ -26,27 +27,59 @@ class SmsStatusReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
         val id = intent.getLongExtra("message_id", -1L)
         if (id < 0) return
-        val part = intent.getIntExtra("part", 0)
+        val part = intent.getIntExtra("part", 0).coerceAtLeast(0)
         val partCount = intent.getIntExtra("part_count", 1).coerceAtLeast(1)
         val isSentEvent = intent.action == "com.bigsammy.sammessagescheduler.SMS_SENT"
         val isDeliveredEvent = intent.action == "com.bigsammy.sammessagescheduler.SMS_DELIVERED"
         if (!isSentEvent && !isDeliveredEvent) return
 
+        // Older pending intents created before attempt IDs were introduced remain readable.
+        val attemptId = intent.getStringExtra("attempt_id")?.takeIf { it.isNotBlank() } ?: "legacy_$id"
+        val failed = if (isSentEvent) resultCode != android.app.Activity.RESULT_OK else
+            resultCode == SmsManager.RESULT_ERROR_GENERIC_FAILURE ||
+            resultCode == SmsManager.RESULT_ERROR_NO_SERVICE ||
+            resultCode == SmsManager.RESULT_ERROR_NULL_PDU ||
+            resultCode == SmsManager.RESULT_ERROR_RADIO_OFF
+        val eventType = if (isSentEvent) "SENT_CALLBACK" else "DELIVERY_CALLBACK"
+        val detail = when {
+            !failed && isSentEvent -> "Android accepted this SMS part for transmission."
+            !failed -> "The mobile network reported this SMS part as delivered."
+            resultCode == SmsManager.RESULT_ERROR_NO_SERVICE -> "No mobile network service was available."
+            resultCode == SmsManager.RESULT_ERROR_RADIO_OFF -> "The phone radio was switched off."
+            resultCode == SmsManager.RESULT_ERROR_NULL_PDU -> "Android could not encode the SMS part."
+            resultCode == SmsManager.RESULT_ERROR_LIMIT_EXCEEDED -> "The SMS sending limit was exceeded."
+            resultCode == SmsManager.RESULT_ERROR_FDN_CHECK_FAILURE -> "The number was blocked by fixed-dialling restrictions."
+            else -> "Android or the mobile network returned error code $resultCode."
+        }
+
         val pending = goAsync()
         kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO).launch {
             try {
-                val dao = AppDatabase.get(context).messageDao()
+                val database = AppDatabase.get(context)
+                val dao = database.messageDao()
+                val attemptDao = database.messageAttemptDao()
                 val prefs = context.getSharedPreferences("sam_sms_part_status", Context.MODE_PRIVATE)
-                val failed = if (isSentEvent) resultCode != android.app.Activity.RESULT_OK else
-                    resultCode == SmsManager.RESULT_ERROR_GENERIC_FAILURE ||
-                    resultCode == SmsManager.RESULT_ERROR_NO_SERVICE ||
-                    resultCode == SmsManager.RESULT_ERROR_NULL_PDU ||
-                    resultCode == SmsManager.RESULT_ERROR_RADIO_OFF
-                val eventPrefix = if (isSentEvent) "sent" else "delivered"
-                synchronized(SmsStatusReceiver::class.java) {
-                    val key = "message_$id"
+
+                val item = dao.getById(id) ?: return@launch
+                attemptDao.insert(
+                    com.bigsammy.sammessagescheduler.data.MessageAttemptEntity(
+                        messageId = id,
+                        attemptId = attemptId,
+                        recipient = item.recipient,
+                        eventType = eventType,
+                        partIndex = part,
+                        partCount = partCount,
+                        outcome = if (failed) "FAILED" else "SUCCESS",
+                        resultCode = resultCode,
+                        detail = detail
+                    )
+                )
+
+                val key = "message_${id}_${attemptId}"
+                val aggregateAndCurrent = synchronized(SmsStatusReceiver::class.java) {
                     val state = runCatching { org.json.JSONObject(prefs.getString(key, "{}") ?: "{}") }
                         .getOrDefault(org.json.JSONObject())
+                    val eventPrefix = if (isSentEvent) "sent" else "delivered"
                     val events = state.optJSONObject(eventPrefix) ?: org.json.JSONObject()
                     events.put(part.toString(), if (failed) "FAILED" else "OK")
                     state.put(eventPrefix, events).put("count", partCount)
@@ -60,9 +93,6 @@ class SmsStatusReceiver : BroadcastReceiver() {
                     val deliveredValues = (0 until partCount).mapNotNull { index ->
                         deliveredEvents.optString(index.toString(), "").takeIf { it.isNotEmpty() }
                     }
-                    // Delivery callbacks are authoritative and must never be downgraded by a late sent callback.
-                    // A positive carrier delivery receipt is stronger evidence than a
-                    // contradictory/late SMS_SENT callback. Never label a delivered message failed.
                     val aggregate = when {
                         deliveredValues.size == partCount && deliveredValues.all { it == "OK" } -> "DELIVERED"
                         deliveredValues.any { it == "FAILED" } -> "DELIVERY_FAILED"
@@ -71,22 +101,30 @@ class SmsStatusReceiver : BroadcastReceiver() {
                         sentValues.isNotEmpty() -> "SENDING_PARTS_${sentValues.size}_OF_$partCount"
                         else -> "DELIVERING_PARTS_${deliveredValues.size}_OF_$partCount"
                     }
-                    kotlinx.coroutines.runBlocking {
-                        val item = dao.getById(id) ?: return@runBlocking
-                        dao.update(item.copy(deliveryStatus = aggregate))
-                    }
+                    val currentAttempt = prefs.getString("current_$id", null)
+                    aggregate to (currentAttempt == null || currentAttempt == attemptId)
                 }
+
+                // A late callback from an earlier retry is kept in history but cannot overwrite
+                // the status of a newer attempt.
+                if (aggregateAndCurrent.second) {
+                    val latest = dao.getById(id)
+                    if (latest != null) dao.update(latest.copy(deliveryStatus = aggregateAndCurrent.first))
+                }
+
                 val manager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
                 val channelId = "sam_scheduled_messages"
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
                     manager.createNotificationChannel(NotificationChannel(channelId, "Scheduled messages", NotificationManager.IMPORTANCE_DEFAULT))
                 }
-                val statusText = if (failed) "part $part of $partCount failed" else "part $part of $partCount updated"
+                val statusText = if (failed) "part ${part + 1} of $partCount failed" else "part ${part + 1} of $partCount updated"
                 manager.notify((id + 500000).toInt(), NotificationCompat.Builder(context, channelId)
                     .setSmallIcon(com.bigsammy.sammessagescheduler.R.drawable.ic_stat_sam)
                     .setContentTitle(if (failed) "SMS delivery problem" else "SMS status update")
-                    .setContentText("Recipient: ${dao.getById(id)?.recipient ?: "saved contact"} · $statusText")
+                    .setContentText("Recipient: ${item.recipient} · $statusText")
                     .setAutoCancel(true).build())
+            } catch (error: Exception) {
+                android.util.Log.e("SAMSmsStatus", "Could not save SMS callback for message $id", error)
             } finally {
                 pending.finish()
             }
@@ -169,21 +207,31 @@ class ReminderWorker(context: Context, params: WorkerParameters) : CoroutineWork
                     else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) applicationContext.getSystemService(SmsManager::class.java)
                     else SmsManager.getDefault()
                 val parts = sms.divideMessage(item.body)
+                val attemptId = java.util.UUID.randomUUID().toString()
+                val attemptPrefs = applicationContext.getSharedPreferences("sam_sms_part_status", Context.MODE_PRIVATE)
                 val sentIntents = ArrayList<PendingIntent>()
                 val deliveredIntents = ArrayList<PendingIntent>()
                 repeat(parts.size) { part ->
                     val sent = Intent(applicationContext, SmsStatusReceiver::class.java)
                         .setAction("com.bigsammy.sammessagescheduler.SMS_SENT")
-                        .putExtra("message_id", id).putExtra("part", part).putExtra("part_count", parts.size)
+                        .setData(Uri.parse("sam-sms://message/$id/attempt/$attemptId/sent/$part"))
+                        .putExtra("message_id", id).putExtra("attempt_id", attemptId)
+                        .putExtra("part", part).putExtra("part_count", parts.size)
                     val delivered = Intent(applicationContext, SmsStatusReceiver::class.java)
                         .setAction("com.bigsammy.sammessagescheduler.SMS_DELIVERED")
-                        .putExtra("message_id", id).putExtra("part", part).putExtra("part_count", parts.size)
-                    sentIntents += PendingIntent.getBroadcast(applicationContext, (id * 100 + part).toInt(), sent, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
-                    deliveredIntents += PendingIntent.getBroadcast(applicationContext, (id * 1000 + part).toInt(), delivered, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
+                        .setData(Uri.parse("sam-sms://message/$id/attempt/$attemptId/delivered/$part"))
+                        .putExtra("message_id", id).putExtra("attempt_id", attemptId)
+                        .putExtra("part", part).putExtra("part_count", parts.size)
+                    val requestBase = attemptId.hashCode() and 0x3fffffff
+                    sentIntents += PendingIntent.getBroadcast(applicationContext, requestBase + part, sent, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
+                    deliveredIntents += PendingIntent.getBroadcast(applicationContext, requestBase + 1000 + part, delivered, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
                 }
-                // Reset per-part callback state before submitting this SMS.
-                applicationContext.getSharedPreferences("sam_sms_part_status", Context.MODE_PRIVATE)
-                    .edit().putString("message_$id", org.json.JSONObject().put("count", parts.size).toString()).apply()
+                // Every retry/recurrence gets an isolated callback state and token. Late callbacks
+                // from a previous attempt therefore cannot contaminate this attempt's aggregate.
+                attemptPrefs.edit()
+                    .putString("current_$id", attemptId)
+                    .putString("message_${id}_${attemptId}", org.json.JSONObject().put("count", parts.size).toString())
+                    .apply()
                 val next = nextOccurrence(item.scheduledAt, item.repeatRule)
                 if (next != null) {
                     dao.update(item.copy(scheduledAt = next, status = "SCHEDULED", deliveryStatus = "SUBMITTED"))
@@ -193,8 +241,35 @@ class ReminderWorker(context: Context, params: WorkerParameters) : CoroutineWork
                 }
 
                 // Persist the submitted state before the asynchronous sent/delivered callbacks can arrive.
-                if (parts.size > 1) sms.sendMultipartTextMessage(item.recipient, null, parts, sentIntents, deliveredIntents)
-                else sms.sendTextMessage(item.recipient, null, item.body, sentIntents.first(), deliveredIntents.first())
+                try {
+                    if (parts.size > 1) sms.sendMultipartTextMessage(item.recipient, null, parts, sentIntents, deliveredIntents)
+                    else sms.sendTextMessage(item.recipient, null, item.body, sentIntents.first(), deliveredIntents.first())
+                    dao.messageAttemptDao().insert(
+                        MessageAttemptEntity(
+                            messageId = id,
+                            attemptId = attemptId,
+                            recipient = item.recipient,
+                            eventType = "SUBMISSION",
+                            partCount = parts.size,
+                            outcome = "SUBMITTED",
+                            detail = "Android accepted the SMS request. Carrier delivery is not yet confirmed."
+                        )
+                    )
+                } catch (sendError: Exception) {
+                    dao.messageAttemptDao().insert(
+                        MessageAttemptEntity(
+                            messageId = id,
+                            attemptId = attemptId,
+                            recipient = item.recipient,
+                            eventType = "SUBMISSION",
+                            partCount = parts.size,
+                            outcome = "FAILED",
+                            resultCode = -1,
+                            detail = sendError.message ?: "Android could not submit this SMS."
+                        )
+                    )
+                    throw sendError
+                }
                 // Notification display is optional. A notification failure must not
                 // overwrite a successfully submitted SMS with a false FAILED state.
                 runCatching {

@@ -883,7 +883,7 @@ private fun SchedulerScreen(
                         Stat("Scheduled", messages.count { it.status == "SCHEDULED" }.toString(), Modifier.weight(1f))
                         Stat("Completed", messages.count { it.status == "COMPLETED" || it.status == "SENT" }.toString(), Modifier.weight(1f))
                     }
-                    val attentionCount = messages.count { it.status in listOf("FAILED", "PERMISSION_REQUIRED", "AWAITING_USER") }
+                    val attentionCount = messages.count { it.status in listOf("FAILED", "PERMISSION_REQUIRED", "AWAITING_USER") || it.deliveryStatus in listOf("SEND_FAILED", "DELIVERY_FAILED") }
                     if (attentionCount > 0) {
                         Card(
                             modifier = Modifier.fillMaxWidth().padding(bottom = 12.dp),
@@ -924,7 +924,7 @@ private fun SchedulerScreen(
 
                     val totalCount = messages.size
                     val completedCount = messages.count { it.status == "COMPLETED" || it.status == "SENT" }
-                    val failedCount = messages.count { it.status == "FAILED" || it.status == "PERMISSION_REQUIRED" }
+                    val failedCount = messages.count { it.status in listOf("FAILED", "PERMISSION_REQUIRED") || it.deliveryStatus in listOf("SEND_FAILED", "DELIVERY_FAILED") }
                     val deliveredCount = messages.count { it.deliveryStatus == "DELIVERED" }
                     val smsCount = messages.count { it.channel == "SMS" }
                     val whatsappCount = messages.count { it.channel == "WhatsApp" }
@@ -966,8 +966,11 @@ private fun SchedulerScreen(
 
             "Scheduled" -> {
                 val visibleMessages = messages.filter { message ->
-                    (statusFilter == "ALL" || message.status == statusFilter ||
-                        (statusFilter == "ATTENTION" && message.status in listOf("FAILED", "PERMISSION_REQUIRED", "AWAITING_USER")) ||
+                    (statusFilter == "ALL" ||
+                        (statusFilter == "FAILED" && (message.status in listOf("FAILED", "PERMISSION_REQUIRED") || message.deliveryStatus in listOf("SEND_FAILED", "DELIVERY_FAILED"))) ||
+                        (statusFilter == "SENT" && message.status == "SENT") ||
+                        message.status == statusFilter ||
+                        (statusFilter == "ATTENTION" && (message.status in listOf("FAILED", "PERMISSION_REQUIRED", "AWAITING_USER") || message.deliveryStatus in listOf("SEND_FAILED", "DELIVERY_FAILED"))) ||
                         (statusFilter == "DELIVERED" && message.deliveryStatus == "DELIVERED") ||
                         (statusFilter == "DELIVERY_ISSUES" && message.deliveryStatus in listOf("SEND_FAILED", "DELIVERY_FAILED"))) &&
                         (message.recipient.contains(searchText, true) ||
@@ -1353,7 +1356,7 @@ private fun SchedulerScreen(
                                              val campaignPosts = messages.filter { it.channel == "Social" && it.campaignId == campaign.id }
                                              val scheduledCampaignPosts = campaignPosts.count { it.status == "SCHEDULED" }
                                              val awaitingCampaignPosts = campaignPosts.count { it.status == "AWAITING_USER" }
-                                             val failedCampaignPosts = campaignPosts.count { it.status == "FAILED" || it.status == "PERMISSION_REQUIRED" }
+                                             val failedCampaignPosts = campaignPosts.count { it.status == "FAILED" || it.status == "PERMISSION_REQUIRED" || it.deliveryStatus in listOf("SEND_FAILED", "DELIVERY_FAILED") }
                                              val completedCampaignPosts = campaignPosts.count { it.status == "COMPLETED" || it.status == "SENT" }
                                              Text("${campaignPosts.size} linked • $scheduledCampaignPosts scheduled • $awaitingCampaignPosts awaiting review • $completedCampaignPosts completed • $failedCampaignPosts failed", fontSize = 10.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                                         }

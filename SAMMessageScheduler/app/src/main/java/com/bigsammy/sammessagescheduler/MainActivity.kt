@@ -42,6 +42,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.lifecycleScope
 import com.bigsammy.sammessagescheduler.data.AppDatabase
 import com.bigsammy.sammessagescheduler.data.MessageEntity
+import com.bigsammy.sammessagescheduler.data.MessageAttemptEntity
 import com.bigsammy.sammessagescheduler.data.ContactEntity
 import com.bigsammy.sammessagescheduler.scheduling.MessageScheduler
 import com.bigsammy.sammessagescheduler.scheduling.LocationGeofenceManager
@@ -533,6 +534,7 @@ class MainActivity : FragmentActivity() {
             ) else lightColorScheme(primary = Purple, background = Color(0xFFF5F3FA), surface = Color.White)
             MaterialTheme(colorScheme = appColors) {
                 val messages by dao.observeAll().collectAsStateWithLifecycle(initialValue = emptyList())
+                val attempts by AppDatabase.get(this@MainActivity).messageAttemptDao().observeAll().collectAsStateWithLifecycle(initialValue = emptyList())
                 val contacts by AppDatabase.get(this@MainActivity).contactDao().observeAll().collectAsStateWithLifecycle(initialValue = emptyList())
                 SchedulerScreen(
                     contacts = contacts,
@@ -551,6 +553,7 @@ class MainActivity : FragmentActivity() {
                     updateContact = { contact -> lifecycleScope.launch { AppDatabase.get(this@MainActivity).contactDao().update(contact) } },
                     deleteContact = { id -> lifecycleScope.launch { AppDatabase.get(this@MainActivity).contactDao().delete(id) } },
                     messages = messages,
+                    attempts = attempts,
                     onBackup = { password -> backupPassword = password; backupLauncher.launch("sam-message-scheduler-backup.json") },
                     onRestore = { password -> backupPassword = password; restoreLauncher.launch(arrayOf("application/json", "text/*")) },
                     onExportCsv = { csvExportLauncher.launch("sam-message-history.csv") },
@@ -753,6 +756,7 @@ private fun parseCsv(content: String): List<List<String>> {
 @Composable
 private fun SchedulerScreen(
     messages: List<MessageEntity>,
+    attempts: List<MessageAttemptEntity>,
     contacts: List<ContactEntity>,
     phoneContacts: List<ContactEntity>,
     contactsPermissionGranted: Boolean,
@@ -951,6 +955,29 @@ private fun SchedulerScreen(
                         }
                     }
 
+                    Text("RECENT SMS ATTEMPTS", fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface, modifier = Modifier.padding(top = 20.dp, bottom = 8.dp))
+                    Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface), modifier = Modifier.fillMaxWidth()) {
+                        Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            if (attempts.isEmpty()) {
+                                Text("No SMS attempts have been recorded yet. Submission and carrier callback events will appear here.", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            } else {
+                                attempts.take(8).forEach { attempt ->
+                                    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
+                                        Column(Modifier.weight(1f)) {
+                                            Text(attempt.recipient, fontWeight = FontWeight.SemiBold, fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurface)
+                                            val eventLabel = attempt.eventType.replace("_", " ").lowercase().replaceFirstChar { it.uppercase() }
+                                            val partLabel = if (attempt.partIndex >= 0) " • part ${attempt.partIndex + 1}/${attempt.partCount}" else ""
+                                            Text("$eventLabel$partLabel • " + SimpleDateFormat("dd MMM, HH:mm", Locale.getDefault()).format(Date(attempt.occurredAt)), fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                            if (attempt.detail.isNotBlank()) Text(attempt.detail, fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 2)
+                                        }
+                                        Text(attempt.outcome.replace("_", " "), fontSize = 10.sp, fontWeight = FontWeight.Bold, color = if (attempt.outcome == "FAILED") MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary)
+                                    }
+                                    if (attempt.id != attempts.take(8).last().id) HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+                                }
+                            }
+                        }
+                    }
+
                     Text(
                         "UPCOMING MESSAGES",
                         fontWeight = FontWeight.Bold,
@@ -976,7 +1003,9 @@ private fun SchedulerScreen(
                         (message.recipient.contains(searchText, true) ||
                             message.body.contains(searchText, true) ||
                             message.channel.contains(searchText, true) ||
-                            message.category.contains(searchText, true))
+                            message.category.contains(searchText, true) ||
+                            message.status.contains(searchText, true) ||
+                            message.deliveryStatus.replace("_", " ").contains(searchText, true))
                 }.sortedBy { it.scheduledAt }
                 Column(
                     modifier = Modifier.padding(padding).fillMaxSize().padding(horizontal = 16.dp, vertical = 12.dp)

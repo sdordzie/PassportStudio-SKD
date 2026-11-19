@@ -7,10 +7,11 @@ import androidx.room.RoomDatabase
 import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
 
-@Database(entities = [MessageEntity::class, ContactEntity::class], version = 9, exportSchema = false)
+@Database(entities = [MessageEntity::class, ContactEntity::class, MessageAttemptEntity::class], version = 10, exportSchema = false)
 abstract class AppDatabase : RoomDatabase() {
     abstract fun messageDao(): MessageDao
     abstract fun contactDao(): ContactDao
+    abstract fun messageAttemptDao(): MessageAttemptDao
 
     companion object {
         private val MIGRATION_1_2 = object : Migration(1, 2) {
@@ -69,6 +70,31 @@ abstract class AppDatabase : RoomDatabase() {
             }
         }
 
+        private val MIGRATION_9_10 = object : Migration(9, 10) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("""
+                    CREATE TABLE IF NOT EXISTS message_attempts (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                        messageId INTEGER NOT NULL,
+                        attemptId TEXT NOT NULL,
+                        recipient TEXT NOT NULL,
+                        channel TEXT NOT NULL,
+                        eventType TEXT NOT NULL,
+                        partIndex INTEGER NOT NULL,
+                        partCount INTEGER NOT NULL,
+                        outcome TEXT NOT NULL,
+                        resultCode INTEGER NOT NULL,
+                        detail TEXT NOT NULL,
+                        occurredAt INTEGER NOT NULL,
+                        FOREIGN KEY(messageId) REFERENCES scheduled_messages(id) ON DELETE CASCADE
+                    )
+                """.trimIndent())
+                db.execSQL("CREATE INDEX IF NOT EXISTS index_message_attempts_messageId ON message_attempts(messageId)")
+                db.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS index_message_attempts_messageId_attemptId_eventType_partIndex ON message_attempts(messageId, attemptId, eventType, partIndex)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS index_message_attempts_occurredAt ON message_attempts(occurredAt)")
+            }
+        }
+
         @Volatile private var INSTANCE: AppDatabase? = null
 
         fun get(context: Context): AppDatabase = INSTANCE ?: synchronized(this) {
@@ -76,7 +102,7 @@ abstract class AppDatabase : RoomDatabase() {
                 context.applicationContext,
                 AppDatabase::class.java,
                 "sam_message_scheduler.db"
-            ).addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9).build().also { INSTANCE = it }
+            ).addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10).build().also { INSTANCE = it }
         }
     }
 }

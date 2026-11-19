@@ -61,11 +61,13 @@ class SmsStatusReceiver : BroadcastReceiver() {
                         deliveredEvents.optString(index.toString(), "").takeIf { it.isNotEmpty() }
                     }
                     // Delivery callbacks are authoritative and must never be downgraded by a late sent callback.
+                    // A positive carrier delivery receipt is stronger evidence than a
+                    // contradictory/late SMS_SENT callback. Never label a delivered message failed.
                     val aggregate = when {
-                        sentValues.any { it == "FAILED" } -> "SEND_FAILED"
+                        deliveredValues.size == partCount && deliveredValues.all { it == "OK" } -> "DELIVERED"
                         deliveredValues.any { it == "FAILED" } -> "DELIVERY_FAILED"
-                        deliveredValues.size == partCount -> "DELIVERED"
-                        sentValues.size == partCount -> "SENT"
+                        sentValues.any { it == "FAILED" } -> "SEND_FAILED"
+                        sentValues.size == partCount && sentValues.all { it == "OK" } -> "SENT"
                         sentValues.isNotEmpty() -> "SENDING_PARTS_${sentValues.size}_OF_$partCount"
                         else -> "DELIVERING_PARTS_${deliveredValues.size}_OF_$partCount"
                     }
@@ -191,7 +193,11 @@ class ReminderWorker(context: Context, params: WorkerParameters) : CoroutineWork
                 // Persist the submitted state before the asynchronous sent/delivered callbacks can arrive.
                 if (parts.size > 1) sms.sendMultipartTextMessage(item.recipient, null, parts, sentIntents, deliveredIntents)
                 else sms.sendTextMessage(item.recipient, null, item.body, sentIntents.first(), deliveredIntents.first())
-                postNotification(id, "SMS submitted", "Android accepted the SMS request for ${item.recipient}. Delivery updates will appear when the network reports them.")
+                // Notification display is optional. A notification failure must not
+                // overwrite a successfully submitted SMS with a false FAILED state.
+                runCatching {
+                    postNotification(id, "SMS submitted", "Android accepted the SMS request for ${item.recipient}. Delivery updates will appear when the network reports them.")
+                }.onFailure { android.util.Log.w("SAMReminderWorker", "SMS submitted but notification could not be shown for message $id", it) }
             } else if (item.channel == "Social") {
                 // Preserve photo/video attachments for social destinations. The destination app
                 // receives read access and the user completes the final review/publish step.

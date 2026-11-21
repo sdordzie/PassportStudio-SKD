@@ -37,3 +37,7 @@ Switch them on in **Studio Control Centre → Pro features**, or **Pro tools** o
 - **Document size library** — Ghana passport (35 × 45 mm, head 31.5–36 mm, white), US passport/visa (2 × 2 in, head 25–35 mm, white), UK passport (35 × 45 mm, head 29–34 mm, light grey/cream), Schengen visa (35 × 45 mm, head 32–36 mm, light), Canada passport (50 × 70 mm, head 31–36 mm, white). Picking one also picks its background; light grey and cream backgrounds are added.
 - **HD background removal** — ML Kit Subject Segmentation with a guided-filter hair-edge refinement, used on the delivery screen and in the editor. The model is downloaded by Google Play services the first time (internet needed once); the app falls back to the standard model until then.
 - **Print straight from capture** — lays copies at true size on 4 × 6 in or A4 with cut guides, then prints through Android's print service or shares the PDF.
+
+## v1.4.1 — One button per pro feature
+
+Four separate on/off buttons (Photo checks, Doc library, HD background, Quick print) on the Home screen and the Ready-to-deliver screen. Each tap switches only that feature. The full descriptions and switches remain in Studio Control Centre.

@@ -58,28 +58,28 @@ internal object ProFeatures {
     }
 }
 
-private data class ProFeatureInfo(val key: String, val title: String, val description: String, val icon: ImageVector)
+private data class ProFeatureInfo(val key: String, val title: String, val description: String, val icon: ImageVector, val shortTitle: String = title)
 
 private val proFeatureList = listOf(
     ProFeatureInfo(
         ProFeatures.PHOTO_CHECKS, "Automatic photo checks",
         "Checks head size, centring, tilt, eyes, expression, lighting, sharpness, background and glasses glare before you send. Auto-send pauses if a check fails.",
-        Icons.Default.FactCheck
+        Icons.Default.FactCheck, "Photo checks"
     ),
     ProFeatureInfo(
         ProFeatures.DOCUMENT_LIBRARY, "Document size library",
         "Adds ready-made sizes for Ghana passport, US passport/visa, UK passport, Schengen visa and Canada passport, with the right head size and background colour.",
-        Icons.Default.Public
+        Icons.Default.Public, "Doc library"
     ),
     ProFeatureInfo(
         ProFeatures.HD_BACKGROUND, "HD background removal",
         "Uses a higher-quality AI model with hair-edge refinement. The first time, Google Play services downloads the model (internet needed once).",
-        Icons.Default.AutoAwesome
+        Icons.Default.AutoAwesome, "HD background"
     ),
     ProFeatureInfo(
         ProFeatures.QUICK_PRINT, "Print straight from capture",
         "Adds a Print button after capture: lays out copies on 4 × 6 in or A4 with cut guides, then prints or shares the PDF.",
-        Icons.Default.Print
+        Icons.Default.Print, "Quick print"
     )
 )
 
@@ -225,4 +225,43 @@ internal fun guidedFilterMask(image: Bitmap, mask: FloatArray, radius: Int, eps:
         }
     }
     return out
+}
+
+
+/**
+ * Four individual on/off buttons, one per pro feature, shown side by side.
+ * Each tap switches only that feature.
+ */
+@Composable
+internal fun ProFeatureToggleButtons(modifier: Modifier = Modifier, refreshKey: Int = 0, onChanged: () -> Unit = {}, onInfo: (() -> Unit)? = null) {
+    val context = LocalContext.current
+    Column(modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            SectionHeading("Pro features", Modifier.weight(1f))
+            if (onInfo != null) StudioButton("What do they do?", onClick = onInfo, tone = ButtonTone.Quiet, compact = true)
+        }
+        proFeatureList.chunked(2).forEach { pair ->
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                pair.forEach { feature ->
+                    var on by remember(feature.key, refreshKey) { mutableStateOf(ProFeatures.isOn(context, feature.key)) }
+                    Surface(
+                        onClick = { on = !on; ProFeatures.set(context, feature.key, on); onChanged() },
+                        color = if (on) BrandAccent.copy(alpha = .16f) else Panel,
+                        border = androidx.compose.foundation.BorderStroke(if (on) 1.5.dp else 1.dp, if (on) BrandAccent else MaterialTheme.colorScheme.outlineVariant),
+                        shape = RoundedCornerShape(14.dp),
+                        modifier = Modifier.weight(1f).heightIn(min = 52.dp)
+                    ) {
+                        Row(Modifier.padding(horizontal = 10.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+                            Icon(feature.icon, contentDescription = null, tint = if (on) BrandAccent else Muted, modifier = Modifier.size(20.dp))
+                            Spacer(Modifier.width(8.dp))
+                            Column(Modifier.weight(1f)) {
+                                Text(feature.shortTitle, color = PrimaryText, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
+                                Text(if (on) "On" else "Off", color = if (on) BrandAccent else Muted, fontSize = 11.sp, fontWeight = if (on) FontWeight.Bold else FontWeight.Normal)
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
 }

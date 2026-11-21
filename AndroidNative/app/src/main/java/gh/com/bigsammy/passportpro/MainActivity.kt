@@ -227,6 +227,7 @@ private fun Dashboard(modifier: Modifier, onCapture: () -> Unit, onNavigate: (St
                 StudioButton("Open camera", onClick = onCapture, icon = Icons.Default.CameraAlt, modifier = Modifier.fillMaxWidth())
             }
         }
+        ProFeatureToggleButtons(onInfo = { onNavigate("Control Centre") })
         Surface(onClick = { onNavigate("Guide") }, color = Gold.copy(alpha = .12f), shape = RoundedCornerShape(16.dp), modifier = Modifier.fillMaxWidth()) {
             Row(Modifier.padding(14.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 Icon(Icons.Default.Lightbulb, contentDescription = null, tint = Gold)

@@ -634,7 +634,7 @@ internal fun QuickFinishScreen(
         }
 
         // Options
-        Column(Modifier.heightIn(max = 240.dp).verticalScroll(rememberScrollState()),verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        Column(Modifier.heightIn(max = 280.dp).verticalScroll(rememberScrollState()),verticalArrangement = Arrangement.spacedBy(10.dp)) {
             if (checksOn) PhotoCheckCard(checks)
             SectionLabel("Size")
             Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -681,22 +681,11 @@ internal fun QuickFinishScreen(
                     }
                 }
             }
-            Surface(onClick = { showProTools = true }, color = Panel, shape = RoundedCornerShape(14.dp), modifier = Modifier.fillMaxWidth()) {
-                Row(Modifier.padding(horizontal = 14.dp, vertical = 11.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Icon(Icons.Default.WorkspacePremium, contentDescription = null, tint = BrandAccent, modifier = Modifier.size(20.dp))
-                    Spacer(Modifier.width(10.dp))
-                    Column(Modifier.weight(1f)) {
-                        Text("Pro tools", color = PrimaryText, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
-                        Text(listOfNotNull(
-                            if (checksOn) "Photo checks" else null,
-                            if (ProFeatures.isOn(context, ProFeatures.DOCUMENT_LIBRARY)) "Document library" else null,
-                            if (hdOn) "HD background" else null,
-                            if (printOn) "Quick print" else null
-                        ).joinToString(" · ").ifEmpty { "All off — tap to turn on" }, color = Muted, fontSize = 11.sp, maxLines = 1)
-                    }
-                    Icon(Icons.Default.ChevronRight, contentDescription = null, tint = Muted)
-                }
-            }
+            ProFeatureToggleButtons(
+                refreshKey = proVersion,
+                onChanged = { proVersion++; sizes = deliverySizes(context) },
+                onInfo = { showProTools = true }
+            )
         }
 
         notice?.let {

@@ -28,3 +28,12 @@ Camera capture, AI/manual editing, WhatsApp delivery, printing, customer managem
 - Zoom buttons (+ / − / fit) with a live percentage on the preview.
 - When zoomed in, a sharper high-resolution preview is rendered in the background so hair and background edges can be checked properly.
 - Works with perspective correction: two fingers zoom and pan, one finger still drags the corner handles.
+
+## v1.4.0 — Pro features (all off by default)
+
+Switch them on in **Studio Control Centre → Pro features**, or **Pro tools** on the Ready-to-deliver screen. With everything off, the app works exactly as before.
+
+- **Automatic photo checks** — head size (using the real top of the hair from the AI mask), centring, tilt/turn, eyes open, neutral expression, even lighting, exposure, sharpness, glasses glare and background. US photos also get the eye-height check. Auto-send pauses if a check fails.
+- **Document size library** — Ghana passport (35 × 45 mm, head 31.5–36 mm, white), US passport/visa (2 × 2 in, head 25–35 mm, white), UK passport (35 × 45 mm, head 29–34 mm, light grey/cream), Schengen visa (35 × 45 mm, head 32–36 mm, light), Canada passport (50 × 70 mm, head 31–36 mm, white). Picking one also picks its background; light grey and cream backgrounds are added.
+- **HD background removal** — ML Kit Subject Segmentation with a guided-filter hair-edge refinement, used on the delivery screen and in the editor. The model is downloaded by Google Play services the first time (internet needed once); the app falls back to the standard model until then.
+- **Print straight from capture** — lays copies at true size on 4 × 6 in or A4 with cut guides, then prints through Android's print service or shares the PDF.

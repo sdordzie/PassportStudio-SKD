@@ -10,8 +10,8 @@ android {
         applicationId = "gh.com.bigsammy.passportpro"
         minSdk = 26
         targetSdk = 35
-        versionCode = 43
-        versionName = "1.3.0"
+        versionCode = 44
+        versionName = "1.4.0"
     }
     // Permanent release key, supplied by CI secrets. Every APK signed with it
     // installs straight over the previous version and keeps the app's data.
@@ -54,6 +54,8 @@ dependencies {
     // On-device face detection; no image upload required
     implementation("com.google.mlkit:face-detection:16.1.7")
     implementation("com.google.mlkit:segmentation-selfie:16.0.0-beta6")
+    // Pro feature "HD background removal" (model delivered by Google Play services on first use)
+    implementation("com.google.android.gms:play-services-mlkit-subject-segmentation:16.0.0-beta1")
 
     implementation("androidx.core:core-ktx:1.15.0")
     implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.8.7")

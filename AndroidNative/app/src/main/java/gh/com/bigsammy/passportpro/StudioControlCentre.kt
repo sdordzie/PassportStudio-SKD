@@ -112,6 +112,10 @@ internal fun StudioControlCentreScreen(modifier: Modifier = Modifier, appearance
             Text("For a safe upgrade, create a full backup before installing a newer build.", color = ControlMuted, fontSize = 11.sp)
         }
 
+        ControlCard("PRO FEATURES", "Optional tools that go beyond the standard workflow. Each one is off until you switch it on.") {
+            ProFeatureSwitches()
+        }
+
         ControlCard("ABOUT & DEVELOPER", "PassportPro Studio — passport photo capture, editing, printing and studio management.") {
             Text("Samuel Kwame Dordzie", color = PrimaryText, fontSize = 15.sp, fontWeight = FontWeight.Bold)
             Text("T.I. Ahmadiyya Girls' SHS, Asokore", color = ControlMuted, fontSize = 12.sp)

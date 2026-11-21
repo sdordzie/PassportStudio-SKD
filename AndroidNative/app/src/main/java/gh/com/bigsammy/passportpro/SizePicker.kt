@@ -59,12 +59,24 @@ internal fun SizePickerSheet(
                 color = Muted, fontSize = 13.sp, lineHeight = 18.sp
             )
             Spacer(Modifier.height(2.dp))
-            sizes.forEach { option ->
-                SizeRow(option, selected = option.key == selectedKey) {
-                    writeSelectedSize(context, option.key)
-                    onSelect(option.key)
-                    onDismiss()
+            fun choose(option: DeliverySize) {
+                writeSelectedSize(context, option.key)
+                // Documents expect a particular background colour; pre-select it.
+                option.background?.let { bg ->
+                    context.getSharedPreferences(QUICK_PREFS, android.content.Context.MODE_PRIVATE).edit().putString("background", bg).apply()
                 }
+                onSelect(option.key)
+                onDismiss()
+            }
+            sizes.filterNot { it.fromLibrary }.forEach { option ->
+                SizeRow(option, selected = option.key == selectedKey) { choose(option) }
+            }
+            val library = sizes.filter { it.fromLibrary }
+            if (library.isNotEmpty()) {
+                Spacer(Modifier.height(4.dp))
+                SectionHeading("Document library")
+                library.forEach { option -> SizeRow(option, selected = option.key == selectedKey) { choose(option) } }
+                Text("Based on published requirements. Always confirm with the issuing office.", color = Muted, fontSize = 11.sp)
             }
 
             Spacer(Modifier.height(6.dp))
@@ -143,6 +155,7 @@ private fun SizeRow(option: DeliverySize, selected: Boolean, onClick: () -> Unit
             Column(Modifier.weight(1f)) {
                 Text(option.label, color = PrimaryText, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
                 Text(option.detail, color = Muted, fontSize = 12.sp)
+                if (option.note.isNotEmpty()) Text(option.note, color = Muted, fontSize = 11.sp)
             }
             if (selected) Icon(Icons.Default.CheckCircle, contentDescription = "Selected", tint = BrandAccent, modifier = Modifier.size(22.dp))
         }

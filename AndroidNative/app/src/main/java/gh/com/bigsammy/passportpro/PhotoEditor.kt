@@ -666,6 +666,31 @@ internal fun PhotoEditorScreen(photoPath: String, onRetake: () -> Unit, onSaved:
                             val selectedSoftness = maskSoftness
                             val selectedDetail = maskDetail
                             val selectedRadius = maskRadius
+                            if (ProFeatures.isOn(context, ProFeatures.HD_BACKGROUND)) {
+                                // Pro feature: HD model with hair-edge refinement.
+                                status = "HD background: separating hair and edges…"
+                                scope.launch {
+                                    try {
+                                        val result = withContext(Dispatchers.Default) {
+                                            val hdMask = hdPersonMask(source) ?: return@withContext null
+                                            replaceBackground(source, hdMask, selectedBackground, selectedSoftness.coerceAtMost(0.2f))
+                                        }
+                                        if (result != null) {
+                                            recordUndo()
+                                            editedBase = result
+                                            status = "HD background replaced. Pinch to zoom and check the hair edges."
+                                        } else {
+                                            ProFeatures.requestHdModel(context)
+                                            status = "The HD model is still downloading (internet needed once). Try again shortly, or turn off HD background in Pro tools."
+                                        }
+                                    } catch (e: Exception) {
+                                        status = "HD background failed: ${e.localizedMessage ?: "please try again"}"
+                                    } finally {
+                                        busy = false
+                                    }
+                                }
+                                return@StudioButton
+                            }
                             val detector = Segmentation.getClient(
                                 SelfieSegmenterOptions.Builder().setDetectorMode(SelfieSegmenterOptions.SINGLE_IMAGE_MODE).build()
                             )

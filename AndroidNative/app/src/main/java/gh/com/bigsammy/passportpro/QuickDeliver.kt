@@ -97,7 +97,17 @@ internal data class DeliverySize(
     val outW: Int,
     val outH: Int,
     /** share of the photo height taken by the head (crown to chin) */
-    val headFraction: Float
+    val headFraction: Float,
+    /** physical print size, when known */
+    val widthMm: Float? = null,
+    val heightMm: Float? = null,
+    /** official head-height range as a share of photo height (document library) */
+    val headRange: ClosedFloatingPointRange<Float>? = null,
+    /** background colour the document expects (key in [deliveryBackgrounds]) */
+    val background: String? = null,
+    /** short extra line shown in the size picker */
+    val note: String = "",
+    val fromLibrary: Boolean = false
 )
 
 internal data class CustomSizeSpec(val width: Float, val height: Float, val unit: String, val dpi: Int) {
@@ -134,16 +144,46 @@ internal fun writeCustomSize(context: Context, spec: CustomSizeSpec) {
         .apply()
 }
 
+/**
+ * Document library (pro feature). Sizes and head heights follow the published
+ * requirements: travel.state.gov (US), gov.uk (UK), EU/ICAO template (Schengen),
+ * canada.ca (Canada); Ghana figures follow commonly published Ghana passport specs.
+ * Always confirm with the issuing office before printing large batches.
+ */
+private fun documentLibrary(): List<DeliverySize> {
+    fun doc(key: String, label: String, wMm: Float, hMm: Float, headMinMm: Float, headMaxMm: Float, bg: String, bgLabel: String): DeliverySize {
+        val outW = (wMm / 25.4f * 600f).toInt()
+        val outH = (hMm / 25.4f * 600f).toInt()
+        val min = headMinMm / hMm
+        val max = headMaxMm / hMm
+        fun clean(v: Float) = if (v % 1f == 0f) v.toInt().toString() else v.toString()
+        return DeliverySize(
+            key, label, "${clean(wMm)} × ${clean(hMm)} mm", wMm / hMm, outW, outH, (min + max) / 2f,
+            widthMm = wMm, heightMm = hMm, headRange = min..max, background = bg,
+            note = "Head ${clean(headMinMm)}–${clean(headMaxMm)} mm · $bgLabel background", fromLibrary = true
+        )
+    }
+    return listOf(
+        doc("doc_gh_passport", "Ghana passport", 35f, 45f, 31.5f, 36f, "white", "white"),
+        doc("doc_us", "US passport / visa", 51f, 51f, 25f, 35f, "white", "white"),
+        doc("doc_uk", "UK passport", 35f, 45f, 29f, 34f, "lightgrey", "light grey or cream"),
+        doc("doc_schengen", "Schengen visa", 35f, 45f, 32f, 36f, "lightgrey", "light"),
+        doc("doc_canada", "Canada passport", 50f, 70f, 31f, 36f, "white", "white")
+    )
+}
+
 internal fun deliverySizes(context: Context): List<DeliverySize> {
     val sizes = mutableListOf(
-        DeliverySize("passport", "Passport", "35 × 45 mm", 35f / 45f, 827, 1063, 0.74f),
-        DeliverySize("visa", "Visa", "2 × 2 in", 1f, 1200, 1200, 0.60f),
-        DeliverySize("id", "ID photo", "30 × 40 mm", 30f / 40f, 709, 945, 0.70f)
+        DeliverySize("passport", "Passport", "35 × 45 mm", 35f / 45f, 827, 1063, 0.74f, widthMm = 35f, heightMm = 45f),
+        DeliverySize("visa", "Visa", "2 × 2 in", 1f, 1200, 1200, 0.60f, widthMm = 50.8f, heightMm = 50.8f),
+        DeliverySize("id", "ID photo", "30 × 40 mm", 30f / 40f, 709, 945, 0.70f, widthMm = 30f, heightMm = 40f)
     )
     readCustomSize(context)?.let { spec ->
         val (pw, ph) = spec.pixels()
-        sizes += DeliverySize("custom", "Custom", spec.label(), pw.toFloat() / ph, pw, ph, 0.72f)
+        val toMm = when (spec.unit) { "mm" -> 1f; "cm" -> 10f; "in" -> 25.4f; else -> 25.4f / spec.dpi }
+        sizes += DeliverySize("custom", "Custom", spec.label(), pw.toFloat() / ph, pw, ph, 0.72f, widthMm = spec.width * toMm, heightMm = spec.height * toMm)
     }
+    if (ProFeatures.isOn(context, ProFeatures.DOCUMENT_LIBRARY)) sizes += documentLibrary()
     sizes += DeliverySize("full", "Full photo", "No crop", null, 0, 0, 0f)
     return sizes
 }
@@ -162,7 +202,7 @@ internal fun writeSelectedSize(context: Context, key: String) {
 
 internal data class DeliveryBackground(val key: String, val label: String, val color: Int?)
 
-internal val deliveryBackgrounds = listOf(
+private val standardBackgrounds = listOf(
     DeliveryBackground("white", "White", Pixel.WHITE),
     DeliveryBackground("blue", "Blue", Pixel.rgb(35, 91, 170)),
     DeliveryBackground("sky", "Light blue", Pixel.rgb(205, 228, 248)),
@@ -170,6 +210,16 @@ internal val deliveryBackgrounds = listOf(
     DeliveryBackground("grey", "Grey", Pixel.LTGRAY),
     DeliveryBackground("original", "Original", null)
 )
+
+/** Light grey (about 8% grey) and cream are added for documents such as UK and Schengen photos. */
+private val libraryBackgrounds = listOf(
+    DeliveryBackground("lightgrey", "Light grey", Pixel.rgb(234, 234, 234)),
+    DeliveryBackground("cream", "Cream", Pixel.rgb(242, 236, 220))
+)
+
+internal fun deliveryBackgrounds(context: Context): List<DeliveryBackground> =
+    if (ProFeatures.isOn(context, ProFeatures.DOCUMENT_LIBRARY)) standardBackgrounds.dropLast(1) + libraryBackgrounds + standardBackgrounds.last()
+    else standardBackgrounds
 
 // ---------------------------------------------------------------- image pipeline
 
@@ -259,8 +309,13 @@ internal fun cropForDelivery(source: Bitmap, face: Rect?, size: DeliverySize): B
 
 internal class PersonMask(val values: FloatArray, val width: Int, val height: Int)
 
-/** On-device selfie segmentation. Call off the main thread. */
-internal fun computePersonMask(base: Bitmap): PersonMask {
+/** On-device segmentation: HD model when that pro feature is on (falls back if unavailable). Call off the main thread. */
+internal fun computePersonMask(base: Bitmap, hd: Boolean = false): PersonMask {
+    if (hd) hdPersonMask(base)?.let { return it }
+    return selfiePersonMask(base)
+}
+
+private fun selfiePersonMask(base: Bitmap): PersonMask {
     val segmenter = Segmentation.getClient(
         SelfieSegmenterOptions.Builder().setDetectorMode(SelfieSegmenterOptions.SINGLE_IMAGE_MODE).build()
     )
@@ -390,6 +445,14 @@ internal fun QuickFinishScreen(
     var sizes by remember { mutableStateOf(deliverySizes(context)) }
     var sizeKey by remember { mutableStateOf(readSelectedSize(context).key) }
     var showSizePicker by remember { mutableStateOf(false) }
+    // Pro features (all off by default)
+    var proVersion by remember { mutableIntStateOf(0) }
+    val checksOn = remember(proVersion) { ProFeatures.isOn(context, ProFeatures.PHOTO_CHECKS) }
+    val hdOn = remember(proVersion) { ProFeatures.isOn(context, ProFeatures.HD_BACKGROUND) }
+    val printOn = remember(proVersion) { ProFeatures.isOn(context, ProFeatures.QUICK_PRINT) }
+    val backgrounds = remember(proVersion) { deliveryBackgrounds(context) }
+    var showProTools by remember { mutableStateOf(false) }
+    var showPrint by remember { mutableStateOf(false) }
     var backgroundKey by remember { mutableStateOf(prefs.getString("background", "white") ?: "white") }
     var autoSend by remember { mutableStateOf(readAutoSend(context)) }
     var brightnessDraft by remember { mutableFloatStateOf(0f) }
@@ -409,7 +472,8 @@ internal fun QuickFinishScreen(
     var notice by remember { mutableStateOf<String?>(null) }
 
     val size = sizes.firstOrNull { it.key == sizeKey } ?: sizes.first()
-    val background = deliveryBackgrounds.firstOrNull { it.key == backgroundKey } ?: deliveryBackgrounds.first()
+    val background = backgrounds.firstOrNull { it.key == backgroundKey } ?: backgrounds.first()
+    var checks by remember(photoPath) { mutableStateOf<List<CheckItem>?>(null) }
     val working = error == null && (result == null || stage.isNotEmpty())
 
     // 1. Decode + find the face (once per photo).
@@ -432,14 +496,15 @@ internal fun QuickFinishScreen(
     }
 
     // 3. Background + brightness.
-    LaunchedEffect(base, backgroundKey, brightness) {
+    LaunchedEffect(hdOn) { mask = null }
+    LaunchedEffect(base, backgroundKey, brightness, hdOn) {
         val b = base ?: return@LaunchedEffect
         val colour = background.color
         val output = withContext(Dispatchers.Default) {
             val cleaned = if (colour == null) b else {
                 val personMask = mask?.takeIf { it.first === b }?.second ?: run {
-                    withContext(Dispatchers.Main) { stage = "Cleaning the background…" }
-                    computePersonMask(b).also { m -> withContext(Dispatchers.Main) { mask = b to m } }
+                    withContext(Dispatchers.Main) { stage = if (hdOn) "Cleaning the background (HD)…" else "Cleaning the background…" }
+                    computePersonMask(b, hdOn).also { m -> withContext(Dispatchers.Main) { mask = b to m } }
                 }
                 replaceBackground(b, personMask, colour)
             }
@@ -481,11 +546,29 @@ internal fun QuickFinishScreen(
         }
     }
 
-    // 4. Auto-send as soon as the first finished photo is ready.
-    LaunchedEffect(result, stage) {
+    // 4. Photo checks (pro feature) on the finished photo.
+    LaunchedEffect(result, stage, checksOn) {
+        val photo = result
+        val b = base
+        if (!checksOn || photo == null || b == null || stage.isNotEmpty()) { if (!checksOn) checks = null; return@LaunchedEffect }
+        checks = null
+        val replaced = background.color != null
+        val personMask = mask?.takeIf { it.first === b }?.second
+        checks = withContext(Dispatchers.Default) {
+            runCatching { runPhotoChecks(photo, b, personMask, size, replaced, backgroundKey) }.getOrElse { listOf(CheckItem("Photo check", CheckLevel.WARN, "The check could not run on this photo.")) }
+        }
+    }
+
+    // 5. Auto-send as soon as the finished photo is ready (and, with checks on, has no problems).
+    LaunchedEffect(result, stage, checks, checksOn) {
         if (!autoDone && result != null && stage.isEmpty() && autoSend != AutoSend.OFF) {
+            if (checksOn && checks == null) return@LaunchedEffect
             autoDone = true
-            send(autoSend == AutoSend.WHATSAPP)
+            if (checksOn && checks.orEmpty().any { it.level == CheckLevel.FAIL }) {
+                notice = "Auto-send paused: the photo check found a problem. Review it, then send or retake."
+            } else {
+                send(autoSend == AutoSend.WHATSAPP)
+            }
         }
     }
 
@@ -552,19 +635,21 @@ internal fun QuickFinishScreen(
 
         // Options
         Column(Modifier.heightIn(max = 240.dp).verticalScroll(rememberScrollState()),verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            if (checksOn) PhotoCheckCard(checks)
             SectionLabel("Size")
             Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 sizes.forEach { option ->
                     OptionPill(selected = option.key == sizeKey, title = option.label, subtitle = option.detail) {
                         sizeKey = option.key
                         writeSelectedSize(context, option.key)
+                        option.background?.let { key -> backgroundKey = key; prefs.edit().putString("background", key).apply() }
                     }
                 }
                 OptionPill(selected = false, title = "Custom…", subtitle = "Set your size") { showSizePicker = true }
             }
             SectionLabel("Background")
             Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                deliveryBackgrounds.forEach { option ->
+                backgrounds.forEach { option ->
                     ColourSwatch(option, selected = option.key == backgroundKey) {
                         backgroundKey = option.key
                         prefs.edit().putString("background", option.key).apply()
@@ -596,6 +681,22 @@ internal fun QuickFinishScreen(
                     }
                 }
             }
+            Surface(onClick = { showProTools = true }, color = Panel, shape = RoundedCornerShape(14.dp), modifier = Modifier.fillMaxWidth()) {
+                Row(Modifier.padding(horizontal = 14.dp, vertical = 11.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Icon(Icons.Default.WorkspacePremium, contentDescription = null, tint = BrandAccent, modifier = Modifier.size(20.dp))
+                    Spacer(Modifier.width(10.dp))
+                    Column(Modifier.weight(1f)) {
+                        Text("Pro tools", color = PrimaryText, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+                        Text(listOfNotNull(
+                            if (checksOn) "Photo checks" else null,
+                            if (ProFeatures.isOn(context, ProFeatures.DOCUMENT_LIBRARY)) "Document library" else null,
+                            if (hdOn) "HD background" else null,
+                            if (printOn) "Quick print" else null
+                        ).joinToString(" · ").ifEmpty { "All off — tap to turn on" }, color = Muted, fontSize = 11.sp, maxLines = 1)
+                    }
+                    Icon(Icons.Default.ChevronRight, contentDescription = null, tint = Muted)
+                }
+            }
         }
 
         notice?.let {
@@ -607,6 +708,9 @@ internal fun QuickFinishScreen(
             StudioButton("WhatsApp", onClick = { send(viaWhatsApp = true) }, enabled = !working, busy = sending, icon = Icons.Default.Send, tone = ButtonTone.WhatsApp, modifier = Modifier.weight(1f))
             StudioButton("Share", onClick = { send(viaWhatsApp = false) }, enabled = !working, busy = sending, icon = Icons.Default.Share, modifier = Modifier.weight(1f))
         }
+        if (printOn && size.ratio != null) {
+            StudioButton("Print photo sheet", onClick = { showPrint = true }, enabled = !working, icon = Icons.Default.Print, tone = ButtonTone.Secondary, modifier = Modifier.fillMaxWidth())
+        }
         ButtonPair {
             StudioButton("Retake", onClick = onRetake, icon = Icons.Default.Replay, tone = ButtonTone.Secondary, compact = true, modifier = Modifier.weight(1f))
             StudioButton("Save", onClick = { saveOnly() }, enabled = !working, icon = Icons.Default.Download, tone = ButtonTone.Secondary, compact = true, modifier = Modifier.weight(1f))
@@ -614,10 +718,19 @@ internal fun QuickFinishScreen(
         }
     }
 
+    if (showProTools) {
+        ProToolsSheet(onDismiss = { showProTools = false }, onChanged = { proVersion++; sizes = deliverySizes(context) })
+    }
+    if (showPrint) {
+        result?.let { PrintSheetSheet(photo = it, photoSize = size, onDismiss = { showPrint = false }) }
+    }
     if (showSizePicker) {
         SizePickerSheet(
             selectedKey = sizeKey,
-            onSelect = { key -> sizes = deliverySizes(context); sizeKey = key },
+            onSelect = { key ->
+                sizes = deliverySizes(context); sizeKey = key
+                sizes.firstOrNull { it.key == key }?.background?.let { bg -> backgroundKey = bg; prefs.edit().putString("background", bg).apply() }
+            },
             onDismiss = { showSizePicker = false }
         )
     }

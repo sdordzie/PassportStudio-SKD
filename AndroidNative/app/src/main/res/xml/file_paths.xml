@@ -1,6 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <paths xmlns:android="http://schemas.android.com/apk/res/android">
     <files-path name="private_captures" path="PassportPro/Captures/" />
+    <files-path name="edited_internal" path="PassportPro/Edited/" />
     <external-files-path name="edited_photos" path="PassportPro/Edited/" />
     <external-files-path name="print_pdfs" path="Documents/PassportPro/Prints/" />
 </paths>

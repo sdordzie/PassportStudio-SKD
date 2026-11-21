@@ -5,6 +5,7 @@ import android.content.pm.PackageManager
 import android.graphics.BitmapFactory
 import android.os.Bundle
 import androidx.activity.ComponentActivity
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -17,7 +18,21 @@ import androidx.camera.core.ImageProxy
 import androidx.camera.core.Preview
 import androidx.camera.lifecycle.ProcessCameraProvider
 import androidx.camera.view.PreviewView
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.border
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.geometry.RoundRect
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.PathEffect
+import androidx.compose.ui.graphics.PathFillType
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.text.style.TextAlign
+import kotlinx.coroutines.delay
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -128,7 +143,7 @@ private fun PassportProApp() {
     CompositionLocalProvider(LocalPassportDark provides darkMode) {
     MaterialTheme(colorScheme = palette) {
         Scaffold(containerColor = Ink, topBar = {
-            if (tab != "Welcome") CenterAlignedTopAppBar(
+            if (tab != "Welcome" && tab != "Capture") CenterAlignedTopAppBar(
                 title = { Text("PASSPORTPRO STUDIO", color = Gold, fontSize = 13.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.4.sp) },
                 actions = {
                     IconButton(onClick = { tab = "Guide" }) { Icon(Icons.Default.MenuBook, contentDescription = "Open user guide", tint = Gold) }
@@ -137,7 +152,7 @@ private fun PassportProApp() {
                 colors = TopAppBarDefaults.centerAlignedTopAppBarColors(containerColor = Panel, titleContentColor = palette.onSurface)
             )
         }, bottomBar = {
-            if (tab != "Welcome" && tab != "Guide") NavigationBar(containerColor = Panel) {
+            if (tab != "Welcome" && tab != "Guide" && tab != "Capture") NavigationBar(containerColor = Panel) {
                 listOf("Home" to Icons.Default.Home, "Capture" to Icons.Default.CameraAlt, "Customers" to Icons.Default.People, "Gallery" to Icons.Default.PhotoLibrary, "Business" to Icons.Default.AccountBalanceWallet).forEach { (label, icon) ->
                     NavigationBarItem(selected = tab == label, onClick = { tab = label }, icon = { Icon(icon, contentDescription = label) }, label = { Text(label, fontSize = 10.sp) }, colors = NavigationBarItemDefaults.colors(selectedIconColor = Gold, selectedTextColor = Gold, indicatorColor = Gold.copy(alpha = .14f), unselectedIconColor = Muted, unselectedTextColor = Muted))
                 }
@@ -147,7 +162,7 @@ private fun PassportProApp() {
                 "Welcome" -> WelcomeScreen(onContinue = { onboardingPrefs.edit().putBoolean("complete", true).apply(); tab = "Home" })
                 "Guide" -> UserGuideScreen(Modifier.padding(padding), onBack = { tab = "Home" })
                 "Home" -> Dashboard(Modifier.padding(padding), onCapture = { tab = "Capture" }, onNavigate = { tab = it })
-                "Capture" -> CameraStudioScreen(Modifier.padding(padding))
+                "Capture" -> CameraStudioScreen(Modifier.padding(padding), onClose = { tab = "Home" })
                 "Editor" -> {
                     val selectedPath = editorPhotoPath
                     if (selectedPath != null) {
@@ -187,7 +202,7 @@ private fun Dashboard(modifier: Modifier, onCapture: () -> Unit, onNavigate: (St
     val tools = listOf(
         StudioTool("New Session", "Start a customer photo job", Icons.Default.AddAPhoto, "Capture"),
         StudioTool("Photo Editor", "Edit a photo from your device or studio", Icons.Default.AutoFixHigh, "Editor"),
-        StudioTool("WhatsApp Delivery", "Individual and group sharing", Icons.Default.Send, "Gallery"),
+        StudioTool("Instant WhatsApp", "Capture and send in one step", Icons.Default.Send, "Capture"),
         StudioTool("Print Designer", "Passport sheets and PDF", Icons.Default.Print, "Print"),
         StudioTool("Customers", "Profiles and photo history", Icons.Default.People, "Customers"),
         StudioTool("Business Reports", "Sales and job summaries", Icons.Default.BarChart, "Business"),
@@ -208,7 +223,7 @@ private fun Dashboard(modifier: Modifier, onCapture: () -> Unit, onNavigate: (St
             Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 Text("READY FOR YOUR NEXT CUSTOMER?", color = Muted, fontSize = 10.sp, fontWeight = FontWeight.Bold)
                 Text("Capture. Create. Deliver.", color = PrimaryText, fontSize = 23.sp, fontWeight = FontWeight.Bold)
-                Text("Capture professional ID photos and prepare them for editing, printing and WhatsApp delivery.", color = Muted, fontSize = 13.sp)
+                Text("Take the photo — PassportPro frames the head, cleans the background and opens WhatsApp or the share menu straight away.", color = Muted, fontSize = 13.sp)
                 Button(onClick = onCapture, modifier = Modifier.fillMaxWidth().height(52.dp), colors = ButtonDefaults.buttonColors(containerColor = Gold, contentColor = Ink), shape = RoundedCornerShape(14.dp)) {
                     Icon(Icons.Default.CameraAlt, null); Spacer(Modifier.width(8.dp)); Text("OPEN CAMERA STUDIO", fontWeight = FontWeight.Bold)
                 }
@@ -395,153 +410,252 @@ private fun PhotoEditorEntryScreen(
 }
 
 @Composable
-private fun CameraStudioScreen(modifier: Modifier = Modifier) {
+private fun CameraStudioScreen(modifier: Modifier = Modifier, onClose: () -> Unit) {
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
+    val haptics = LocalHapticFeedback.current
+    val scope = rememberCoroutineScope()
     var hasPermission by remember {
         mutableStateOf(ContextCompat.checkSelfPermission(context, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED)
     }
     val permissionLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { hasPermission = it }
+    LaunchedEffect(Unit) { if (!hasPermission) permissionLauncher.launch(Manifest.permission.CAMERA) }
+
     var lensFacing by remember { mutableIntStateOf(CameraSelector.LENS_FACING_BACK) }
     var flashOn by remember { mutableStateOf(false) }
     var faceCount by remember { mutableIntStateOf(0) }
     var captureUseCase by remember { mutableStateOf<ImageCapture?>(null) }
     var boundCamera by remember { mutableStateOf<Camera?>(null) }
-    var savedPhoto by remember { mutableStateOf<String?>(null) }
+    var capturedPath by remember { mutableStateOf<String?>(null) }
+    var fineTune by remember { mutableStateOf(false) }
+    var capturing by remember { mutableStateOf(false) }
+    var shutterFlash by remember { mutableStateOf(false) }
+    var autoSend by remember { mutableStateOf(readAutoSend(context)) }
     var message by remember { mutableStateOf("Position the face inside the guide") }
-    val previewView = remember {
-        PreviewView(context).apply { scaleType = PreviewView.ScaleType.FILL_CENTER }
-    }
+    val flashAlpha by animateFloatAsState(if (shutterFlash) 0.85f else 0f, animationSpec = tween(if (shutterFlash) 40 else 260), label = "shutter")
+    LaunchedEffect(shutterFlash) { if (shutterFlash) { delay(70); shutterFlash = false } }
+
+    val previewView = remember { PreviewView(context).apply { scaleType = PreviewView.ScaleType.FILL_CENTER } }
     val cameraExecutor = remember { Executors.newSingleThreadExecutor() }
     val faceDetector = remember {
-        val options = FaceDetectorOptions.Builder()
-            .setPerformanceMode(FaceDetectorOptions.PERFORMANCE_MODE_FAST)
-            .setLandmarkMode(FaceDetectorOptions.LANDMARK_MODE_NONE)
-            .setClassificationMode(FaceDetectorOptions.CLASSIFICATION_MODE_NONE)
-            .build()
-        FaceDetection.getClient(options)
+        FaceDetection.getClient(
+            FaceDetectorOptions.Builder()
+                .setPerformanceMode(FaceDetectorOptions.PERFORMANCE_MODE_FAST)
+                .setLandmarkMode(FaceDetectorOptions.LANDMARK_MODE_NONE)
+                .setClassificationMode(FaceDetectorOptions.CLASSIFICATION_MODE_NONE)
+                .build()
+        )
     }
-
     DisposableEffect(Unit) {
         onDispose {
+            runCatching { ProcessCameraProvider.getInstance(context).get().unbindAll() }
             faceDetector.close()
             cameraExecutor.shutdown()
         }
     }
 
-    LaunchedEffect(hasPermission, lensFacing) {
-        if (hasPermission) {
-            val providerFuture = ProcessCameraProvider.getInstance(context)
-            providerFuture.addListener({
-                try {
-                    val provider = providerFuture.get()
-                    val selector = CameraSelector.Builder().requireLensFacing(lensFacing).build()
-                    val preview = Preview.Builder().build().also { it.setSurfaceProvider(previewView.surfaceProvider) }
-                    val imageCapture = ImageCapture.Builder()
-                        .setCaptureMode(ImageCapture.CAPTURE_MODE_MAXIMIZE_QUALITY)
-                        .setFlashMode(if (flashOn) ImageCapture.FLASH_MODE_ON else ImageCapture.FLASH_MODE_OFF)
-                        .build()
-                    val analysis = ImageAnalysis.Builder()
-                        .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
-                        .build()
-                    analysis.setAnalyzer(cameraExecutor) { proxy -> analyseFace(proxy, faceDetector) { count ->
-                        faceCount = count
-                        message = when {
-                            count == 0 -> "No face detected — move into the frame"
-                            count == 1 -> "One face detected — hold still"
-                            else -> "$count faces detected — keep only one person in frame"
-                        }
-                    } }
-                    provider.unbindAll()
-                    boundCamera = provider.bindToLifecycle(lifecycleOwner, selector, preview, imageCapture, analysis)
-                    captureUseCase = imageCapture
-                } catch (e: Exception) {
-                    message = "Camera could not start: ${e.localizedMessage ?: "check camera access"}"
+    val importer = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
+        if (uri != null) scope.launch {
+            val path = withContext(Dispatchers.IO) {
+                runCatching {
+                    val destination = File(context.cacheDir, "PassportPro_Import_${System.currentTimeMillis()}.jpg")
+                    context.contentResolver.openInputStream(uri)?.use { input -> destination.outputStream().use { input.copyTo(it) } }
+                        ?: error("The selected image could not be opened.")
+                    destination.absolutePath
                 }
-            }, ContextCompat.getMainExecutor(context))
+            }
+            path.onSuccess { capturedPath = it; fineTune = false }
+                .onFailure { message = it.localizedMessage ?: "Unable to import this image." }
         }
     }
 
-    val photoBitmap = remember(savedPhoto) {
-        savedPhoto?.let { BitmapFactory.decodeFile(it) }
+    // The camera only runs while the viewfinder is visible, so processing after capture gets the full CPU.
+    val cameraActive = hasPermission && capturedPath == null
+    LaunchedEffect(cameraActive, lensFacing) {
+        val providerFuture = ProcessCameraProvider.getInstance(context)
+        providerFuture.addListener({
+            try {
+                val provider = providerFuture.get()
+                provider.unbindAll()
+                captureUseCase = null
+                if (!cameraActive) return@addListener
+                val selector = CameraSelector.Builder().requireLensFacing(lensFacing).build()
+                val preview = Preview.Builder().build().also { it.setSurfaceProvider(previewView.surfaceProvider) }
+                val imageCapture = ImageCapture.Builder()
+                    .setCaptureMode(ImageCapture.CAPTURE_MODE_MINIMIZE_LATENCY)
+                    .setJpegQuality(95)
+                    .build()
+                val analysis = ImageAnalysis.Builder()
+                    .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
+                    .build()
+                analysis.setAnalyzer(cameraExecutor) { proxy ->
+                    analyseFace(proxy, faceDetector) { count ->
+                        faceCount = count
+                        message = when (count) {
+                            0 -> "Move the face into the guide"
+                            1 -> "Looks good — hold still"
+                            else -> "Only one person in the frame"
+                        }
+                    }
+                }
+                boundCamera = provider.bindToLifecycle(lifecycleOwner, selector, preview, imageCapture, analysis)
+                boundCamera?.cameraControl?.enableTorch(flashOn)
+                captureUseCase = imageCapture
+            } catch (e: Exception) {
+                message = "Camera could not start: ${e.localizedMessage ?: "check camera access"}"
+            }
+        }, ContextCompat.getMainExecutor(context))
     }
 
-    Column(modifier.fillMaxSize().padding(horizontal = 14.dp, vertical = 10.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Column(Modifier.weight(1f)) {
-                Text("CAMERA STUDIO", color = Gold, fontSize = 11.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.5.sp)
-                Text("Passport capture", color = PrimaryText, fontSize = 23.sp, fontWeight = FontWeight.Bold)
-            }
-            Surface(color = Panel, shape = RoundedCornerShape(12.dp)) {
-                Text("LIVE CAPTURE", color = Gold, modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp), fontSize = 10.sp, fontWeight = FontWeight.Bold)
-            }
+    BackHandler {
+        when {
+            fineTune -> fineTune = false
+            capturedPath != null -> capturedPath = null
+            else -> onClose()
         }
+    }
 
-        if (savedPhoto != null && photoBitmap != null) {
-            PhotoEditorScreen(photoPath = savedPhoto!!, onRetake = { savedPhoto = null }, onSaved = { savedPhoto = null; message = "Edited photograph saved successfully" })
-        } else if (!hasPermission) {
-            Column(Modifier.weight(1f).fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
-                Icon(Icons.Default.NoPhotography, null, tint = Gold, modifier = Modifier.size(52.dp))
-                Text("Camera permission required", color = PrimaryText, fontSize = 18.sp, fontWeight = FontWeight.Bold)
-                Text("Allow camera access to use the live passport studio.", color = Muted, fontSize = 13.sp)
-                Button(onClick = { permissionLauncher.launch(Manifest.permission.CAMERA) }, colors = ButtonDefaults.buttonColors(containerColor = Gold, contentColor = Ink)) { Text("Grant camera access") }
+    val currentPath = capturedPath
+    if (currentPath != null) {
+        if (fineTune) {
+            Box(modifier.fillMaxSize().background(Ink)) {
+                PhotoEditorScreen(photoPath = currentPath, onRetake = { fineTune = false }, onSaved = { fineTune = false; capturedPath = null })
             }
         } else {
-            Box(Modifier.weight(1f).fillMaxWidth()) {
+            QuickFinishScreen(
+                photoPath = currentPath,
+                onRetake = { capturedPath = null },
+                onFineTune = { fineTune = true },
+                onNextCustomer = { capturedPath = null; message = "Ready for the next customer" },
+                modifier = modifier
+            )
+        }
+        return
+    }
+
+    Column(modifier.fillMaxSize().background(Color.Black)) {
+        Box(Modifier.weight(1f).fillMaxWidth()) {
+            if (hasPermission) {
                 AndroidView(factory = { previewView }, modifier = Modifier.fillMaxSize())
+                val guide = if (faceCount == 1) Good else Color.White
                 Canvas(Modifier.fillMaxSize()) {
-                    val ovalWidth = size.width * 0.62f
-                    val ovalHeight = size.height * 0.56f
-                    val left = (size.width - ovalWidth) / 2f
-                    val top = (size.height - ovalHeight) / 2f
-                    drawOval(color = if (faceCount == 1) Good else Gold, topLeft = Offset(left, top), size = Size(ovalWidth, ovalHeight), style = Stroke(width = 3.dp.toPx()))
-                    drawLine(Gold.copy(alpha = .55f), Offset(size.width * .15f, size.height * .78f), Offset(size.width * .85f, size.height * .78f), strokeWidth = 1.dp.toPx())
-                }
-                Surface(color = Ink.copy(alpha = .78f), shape = RoundedCornerShape(20.dp), modifier = Modifier.align(Alignment.TopCenter).padding(10.dp)) {
-                    Text(message, color = if (faceCount == 1) Good else PrimaryText, modifier = Modifier.padding(horizontal = 14.dp, vertical = 9.dp), fontSize = 12.sp)
-                }
-                Row(Modifier.align(Alignment.BottomCenter).padding(14.dp), horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
-                    FilledTonalIconButton(onClick = {
-                        flashOn = !flashOn
-                        captureUseCase?.flashMode = if (flashOn) ImageCapture.FLASH_MODE_ON else ImageCapture.FLASH_MODE_OFF
-                        boundCamera?.cameraControl?.enableTorch(flashOn)
-                    }) { Icon(if (flashOn) Icons.Default.FlashOn else Icons.Default.FlashOff, contentDescription = "Toggle flash") }
-                    FilledTonalIconButton(onClick = { lensFacing = if (lensFacing == CameraSelector.LENS_FACING_BACK) CameraSelector.LENS_FACING_FRONT else CameraSelector.LENS_FACING_BACK }) {
-                        Icon(Icons.Default.Cameraswitch, contentDescription = "Switch camera")
+                    var frameW = size.width * 0.78f
+                    var frameH = frameW * 45f / 35f
+                    if (frameH > size.height * 0.78f) { frameH = size.height * 0.78f; frameW = frameH * 35f / 45f }
+                    val left = (size.width - frameW) / 2f
+                    val top = (size.height - frameH) / 2f
+                    val radius = CornerRadius(20.dp.toPx())
+                    val shade = Path().apply {
+                        fillType = PathFillType.EvenOdd
+                        addRect(Rect(0f, 0f, size.width, size.height))
+                        addRoundRect(RoundRect(left, top, left + frameW, top + frameH, radius))
                     }
-                    Button(
-                        onClick = {
-                            val capture = captureUseCase ?: return@Button
-                            val folder = File(context.filesDir, "PassportPro/Captures").apply { mkdirs() }
-                            val timestamp = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.US).format(Date())
-                            val file = File(folder, "PassportPro_$timestamp.jpg")
-                            val options = ImageCapture.OutputFileOptions.Builder(file).build()
-                            capture.takePicture(options, ContextCompat.getMainExecutor(context), object : ImageCapture.OnImageSavedCallback {
-                                override fun onImageSaved(output: ImageCapture.OutputFileResults) {
-                                    savedPhoto = file.absolutePath
-                                    message = "Photograph captured successfully"
-                                }
-                                override fun onError(exception: ImageCaptureException) {
-                                    message = "Capture failed: ${exception.message ?: "please try again"}"
-                                }
-                            })
-                        },
-                        shape = CircleShape,
-                        colors = ButtonDefaults.buttonColors(containerColor = Gold, contentColor = Ink),
-                        modifier = Modifier.size(66.dp),
-                        contentPadding = PaddingValues(0.dp)
-                    ) { Icon(Icons.Default.CameraAlt, contentDescription = "Capture photo", modifier = Modifier.size(30.dp)) }
+                    drawPath(shade, Color.Black.copy(alpha = .5f))
+                    drawRoundRect(guide, Offset(left, top), Size(frameW, frameH), radius, style = Stroke(2.dp.toPx()))
+                    val ovalW = frameW * 0.56f
+                    val ovalH = frameH * 0.62f
+                    drawOval(
+                        guide.copy(alpha = .9f),
+                        topLeft = Offset(left + (frameW - ovalW) / 2f, top + frameH * 0.09f),
+                        size = Size(ovalW, ovalH),
+                        style = Stroke(2.dp.toPx(), pathEffect = PathEffect.dashPathEffect(floatArrayOf(18f, 12f)))
+                    )
+                }
+                Box(Modifier.fillMaxSize().background(Color.White.copy(alpha = flashAlpha)))
+            } else {
+                Column(Modifier.fillMaxSize().padding(28.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
+                    Icon(Icons.Default.NoPhotography, null, tint = Gold, modifier = Modifier.size(52.dp))
+                    Spacer(Modifier.height(12.dp))
+                    Text("Camera access needed", color = Color.White, fontSize = 18.sp, fontWeight = FontWeight.Bold)
+                    Text("Allow the camera to take passport photos. You can also import a photo below.", color = Color(0xFFB9C2D0), fontSize = 13.sp, textAlign = TextAlign.Center)
+                    Spacer(Modifier.height(16.dp))
+                    Button(onClick = { permissionLauncher.launch(Manifest.permission.CAMERA) }, colors = ButtonDefaults.buttonColors(containerColor = Gold, contentColor = Ink)) { Text("Allow camera", fontWeight = FontWeight.Bold) }
                 }
             }
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Icon(Icons.Default.Face, tint = if (faceCount == 1) Good else Gold, contentDescription = null)
-                Spacer(Modifier.width(8.dp))
-                Text(if (faceCount == 1) "Face aligned in frame" else "Face guidance active", color = Muted, fontSize = 12.sp)
+
+            // Top controls
+            Row(Modifier.fillMaxWidth().align(Alignment.TopCenter).padding(10.dp), verticalAlignment = Alignment.CenterVertically) {
+                CameraRoundButton(Icons.Default.Close, "Close camera", onClick = onClose)
                 Spacer(Modifier.weight(1f))
-                Text("Saved locally • Offline", color = Good, fontSize = 11.sp)
+                Surface(
+                    onClick = { autoSend = autoSend.next(); writeAutoSend(context, autoSend) },
+                    color = Color.Black.copy(alpha = .55f), shape = RoundedCornerShape(50)
+                ) {
+                    Row(Modifier.padding(horizontal = 12.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Icon(Icons.Default.Bolt, contentDescription = null, tint = if (autoSend == AutoSend.OFF) Color(0xFFB9C2D0) else Gold, modifier = Modifier.size(16.dp))
+                        Spacer(Modifier.width(5.dp))
+                        Text(autoSend.label, color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
+                    }
+                }
+                Spacer(Modifier.width(8.dp))
+                CameraRoundButton(if (flashOn) Icons.Default.FlashOn else Icons.Default.FlashOff, "Toggle light", tint = if (flashOn) Gold else Color.White) {
+                    flashOn = !flashOn
+                    boundCamera?.cameraControl?.enableTorch(flashOn)
+                }
+            }
+            if (hasPermission) {
+                Surface(color = Color.Black.copy(alpha = .6f), shape = RoundedCornerShape(50), modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 14.dp)) {
+                    Row(Modifier.padding(horizontal = 14.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Icon(Icons.Default.Face, contentDescription = null, tint = if (faceCount == 1) Good else Gold, modifier = Modifier.size(16.dp))
+                        Spacer(Modifier.width(7.dp))
+                        Text(message, color = Color.White, fontSize = 12.sp)
+                    }
+                }
+            }
+        }
+
+        // Bottom controls
+        Row(
+            Modifier.fillMaxWidth().background(Color.Black).padding(horizontal = 28.dp, vertical = 18.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            CameraRoundButton(Icons.Default.PhotoLibrary, "Import a photo", size = 52) { importer.launch("image/*") }
+            Box(
+                Modifier.size(80.dp).border(4.dp, Color.White, CircleShape).padding(7.dp).clip(CircleShape)
+                    .background(if (capturing) Color(0xFF8A93A3) else if (faceCount == 1) Gold else Color.White)
+                    .clickable(enabled = hasPermission && !capturing && captureUseCase != null) {
+                        val capture = captureUseCase ?: return@clickable
+                        capturing = true
+                        shutterFlash = true
+                        haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+                        val folder = File(context.filesDir, "PassportPro/Captures").apply { mkdirs() }
+                        val file = File(folder, "PassportPro_${SimpleDateFormat("yyyyMMdd_HHmmss", Locale.US).format(Date())}.jpg")
+                        capture.takePicture(ImageCapture.OutputFileOptions.Builder(file).build(), ContextCompat.getMainExecutor(context), object : ImageCapture.OnImageSavedCallback {
+                            override fun onImageSaved(output: ImageCapture.OutputFileResults) {
+                                capturing = false
+                                fineTune = false
+                                capturedPath = file.absolutePath
+                            }
+                            override fun onError(exception: ImageCaptureException) {
+                                capturing = false
+                                message = "Capture failed: ${exception.message ?: "please try again"}"
+                            }
+                        })
+                    },
+                contentAlignment = Alignment.Center
+            ) {
+                if (capturing) CircularProgressIndicator(Modifier.size(26.dp), strokeWidth = 3.dp, color = Color.White)
+            }
+            CameraRoundButton(Icons.Default.Cameraswitch, "Switch camera", size = 52) {
+                lensFacing = if (lensFacing == CameraSelector.LENS_FACING_BACK) CameraSelector.LENS_FACING_FRONT else CameraSelector.LENS_FACING_BACK
             }
         }
     }
+}
+
+@Composable
+private fun CameraRoundButton(
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    description: String,
+    size: Int = 44,
+    tint: Color = Color.White,
+    onClick: () -> Unit
+) {
+    Box(
+        Modifier.size(size.dp).clip(CircleShape).background(Color.White.copy(alpha = .14f)).clickable(onClick = onClick),
+        contentAlignment = Alignment.Center
+    ) { Icon(icon, contentDescription = description, tint = tint, modifier = Modifier.size((size * 0.48f).dp)) }
 }
 
 private fun analyseFace(proxy: ImageProxy, detector: FaceDetector, onResult: (Int) -> Unit) {

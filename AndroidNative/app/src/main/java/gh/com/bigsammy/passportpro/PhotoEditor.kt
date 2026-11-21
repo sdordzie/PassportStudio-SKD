@@ -30,6 +30,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
@@ -100,7 +101,7 @@ private fun transformPhoto(source: Bitmap, rotation: Int, flipHorizontal: Boolea
     return Bitmap.createBitmap(source, 0, 0, source.width, source.height, matrix, true)
 }
 
-private fun adjustPhoto(source: Bitmap, brightness: Float, contrast: Float, saturation: Float): Bitmap {
+internal fun adjustPhoto(source: Bitmap, brightness: Float, contrast: Float, saturation: Float): Bitmap {
     if (brightness == 0f && contrast == 1f && saturation == 1f) return source
     val w = source.width
     val h = source.height
@@ -124,7 +125,7 @@ private fun adjustPhoto(source: Bitmap, brightness: Float, contrast: Float, satu
     }
 }
 
-private fun decodeUprightPhoto(path: String): Bitmap? {
+internal fun decodeUprightPhoto(path: String): Bitmap? {
     val bitmap = BitmapFactory.decodeFile(path) ?: return null
     return try {
         val exif = ExifInterface(path)
@@ -181,7 +182,7 @@ private fun perspectiveCorrect(source: Bitmap, corners: List<Offset>): Bitmap {
     return output
 }
 
-private fun refineSegmentationMask(raw: FloatArray, width: Int, height: Int, radius: Int, edgeBias: Float): FloatArray {
+internal fun refineSegmentationMask(raw: FloatArray, width: Int, height: Int, radius: Int, edgeBias: Float): FloatArray {
     if (width <= 0 || height <= 0 || raw.size != width * height) return raw
     val horizontal = FloatArray(raw.size)
     val weights = when (radius.coerceIn(0, 3)) {
@@ -220,7 +221,7 @@ private fun refineSegmentationMask(raw: FloatArray, width: Int, height: Int, rad
     return smooth
 }
 
-private fun sampleMaskBilinear(mask: FloatArray, width: Int, height: Int, x: Float, y: Float): Float {
+internal fun sampleMaskBilinear(mask: FloatArray, width: Int, height: Int, x: Float, y: Float): Float {
     val px = x.coerceIn(0f, (width - 1).toFloat())
     val py = y.coerceIn(0f, (height - 1).toFloat())
     val x0 = px.toInt(); val y0 = py.toInt()
@@ -231,7 +232,7 @@ private fun sampleMaskBilinear(mask: FloatArray, width: Int, height: Int, x: Flo
     return (a * (1f - fy) + b * fy).coerceIn(0f, 1f)
 }
 
-private fun smoothAlpha(value: Float, softness: Float): Float {
+internal fun smoothAlpha(value: Float, softness: Float): Float {
     val low = (0.5f - softness.coerceIn(0.02f, 0.48f)).coerceIn(0f, 0.49f)
     val high = 1f - low
     val t = ((value - low) / (high - low)).coerceIn(0f, 1f)
@@ -277,6 +278,7 @@ internal fun PhotoEditorScreen(photoPath: String, onRetake: () -> Unit, onSaved:
     var jpegQuality by remember { mutableIntStateOf(95) }
     var estimatedJpegBytes by remember { mutableLongStateOf(0L) }
     var showOriginal by remember { mutableStateOf(false) }
+    var toolTab by remember { mutableIntStateOf(0) }
     var undoStack by remember { mutableStateOf(listOf<EditorSnapshot>()) }
     var redoStack by remember { mutableStateOf(listOf<EditorSnapshot>()) }
     var status by remember { mutableStateOf("Your photograph is ready. Changes appear in the preview.") }
@@ -342,7 +344,7 @@ internal fun PhotoEditorScreen(photoPath: String, onRetake: () -> Unit, onSaved:
     pendingSaveBitmap?.let { saveBitmap ->
         AlertDialog(
             onDismissRequest = { if (!busy) pendingSaveBitmap = null },
-            title = { Text("REVIEW SAVE QUALITY", fontWeight = FontWeight.Bold) },
+            title = { Text("SAVE OR SEND", fontWeight = FontWeight.Bold) },
             text = {
                 Column(Modifier.fillMaxWidth().heightIn(max = 470.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                     Box(Modifier.fillMaxWidth().heightIn(min = 150.dp, max = 270.dp).background(Color(0xFF090D14), RoundedCornerShape(12.dp)), contentAlignment = Alignment.Center) {
@@ -365,57 +367,37 @@ internal fun PhotoEditorScreen(photoPath: String, onRetake: () -> Unit, onSaved:
                 }
             },
             confirmButton = {
-                Button(
-                    onClick = {
-                        busy = true
-                        scope.launch {
-                            try {
-                                val file = withContext(Dispatchers.IO) {
-                                    val name = "PassportPro_${SimpleDateFormat("yyyyMMdd_HHmmss", Locale.US).format(Date())}.jpg"
-                                    val dir = File(context.getExternalFilesDir(null), "PassportPro/Edited").apply { mkdirs() }
-                                    val output = File(dir, name)
-                                    FileOutputStream(output).use { stream ->
-                                        if (!saveBitmap.compress(CompressFormat.JPEG, jpegQuality, stream)) throw IllegalStateException("JPEG encoding failed")
-                                        stream.flush()
-                                    }
-                                    val values = ContentValues().apply {
-                                        put(MediaStore.Images.Media.DISPLAY_NAME, name)
-                                        put(MediaStore.Images.Media.MIME_TYPE, "image/jpeg")
-                                        put(MediaStore.Images.Media.DESCRIPTION, "Edited with PassportPro Studio")
-                                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                                            put(MediaStore.Images.Media.RELATIVE_PATH, "Pictures/PassportPro Studio/Edited")
-                                            put(MediaStore.Images.Media.IS_PENDING, 1)
-                                        }
-                                    }
-                                    val uri = context.contentResolver.insert(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, values)
-                                        ?: throw IllegalStateException("Could not add the edited photograph to your device Gallery")
-                                    try {
-                                        context.contentResolver.openOutputStream(uri, "w")?.use { stream ->
-                                            if (!saveBitmap.compress(CompressFormat.JPEG, jpegQuality, stream)) throw IllegalStateException("Gallery JPEG encoding failed")
-                                            stream.flush()
-                                        } ?: throw IllegalStateException("Could not write the photograph to your device Gallery")
-                                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                                            context.contentResolver.update(uri, ContentValues().apply { put(MediaStore.Images.Media.IS_PENDING, 0) }, null, null)
-                                        }
-                                    } catch (error: Exception) {
-                                        context.contentResolver.delete(uri, null, null)
-                                        throw error
-                                    }
-                                    output
-                                }
-                                pendingSaveBitmap = null
-                                status = "Saved to Studio Gallery and device Gallery: ${file.name}"
-                                onSaved()
-                            } catch (e: Exception) {
-                                status = "Save failed: ${e.localizedMessage ?: "please try again"}"
-                            } finally {
-                                busy = false
-                            }
+                fun commit(share: Boolean, viaWhatsApp: Boolean) {
+                    busy = true
+                    scope.launch {
+                        try {
+                            val file = saveFinishedPhoto(context, saveBitmap, jpegQuality)
+                            pendingSaveBitmap = null
+                            status = "Saved to Studio Gallery and device Gallery: ${file.name}"
+                            if (share) sharePhoto(context, file, viaWhatsApp)?.let { status = it }
+                            onSaved()
+                        } catch (e: Exception) {
+                            status = "Save failed: ${e.localizedMessage ?: "please try again"}"
+                        } finally {
+                            busy = false
                         }
-                    },
-                    enabled = !busy,
-                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFE4B45D), contentColor = Color(0xFF101522))
-                ) { Text(if (busy) "Saving…" else "Save image", fontWeight = FontWeight.Bold) }
+                    }
+                }
+                Column(horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Button(
+                            onClick = { commit(share = true, viaWhatsApp = true) },
+                            enabled = !busy,
+                            colors = ButtonDefaults.buttonColors(containerColor = WhatsAppGreen, contentColor = Color(0xFF06291A))
+                        ) { Text("WhatsApp", fontWeight = FontWeight.Bold) }
+                        Button(
+                            onClick = { commit(share = true, viaWhatsApp = false) },
+                            enabled = !busy,
+                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFE4B45D), contentColor = Color(0xFF101522))
+                        ) { Text(if (busy) "Saving…" else "Save & Share", fontWeight = FontWeight.Bold) }
+                    }
+                    TextButton(onClick = { commit(share = false, viaWhatsApp = false) }, enabled = !busy) { Text("Save only") }
+                }
             },
             dismissButton = { TextButton(onClick = { pendingSaveBitmap = null }, enabled = !busy) { Text("Cancel") } }
         )
@@ -427,7 +409,7 @@ internal fun PhotoEditorScreen(photoPath: String, onRetake: () -> Unit, onSaved:
                 Text("PHOTO EDITOR", color=Color(0xFFE4B45D), fontSize=11.sp, fontWeight=FontWeight.Bold, letterSpacing=1.2.sp)
                 Text("Live editing preview", color=PrimaryText, fontSize=21.sp, fontWeight=FontWeight.Bold)
             }
-            Surface(color=Color(0xFF1B2433), shape=RoundedCornerShape(10.dp)) {
+            Surface(color=Panel, shape=RoundedCornerShape(10.dp)) {
                 Text("ON DEVICE", color=Color(0xFF64D6A0), modifier=Modifier.padding(horizontal=10.dp, vertical=7.dp), fontSize=9.sp, fontWeight=FontWeight.Bold)
             }
         }
@@ -514,7 +496,7 @@ internal fun PhotoEditorScreen(photoPath: String, onRetake: () -> Unit, onSaved:
         }
 
         Column(
-            Modifier.weight(1.25f).fillMaxWidth().verticalScroll(rememberScrollState()),
+            Modifier.weight(1.25f).fillMaxWidth(),
             verticalArrangement=Arrangement.spacedBy(6.dp)
         ) {
             Row(horizontalArrangement=Arrangement.spacedBy(7.dp), verticalAlignment=Alignment.CenterVertically) {
@@ -534,177 +516,203 @@ internal fun PhotoEditorScreen(photoPath: String, onRetake: () -> Unit, onSaved:
                 }, enabled=!busy, modifier=Modifier.weight(1f), colors=ButtonDefaults.outlinedButtonColors(contentColor=if (LocalPassportDark.current) Color(0xFFE4B45D) else Color(0xFF80520F), disabledContentColor=if (LocalPassportDark.current) Color(0xFFB9C2D0) else Color(0xFF596579)), border=BorderStroke(1.dp, if (LocalPassportDark.current) Color(0xFF657184) else Color(0xFF7C8798))) { Text("Redo ↷", color=if (LocalPassportDark.current) Color(0xFFE4B45D) else Color(0xFF80520F), fontWeight=FontWeight.Bold) }
                 FilterChip(selected=showOriginal, onClick={showOriginal=!showOriginal}, label={Text(if(showOriginal) "Show edited" else "Before / after")})
             }
-            Text("MANUAL PERSPECTIVE", color=Muted, fontSize=10.sp, fontWeight=FontWeight.Bold)
-            Row(verticalAlignment=Alignment.CenterVertically, horizontalArrangement=Arrangement.spacedBy(8.dp)) {
-                FilterChip(selected=perspectiveEnabled, onClick={recordUndo(); perspectiveEnabled = !perspectiveEnabled}, label={Text(if (perspectiveEnabled) "Adjust corners: ON" else "Adjust corners: OFF")})
-                Text("Drag the four gold corner handles to straighten a tilted photo.", color=Muted, fontSize=10.sp, modifier=Modifier.weight(1f))
-            }
-            if (perspectiveEnabled) {
-                Row(horizontalArrangement=Arrangement.spacedBy(8.dp)) {
-                    OutlinedButton(onClick={recordUndo(); perspectiveCorners=listOf(Offset(0f,0f),Offset(1f,0f),Offset(1f,1f),Offset(0f,1f))}) { Text("Reset corners") }
-                    Text("The selected area is corrected to a straight rectangle.", color=Muted, fontSize=10.sp, modifier=Modifier.weight(1f))
+            val toolTabs = listOf("Background", "Crop", "Adjust", "Transform")
+            TabRow(
+                selectedTabIndex = toolTab,
+                containerColor = Panel,
+                contentColor = Color(0xFFE4B45D),
+                modifier = Modifier.clip(RoundedCornerShape(12.dp))
+            ) {
+                toolTabs.forEachIndexed { index, label ->
+                    Tab(selected = toolTab == index, onClick = { toolTab = index },
+                        text = { Text(label, fontSize = 12.sp, fontWeight = if (toolTab == index) FontWeight.Bold else FontWeight.Normal, color = if (toolTab == index) Color(0xFFE4B45D) else Muted, maxLines = 1) })
                 }
             }
-            Text("TRANSFORM", color=Muted, fontSize=10.sp, fontWeight=FontWeight.Bold)
-            Row(horizontalArrangement=Arrangement.spacedBy(6.dp), modifier=Modifier.fillMaxWidth()) {
-                OutlinedButton(onClick={ recordUndo(); rotation=(rotation+270)%360 }, modifier=Modifier.weight(1f)) { Text("↶ 90°") }
-                OutlinedButton(onClick={ recordUndo(); rotation=(rotation+90)%360 }, modifier=Modifier.weight(1f)) { Text("90° ↷") }
-            }
-            Row(horizontalArrangement=Arrangement.spacedBy(6.dp), modifier=Modifier.fillMaxWidth()) {
-                FilterChip(selected=flipHorizontal, onClick={recordUndo(); flipHorizontal=!flipHorizontal}, label={Text("Mirror ↔")})
-                FilterChip(selected=flipVertical, onClick={recordUndo(); flipVertical=!flipVertical}, label={Text("Flip ↕")})
-                Text("Rotation: $rotation°", color=Muted, fontSize=10.sp, modifier=Modifier.align(Alignment.CenterVertically))
-            }
-            Text("AI BACKGROUND • EDGE REFINEMENT", color=Muted, fontSize=10.sp, fontWeight=FontWeight.Bold)
-            Row(Modifier.horizontalScroll(androidx.compose.foundation.rememberScrollState()), horizontalArrangement=Arrangement.spacedBy(6.dp)) {
-                listOf("White" to Pixel.WHITE, "Blue" to Pixel.rgb(35,91,170), "Red" to Pixel.rgb(190,35,48), "Grey" to Pixel.LTGRAY).forEach { (label, color) ->
-                    FilterChip(selected=background==color, onClick={background=color}, label={Text(label)})
-                }
-            }
-            Text("Edge softness ${(maskSoftness*100).toInt()}%", color=Muted, fontSize=10.sp)
-            Slider(value=maskSoftness,onValueChange={maskSoftness=it},valueRange=0.04f..0.42f)
-            Text("Fine-detail preservation ${(maskDetail*100).toInt()}%", color=Muted, fontSize=10.sp)
-            Slider(value=maskDetail,onValueChange={maskDetail=it},valueRange=0f..1f)
-            Row(horizontalArrangement=Arrangement.spacedBy(5.dp),verticalAlignment=Alignment.CenterVertically) {
-                Text("Mask smoothing",color=Muted,fontSize=10.sp)
-                listOf(0,1,2,3).forEach { level -> FilterChip(selected=maskRadius==level,onClick={maskRadius=level},label={Text(listOf("Off","Low","Medium","High")[level],fontSize=9.sp)}) }
-            }
-            Button(
-                onClick = {
-                    val source = editedBase ?: return@Button
-                    busy = true
-                    status = "AI is analysing your photograph…"
-                    val selectedBackground = background
-                    val selectedSoftness = maskSoftness
-                    val selectedDetail = maskDetail
-                    val selectedRadius = maskRadius
-                    val detector = Segmentation.getClient(
-                        SelfieSegmenterOptions.Builder().setDetectorMode(SelfieSegmenterOptions.SINGLE_IMAGE_MODE).build()
-                    )
-                    detector.process(InputImage.fromBitmap(source, 0))
-                        .addOnSuccessListener { mask ->
-                            scope.launch {
-                                try {
-                                    status = "Replacing background…"
-                                    val result = withContext(Dispatchers.Default) {
-                                        val mw = mask.width
-                                        val mh = mask.height
-                                        val buffer = mask.buffer.order(ByteOrder.nativeOrder()).apply { rewind() }
-                                        val rawMask = FloatArray(mw * mh) { buffer.getFloat().coerceIn(0f, 1f) }
-                                        val confidence = refineSegmentationMask(rawMask,mw,mh,selectedRadius,selectedDetail)
-                                        val input = IntArray(source.width * source.height)
-                                        source.getPixels(input, 0, source.width, 0, 0, source.width, source.height)
-                                        val output = IntArray(input.size)
-                                        val br = Pixel.red(selectedBackground)
-                                        val bg = Pixel.green(selectedBackground)
-                                        val bb = Pixel.blue(selectedBackground)
-                                        for (y in 0 until source.height) {
-                                            val my = (y.toLong() * mh / source.height).toInt().coerceAtMost(mh - 1)
-                                            for (x in 0 until source.width) {
-                                                // Sample at pixel centres to avoid a half-pixel mask shift around the silhouette.
-                                                val maskX = ((x + 0.5f) * mw / source.width) - 0.5f
-                                                val maskY = ((y + 0.5f) * mh / source.height) - 0.5f
-                                                val sampled = sampleMaskBilinear(confidence,mw,mh,maskX,maskY)
-                                                val alpha = smoothAlpha(sampled,selectedSoftness)
-                                                val p = input[y * source.width + x]
-                                                output[y * source.width + x] = Pixel.rgb(
-                                                    (Pixel.red(p) * alpha + br * (1f-alpha)).toInt().coerceIn(0,255),
-                                                    (Pixel.green(p) * alpha + bg * (1f-alpha)).toInt().coerceIn(0,255),
-                                                    (Pixel.blue(p) * alpha + bb * (1f-alpha)).toInt().coerceIn(0,255)
-                                                )
+            Column(
+                Modifier.weight(1f).fillMaxWidth().verticalScroll(rememberScrollState()).padding(top = 4.dp),
+                verticalArrangement=Arrangement.spacedBy(6.dp)
+            ) {
+                when (toolTab) {
+                    0 -> {
+                    Text("AI BACKGROUND • EDGE REFINEMENT", color=Muted, fontSize=10.sp, fontWeight=FontWeight.Bold)
+                    Row(Modifier.horizontalScroll(androidx.compose.foundation.rememberScrollState()), horizontalArrangement=Arrangement.spacedBy(6.dp)) {
+                        listOf("White" to Pixel.WHITE, "Blue" to Pixel.rgb(35,91,170), "Red" to Pixel.rgb(190,35,48), "Grey" to Pixel.LTGRAY).forEach { (label, color) ->
+                            FilterChip(selected=background==color, onClick={background=color}, label={Text(label)})
+                        }
+                    }
+                    Text("Edge softness ${(maskSoftness*100).toInt()}%", color=Muted, fontSize=10.sp)
+                    Slider(value=maskSoftness,onValueChange={maskSoftness=it},valueRange=0.04f..0.42f)
+                    Text("Fine-detail preservation ${(maskDetail*100).toInt()}%", color=Muted, fontSize=10.sp)
+                    Slider(value=maskDetail,onValueChange={maskDetail=it},valueRange=0f..1f)
+                    Row(horizontalArrangement=Arrangement.spacedBy(5.dp),verticalAlignment=Alignment.CenterVertically) {
+                        Text("Mask smoothing",color=Muted,fontSize=10.sp)
+                        listOf(0,1,2,3).forEach { level -> FilterChip(selected=maskRadius==level,onClick={maskRadius=level},label={Text(listOf("Off","Low","Medium","High")[level],fontSize=9.sp)}) }
+                    }
+                    Button(
+                        onClick = {
+                            val source = editedBase ?: return@Button
+                            busy = true
+                            status = "AI is analysing your photograph…"
+                            val selectedBackground = background
+                            val selectedSoftness = maskSoftness
+                            val selectedDetail = maskDetail
+                            val selectedRadius = maskRadius
+                            val detector = Segmentation.getClient(
+                                SelfieSegmenterOptions.Builder().setDetectorMode(SelfieSegmenterOptions.SINGLE_IMAGE_MODE).build()
+                            )
+                            detector.process(InputImage.fromBitmap(source, 0))
+                                .addOnSuccessListener { mask ->
+                                    scope.launch {
+                                        try {
+                                            status = "Replacing background…"
+                                            val result = withContext(Dispatchers.Default) {
+                                                val mw = mask.width
+                                                val mh = mask.height
+                                                val buffer = mask.buffer.order(ByteOrder.nativeOrder()).apply { rewind() }
+                                                val rawMask = FloatArray(mw * mh) { buffer.getFloat().coerceIn(0f, 1f) }
+                                                val confidence = refineSegmentationMask(rawMask,mw,mh,selectedRadius,selectedDetail)
+                                                val input = IntArray(source.width * source.height)
+                                                source.getPixels(input, 0, source.width, 0, 0, source.width, source.height)
+                                                val output = IntArray(input.size)
+                                                val br = Pixel.red(selectedBackground)
+                                                val bg = Pixel.green(selectedBackground)
+                                                val bb = Pixel.blue(selectedBackground)
+                                                for (y in 0 until source.height) {
+                                                    val my = (y.toLong() * mh / source.height).toInt().coerceAtMost(mh - 1)
+                                                    for (x in 0 until source.width) {
+                                                        // Sample at pixel centres to avoid a half-pixel mask shift around the silhouette.
+                                                        val maskX = ((x + 0.5f) * mw / source.width) - 0.5f
+                                                        val maskY = ((y + 0.5f) * mh / source.height) - 0.5f
+                                                        val sampled = sampleMaskBilinear(confidence,mw,mh,maskX,maskY)
+                                                        val alpha = smoothAlpha(sampled,selectedSoftness)
+                                                        val p = input[y * source.width + x]
+                                                        output[y * source.width + x] = Pixel.rgb(
+                                                            (Pixel.red(p) * alpha + br * (1f-alpha)).toInt().coerceIn(0,255),
+                                                            (Pixel.green(p) * alpha + bg * (1f-alpha)).toInt().coerceIn(0,255),
+                                                            (Pixel.blue(p) * alpha + bb * (1f-alpha)).toInt().coerceIn(0,255)
+                                                        )
+                                                    }
+                                                }
+                                                Bitmap.createBitmap(source.width, source.height, Bitmap.Config.ARGB_8888).also {
+                                                    it.setPixels(output, 0, source.width, 0, 0, source.width, source.height)
+                                                }
                                             }
-                                        }
-                                        Bitmap.createBitmap(source.width, source.height, Bitmap.Config.ARGB_8888).also {
-                                            it.setPixels(output, 0, source.width, 0, 0, source.width, source.height)
+                                            editedBase = result
+                                            status = "Background replaced with refined edges. Preview updated."
+                                        } catch (e: Exception) {
+                                            status = "Background replacement failed: ${e.localizedMessage ?: "try another photo"}"
+                                        } finally {
+                                            busy = false
+                                            detector.close()
                                         }
                                     }
-                                    editedBase = result
-                                    status = "Background replaced with refined edges. Preview updated."
-                                } catch (e: Exception) {
-                                    status = "Background replacement failed: ${e.localizedMessage ?: "try another photo"}"
-                                } finally {
+                                }
+                                .addOnFailureListener { e ->
+                                    status = "AI could not process this photo: ${e.localizedMessage ?: "please try again"}"
                                     busy = false
                                     detector.close()
                                 }
-                            }
-                        }
-                        .addOnFailureListener { e ->
-                            status = "AI could not process this photo: ${e.localizedMessage ?: "please try again"}"
-                            busy = false
-                            detector.close()
-                        }
-                },
-                enabled=!busy && editedBase!=null,
-                modifier=Modifier.fillMaxWidth(),
-                colors=ButtonDefaults.buttonColors(containerColor=Color(0xFFE4B45D),contentColor=Color(0xFF101522))
-            ) { Text(if(busy) "PROCESSING…" else "REMOVE / REPLACE BACKGROUND WITH AI", fontWeight=FontWeight.Bold) }
-
-            Text("CROP FORMAT", color=Muted, fontSize=10.sp, fontWeight=FontWeight.Bold)
-            Row(Modifier.horizontalScroll(androidx.compose.foundation.rememberScrollState()), horizontalArrangement=Arrangement.spacedBy(5.dp)) {
-                listOf("Original","Portrait","Landscape","35 × 45 mm","Square","4 × 6","Custom").forEach { value ->
-                    FilterChip(selected=crop==value,onClick={recordUndo(); crop=value},label={Text(value,fontSize=10.sp)})
-                }
-            }
-            if (crop == "Custom") {
-                Text("CUSTOM CROP DIMENSIONS", color=Muted, fontSize=10.sp, fontWeight=FontWeight.Bold)
-                Row(horizontalArrangement=Arrangement.spacedBy(8.dp), verticalAlignment=Alignment.CenterVertically) {
-                    OutlinedTextField(value=customWidth, onValueChange={ customWidth=it.filter(Char::isDigit).take(6) }, label={Text("Width")}, modifier=Modifier.weight(1f), singleLine=true, keyboardOptions=KeyboardOptions(keyboardType=KeyboardType.Number), colors = studioOutlinedTextFieldColors())
-                    OutlinedTextField(value=customHeight, onValueChange={ customHeight=it.filter(Char::isDigit).take(6) }, label={Text("Height")}, modifier=Modifier.weight(1f), singleLine=true, keyboardOptions=KeyboardOptions(keyboardType=KeyboardType.Number), colors = studioOutlinedTextFieldColors())
-                }
-                Row(horizontalArrangement=Arrangement.spacedBy(5.dp)) {
-                    listOf("px","mm","cm","in").forEach { unit -> FilterChip(selected=customUnit==unit,onClick={customUnit=unit},label={Text(unit)}) }
-                }
-                if (customUnit != "px") {
-                    Text("Output resolution: " + outputDpi + " DPI", color=Muted, fontSize=10.sp)
-                    Row(horizontalArrangement=Arrangement.spacedBy(5.dp)) {
-                        listOf(150,300,600).forEach { dpi -> FilterChip(selected=outputDpi==dpi,onClick={outputDpi=dpi},label={Text("$dpi DPI")}) }
-                    }
-                }
-                Text("Preview follows the width-to-height ratio. Physical units convert to pixels using the selected DPI.", color=Muted, fontSize=10.sp)
-                Row(
-                    Modifier.fillMaxWidth(),
-                    horizontalArrangement=Arrangement.spacedBy(8.dp),
-                    verticalAlignment=Alignment.CenterVertically
-                ) {
-                    OutlinedButton(
-                        onClick = {
-                            val valid = customWidth.toFloatOrNull()?.let { it > 0f } == true &&
-                                customHeight.toFloatOrNull()?.let { it > 0f } == true
-                            if (valid) {
-                                editorDefaults.edit()
-                                    .putString("width", customWidth)
-                                    .putString("height", customHeight)
-                                    .putString("unit", customUnit)
-                                    .putInt("dpi", outputDpi)
-                                    .putBoolean("use_custom_dimensions", true)
-                                    .apply()
-                                customDefaultSaved = true
-                                status = "Default dimensions saved. They will be applied automatically to future editor photos."
-                            } else {
-                                status = "Enter valid width and height before saving defaults."
-                            }
                         },
-                        modifier = Modifier.weight(1f)
-                    ) { Text(if (customDefaultSaved) "Update saved default" else "Save as default") }
-                    if (customDefaultSaved) {
-                        TextButton(onClick = {
-                            editorDefaults.edit().putBoolean("use_custom_dimensions", false).apply()
-                            customDefaultSaved = false
-                            status = "Automatic custom dimensions turned off. Saved values are retained."
-                        }) { Text("Turn off") }
+                        enabled=!busy && editedBase!=null,
+                        modifier=Modifier.fillMaxWidth(),
+                        colors=ButtonDefaults.buttonColors(containerColor=Color(0xFFE4B45D),contentColor=Color(0xFF101522))
+                    ) { Text(if(busy) "PROCESSING…" else "REMOVE / REPLACE BACKGROUND WITH AI", fontWeight=FontWeight.Bold) }
+                    }
+                    1 -> {
+                    Text("CROP FORMAT", color=Muted, fontSize=10.sp, fontWeight=FontWeight.Bold)
+                    Row(Modifier.horizontalScroll(androidx.compose.foundation.rememberScrollState()), horizontalArrangement=Arrangement.spacedBy(5.dp)) {
+                        listOf("Original","Portrait","Landscape","35 × 45 mm","Square","4 × 6","Custom").forEach { value ->
+                            FilterChip(selected=crop==value,onClick={recordUndo(); crop=value},label={Text(value,fontSize=10.sp)})
+                        }
+                    }
+                    if (crop == "Custom") {
+                        Text("CUSTOM CROP DIMENSIONS", color=Muted, fontSize=10.sp, fontWeight=FontWeight.Bold)
+                        Row(horizontalArrangement=Arrangement.spacedBy(8.dp), verticalAlignment=Alignment.CenterVertically) {
+                            OutlinedTextField(value=customWidth, onValueChange={ customWidth=it.filter(Char::isDigit).take(6) }, label={Text("Width")}, modifier=Modifier.weight(1f), singleLine=true, keyboardOptions=KeyboardOptions(keyboardType=KeyboardType.Number), colors = studioOutlinedTextFieldColors())
+                            OutlinedTextField(value=customHeight, onValueChange={ customHeight=it.filter(Char::isDigit).take(6) }, label={Text("Height")}, modifier=Modifier.weight(1f), singleLine=true, keyboardOptions=KeyboardOptions(keyboardType=KeyboardType.Number), colors = studioOutlinedTextFieldColors())
+                        }
+                        Row(horizontalArrangement=Arrangement.spacedBy(5.dp)) {
+                            listOf("px","mm","cm","in").forEach { unit -> FilterChip(selected=customUnit==unit,onClick={customUnit=unit},label={Text(unit)}) }
+                        }
+                        if (customUnit != "px") {
+                            Text("Output resolution: " + outputDpi + " DPI", color=Muted, fontSize=10.sp)
+                            Row(horizontalArrangement=Arrangement.spacedBy(5.dp)) {
+                                listOf(150,300,600).forEach { dpi -> FilterChip(selected=outputDpi==dpi,onClick={outputDpi=dpi},label={Text("$dpi DPI")}) }
+                            }
+                        }
+                        Text("Preview follows the width-to-height ratio. Physical units convert to pixels using the selected DPI.", color=Muted, fontSize=10.sp)
+                        Row(
+                            Modifier.fillMaxWidth(),
+                            horizontalArrangement=Arrangement.spacedBy(8.dp),
+                            verticalAlignment=Alignment.CenterVertically
+                        ) {
+                            OutlinedButton(
+                                onClick = {
+                                    val valid = customWidth.toFloatOrNull()?.let { it > 0f } == true &&
+                                        customHeight.toFloatOrNull()?.let { it > 0f } == true
+                                    if (valid) {
+                                        editorDefaults.edit()
+                                            .putString("width", customWidth)
+                                            .putString("height", customHeight)
+                                            .putString("unit", customUnit)
+                                            .putInt("dpi", outputDpi)
+                                            .putBoolean("use_custom_dimensions", true)
+                                            .apply()
+                                        customDefaultSaved = true
+                                        status = "Default dimensions saved. They will be applied automatically to future editor photos."
+                                    } else {
+                                        status = "Enter valid width and height before saving defaults."
+                                    }
+                                },
+                                modifier = Modifier.weight(1f)
+                            ) { Text(if (customDefaultSaved) "Update saved default" else "Save as default") }
+                            if (customDefaultSaved) {
+                                TextButton(onClick = {
+                                    editorDefaults.edit().putBoolean("use_custom_dimensions", false).apply()
+                                    customDefaultSaved = false
+                                    status = "Automatic custom dimensions turned off. Saved values are retained."
+                                }) { Text("Turn off") }
+                            }
+                        }
+                        if (customDefaultSaved) {
+                            Text("Automatic default is ON: " + customWidth + " × " + customHeight + " " + customUnit + (if (customUnit == "px") "" else " • " + outputDpi + " DPI"), color=Color(0xFF64D6A0), fontSize=10.sp)
+                        }
+                    }
+                    }
+                    2 -> {
+                    Text("Brightness ${(brightness*100).toInt()}%",color=Muted,fontSize=10.sp)
+                    Slider(value=brightness,onValueChange={recordUndo(); brightness=it},valueRange=-.35f.. .35f)
+                    Text("Contrast ${(contrast*100).toInt()}%",color=Muted,fontSize=10.sp)
+                    Slider(value=contrast,onValueChange={recordUndo(); contrast=it},valueRange=.5f..1.8f)
+                    Text("Saturation ${(saturation*100).toInt()}%",color=Muted,fontSize=10.sp)
+                    Slider(value=saturation,onValueChange={recordUndo(); saturation=it},valueRange=0f..2f)
+                    }
+                    else -> {
+                    Text("TRANSFORM", color=Muted, fontSize=10.sp, fontWeight=FontWeight.Bold)
+                    Row(horizontalArrangement=Arrangement.spacedBy(6.dp), modifier=Modifier.fillMaxWidth()) {
+                        OutlinedButton(onClick={ recordUndo(); rotation=(rotation+270)%360 }, modifier=Modifier.weight(1f)) { Text("↶ 90°") }
+                        OutlinedButton(onClick={ recordUndo(); rotation=(rotation+90)%360 }, modifier=Modifier.weight(1f)) { Text("90° ↷") }
+                    }
+                    Row(horizontalArrangement=Arrangement.spacedBy(6.dp), modifier=Modifier.fillMaxWidth()) {
+                        FilterChip(selected=flipHorizontal, onClick={recordUndo(); flipHorizontal=!flipHorizontal}, label={Text("Mirror ↔")})
+                        FilterChip(selected=flipVertical, onClick={recordUndo(); flipVertical=!flipVertical}, label={Text("Flip ↕")})
+                        Text("Rotation: $rotation°", color=Muted, fontSize=10.sp, modifier=Modifier.align(Alignment.CenterVertically))
+                    }
+                    Text("MANUAL PERSPECTIVE", color=Muted, fontSize=10.sp, fontWeight=FontWeight.Bold)
+                    Row(verticalAlignment=Alignment.CenterVertically, horizontalArrangement=Arrangement.spacedBy(8.dp)) {
+                        FilterChip(selected=perspectiveEnabled, onClick={recordUndo(); perspectiveEnabled = !perspectiveEnabled}, label={Text(if (perspectiveEnabled) "Adjust corners: ON" else "Adjust corners: OFF")})
+                        Text("Drag the four gold corner handles to straighten a tilted photo.", color=Muted, fontSize=10.sp, modifier=Modifier.weight(1f))
+                    }
+                    if (perspectiveEnabled) {
+                        Row(horizontalArrangement=Arrangement.spacedBy(8.dp)) {
+                            OutlinedButton(onClick={recordUndo(); perspectiveCorners=listOf(Offset(0f,0f),Offset(1f,0f),Offset(1f,1f),Offset(0f,1f))}) { Text("Reset corners") }
+                            Text("The selected area is corrected to a straight rectangle.", color=Muted, fontSize=10.sp, modifier=Modifier.weight(1f))
+                        }
+                    }
                     }
                 }
-                if (customDefaultSaved) {
-                    Text("Automatic default is ON: " + customWidth + " × " + customHeight + " " + customUnit + (if (customUnit == "px") "" else " • " + outputDpi + " DPI"), color=Color(0xFF64D6A0), fontSize=10.sp)
-                }
             }
-            Text("Brightness ${(brightness*100).toInt()}%",color=Muted,fontSize=10.sp)
-            Slider(value=brightness,onValueChange={recordUndo(); brightness=it},valueRange=-.35f.. .35f)
-            Text("Contrast ${(contrast*100).toInt()}%",color=Muted,fontSize=10.sp)
-            Slider(value=contrast,onValueChange={recordUndo(); contrast=it},valueRange=.5f..1.8f)
-            Text("Saturation ${(saturation*100).toInt()}%",color=Muted,fontSize=10.sp)
-            Slider(value=saturation,onValueChange={recordUndo(); saturation=it},valueRange=0f..2f)
-            Text(status,color=Muted,fontSize=10.sp)
+            Text(status,color=Muted,fontSize=10.sp, maxLines=2)
             Row(horizontalArrangement=Arrangement.spacedBy(7.dp)) {
                 OutlinedButton(onClick=onRetake,enabled=!busy,modifier=Modifier.weight(1f)) { Text("Retake") }
                 OutlinedButton(onClick={
@@ -748,7 +756,7 @@ internal fun PhotoEditorScreen(photoPath: String, onRetake: () -> Unit, onSaved:
                     enabled = !busy && editedBase != null,
                     modifier = Modifier.weight(1f),
                     colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFE4B45D), contentColor = Color(0xFF101522))
-                ) { Text(if (busy) "Preparing…" else "Review & Save", fontWeight = FontWeight.Bold) }
+                ) { Text(if (busy) "Preparing…" else "Save / Share", fontWeight = FontWeight.Bold) }
             }
         }
     }

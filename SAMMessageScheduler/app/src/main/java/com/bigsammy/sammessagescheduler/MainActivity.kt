@@ -48,6 +48,15 @@ import com.bigsammy.sammessagescheduler.scheduling.MessageScheduler
 import com.bigsammy.sammessagescheduler.scheduling.LocationGeofenceManager
 import com.bigsammy.sammessagescheduler.scheduling.AnniversaryReminderScheduler
 import com.bigsammy.sammessagescheduler.security.BackupCrypto
+import com.bigsammy.sammessagescheduler.ui.*
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.graphics.luminance
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -553,18 +562,21 @@ class MainActivity : FragmentActivity() {
         setContent {
             val systemDark = androidx.compose.foundation.isSystemInDarkTheme()
             val useDark = when (themeMode) { "Dark" -> true; "Light" -> false; else -> systemDark }
-            val appColors = if (useDark) darkColorScheme(
-                primary = Color(0xFFD0BCFF), onPrimary = Color(0xFF381E72),
-                secondary = Color(0xFFCCC2DC), background = Color(0xFF101218),
-                surface = Color(0xFF191C24), surfaceVariant = Color(0xFF292D38),
-                onSurface = Color(0xFFE5E1EA), onBackground = Color(0xFFE5E1EA),
-                onSurfaceVariant = Color(0xFFC4C6D0), outline = Color(0xFF8E9099)
-            ) else lightColorScheme(primary = Purple, background = Color(0xFFF5F3FA), surface = Color.White)
+            val appColors = if (useDark) SamDarkColors else SamLightColors
             MaterialTheme(colorScheme = appColors) {
                 val messages by dao.observeAll().collectAsStateWithLifecycle(initialValue = emptyList())
                 val attempts by AppDatabase.get(this@MainActivity).messageAttemptDao().observeAll().collectAsStateWithLifecycle(initialValue = emptyList())
                 val contacts by AppDatabase.get(this@MainActivity).contactDao().observeAll().collectAsStateWithLifecycle(initialValue = emptyList())
+                val contactNames = remember(contacts, phoneContacts) {
+                    (phoneContacts + contacts).filter { phoneKey(it.phone).length >= 7 }.associate { phoneKey(it.phone) to it.name }
+                }
+                CompositionLocalProvider(LocalContactNames provides contactNames) {
                 SchedulerScreen(
+                    themeMode = themeMode,
+                    onThemeChange = { mode ->
+                        themeMode = mode
+                        getSharedPreferences("sam_appearance", android.content.Context.MODE_PRIVATE).edit().putString("theme_mode", mode).apply()
+                    },
                     contacts = contacts,
                     phoneContacts = phoneContacts,
                     contactsPermissionGranted = contactsPermissionGranted,
@@ -746,6 +758,7 @@ class MainActivity : FragmentActivity() {
                         } else scheduleAgain()
                     }
                 )
+                }
             }
         }
     }
@@ -814,7 +827,9 @@ private fun SchedulerScreen(
     remove: (Long) -> Unit,
     complete: (MessageEntity) -> Unit,
     togglePause: (MessageEntity) -> Unit,
-    retry: (MessageEntity) -> Unit
+    retry: (MessageEntity) -> Unit,
+    themeMode: String = "System",
+    onThemeChange: (String) -> Unit = {}
 ) {
     val context = androidx.compose.ui.platform.LocalContext.current
     var page by remember { mutableStateOf("Home") }
@@ -825,21 +840,45 @@ private fun SchedulerScreen(
     var pendingRemoval by remember { mutableStateOf<MessageEntity?>(null) }
     var searchText by remember { mutableStateOf("") }
     var statusFilter by remember { mutableStateOf("ALL") }
+    var composerChannel by remember { mutableStateOf("SMS") }
+    var sortNewestFirst by remember { mutableStateOf(false) }
+    val snackbarHostState = remember { SnackbarHostState() }
+    val uiScope = rememberCoroutineScope()
+    val isDark = MaterialTheme.colorScheme.background.luminance() < 0.5f
+    fun openComposer(channel: String = "SMS") { composerChannel = channel; editMessage = null; duplicateMode = false; showComposer = true }
+    fun notify(text: String) { uiScope.launch { snackbarHostState.currentSnackbarData?.dismiss(); snackbarHostState.showSnackbar(text) } }
 
     Scaffold(
         containerColor = MaterialTheme.colorScheme.background,
+        snackbarHost = { SnackbarHost(snackbarHostState) },
         topBar = {
             Row(
-                modifier = Modifier.fillMaxWidth().background(MaterialTheme.colorScheme.surface).windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Top)).padding(horizontal = 18.dp, vertical = 14.dp),
+                modifier = Modifier.fillMaxWidth().background(MaterialTheme.colorScheme.surface).windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Top)).padding(start = 16.dp, end = 8.dp, top = 10.dp, bottom = 10.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Icon(Icons.Default.Forum, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(30.dp))
-                Spacer(Modifier.width(10.dp))
+                Box(
+                    Modifier.size(38.dp).clip(RoundedCornerShape(12.dp)).background(samHeroBrush(isDark)),
+                    contentAlignment = Alignment.Center
+                ) { Icon(Icons.Default.ScheduleSend, contentDescription = null, tint = Color.White, modifier = Modifier.size(21.dp)) }
+                Spacer(Modifier.width(12.dp))
                 Column(Modifier.weight(1f)) {
-                    Text("SAM Message Scheduler", fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface, fontSize = 17.sp)
-                    Text("Plan it. Remember it. Send it.", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Text("SAM Message Scheduler", fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface, fontSize = 17.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    Text(
+                        when (page) { "Home" -> "Dashboard"; "Scheduled" -> "All messages"; "Calendar" -> "Agenda"; "Social" -> "Social media centre"; "Contacts" -> "Contact centre"; else -> "Settings & tools" },
+                        fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
                 }
-                Icon(Icons.Default.Schedule, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
+                val attention = messages.count { it.needsAttention() }
+                if (attention > 0) {
+                    BadgedBox(badge = { Badge { Text("$attention") } }, modifier = Modifier.padding(end = 8.dp)) {
+                        IconButton(onClick = { page = "Scheduled"; statusFilter = "ATTENTION" }) {
+                            Icon(Icons.Default.NotificationsActive, contentDescription = "Messages needing attention", tint = SamColors.Amber)
+                        }
+                    }
+                }
+                IconButton(onClick = { page = "Settings" }) {
+                    Icon(Icons.Default.Settings, contentDescription = "Settings", tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
             }
         },
         bottomBar = {
@@ -850,17 +889,21 @@ private fun SchedulerScreen(
                 windowInsets = NavigationBarDefaults.windowInsets
             ) {
                 val primaryTabs = listOf(
-                    "Home" to Icons.Default.Home,
-                    "Scheduled" to Icons.Default.Schedule,
-                    "Calendar" to Icons.Default.CalendarMonth,
-                    "Social" to Icons.Default.Campaign
+                    Triple("Home", "Home", Icons.Default.SpaceDashboard),
+                    Triple("Scheduled", "Messages", Icons.Default.ScheduleSend),
+                    Triple("Calendar", "Agenda", Icons.Default.CalendarMonth),
+                    Triple("Social", "Social", Icons.Default.Campaign)
                 )
-                primaryTabs.forEach { (name, icon) ->
+                primaryTabs.forEach { (name, label, icon) ->
                     NavigationBarItem(
                         selected = page == name,
                         onClick = { page = name; showMoreMenu = false },
-                        icon = { Icon(icon, contentDescription = name, modifier = Modifier.size(21.dp)) },
-                        label = { Text(name, fontSize = 11.sp, maxLines = 1, softWrap = false) },
+                        icon = {
+                            if (name == "Scheduled" && messages.any { it.needsAttention() }) {
+                                BadgedBox(badge = { Badge() }) { Icon(icon, contentDescription = label, modifier = Modifier.size(22.dp)) }
+                            } else Icon(icon, contentDescription = label, modifier = Modifier.size(22.dp))
+                        },
+                        label = { Text(label, fontSize = 11.sp, maxLines = 1, softWrap = false) },
                         alwaysShowLabel = true
                     )
                 }
@@ -889,215 +932,330 @@ private fun SchedulerScreen(
             }
         },
         floatingActionButton = {
-            if (page != "Settings") {
-                FloatingActionButton(
-                    onClick = { showComposer = true },
-                    containerColor = MaterialTheme.colorScheme.primary
-                ) {
-                    Icon(Icons.Default.Add, contentDescription = "Add message", tint = Color.White)
-                }
+            if (page != "Settings" && page != "Contacts") {
+                ExtendedFloatingActionButton(
+                    onClick = { openComposer(if (page == "Social") "Social" else "SMS") },
+                    containerColor = MaterialTheme.colorScheme.primary,
+                    contentColor = MaterialTheme.colorScheme.onPrimary,
+                    icon = { Icon(Icons.Default.Edit, contentDescription = null) },
+                    text = { Text(if (page == "Social") "New post" else "New message", fontWeight = FontWeight.SemiBold) }
+                )
             }
         }
     ) { padding ->
         when (page) {
             "Home" -> {
+                val now = System.currentTimeMillis()
+                val upcoming = messages.filter { it.status == "SCHEDULED" }.sortedBy { if (it.triggerType == "LOCATION") Long.MAX_VALUE else it.scheduledAt }
+                val nextTimed = upcoming.firstOrNull { it.triggerType == "TIME" && it.scheduledAt >= now - 60_000L }
+                val todayCount = upcoming.count { it.triggerType == "TIME" && dayHeading(it.scheduledAt) == "Today" }
+                val attentionCount = messages.count { it.needsAttention() }
+                val sentCount = messages.count { (it.status == "SENT" || it.status == "COMPLETED") && it.deliveryStatus !in listOf("SEND_FAILED", "DELIVERY_FAILED") }
+                val deliveredCount = messages.count { it.deliveryStatus == "DELIVERED" }
                 Column(
                     modifier = Modifier.padding(padding).fillMaxSize()
                         .verticalScroll(rememberScrollState())
-                        .padding(18.dp)
+                        .padding(horizontal = 16.dp, vertical = 12.dp)
                 ) {
-                    Text("Good day 👋", fontSize = 25.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
-                    Text("Your messages, organised and on time.", color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    Row(
-                        modifier = Modifier.fillMaxWidth().padding(vertical = 18.dp),
-                        horizontalArrangement = Arrangement.spacedBy(12.dp)
+                    // Hero
+                    Box(
+                        Modifier.fillMaxWidth().clip(RoundedCornerShape(24.dp)).background(samHeroBrush(isDark)).padding(20.dp)
                     ) {
-                        Stat("Scheduled", messages.count { it.status == "SCHEDULED" }.toString(), Modifier.weight(1f))
-                        Stat("Completed", messages.count { it.status == "COMPLETED" || it.status == "SENT" }.toString(), Modifier.weight(1f))
+                        Column {
+                            Text("${greetingForNow()} 👋", fontSize = 22.sp, fontWeight = FontWeight.Bold, color = Color.White)
+                            Text(
+                                when {
+                                    upcoming.isEmpty() -> "Nothing is queued. Schedule your first message."
+                                    todayCount > 0 -> "$todayCount message(s) going out today • ${upcoming.size} scheduled in total"
+                                    else -> "${upcoming.size} message(s) scheduled and ready"
+                                },
+                                color = Color.White.copy(alpha = 0.88f), fontSize = 13.sp, modifier = Modifier.padding(top = 4.dp)
+                            )
+                            if (nextTimed != null) {
+                                Spacer(Modifier.height(14.dp))
+                                Row(
+                                    Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(Color.White.copy(alpha = 0.16f))
+                                        .clickable { editMessage = nextTimed; duplicateMode = false; showComposer = true }.padding(12.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Icon(channelIcon(nextTimed.channel), contentDescription = null, tint = Color.White, modifier = Modifier.size(22.dp))
+                                    Spacer(Modifier.width(10.dp))
+                                    Column(Modifier.weight(1f)) {
+                                        Text("NEXT UP • ${countdown(nextTimed.scheduledAt).uppercase()}", color = Color.White.copy(alpha = 0.8f), fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                                        Text(nextTimed.recipient, color = Color.White, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                        Text(friendlyDateTime(nextTimed.scheduledAt) + " • " + nextTimed.channel, color = Color.White.copy(alpha = 0.85f), fontSize = 12.sp)
+                                    }
+                                    Icon(Icons.Default.ChevronRight, contentDescription = null, tint = Color.White)
+                                }
+                            }
+                            Spacer(Modifier.height(14.dp))
+                            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                Button(
+                                    onClick = { openComposer("SMS") },
+                                    colors = ButtonDefaults.buttonColors(containerColor = Color.White, contentColor = SamColors.Indigo),
+                                    contentPadding = PaddingValues(horizontal = 14.dp, vertical = 8.dp)
+                                ) { Icon(Icons.Default.Sms, null, Modifier.size(18.dp)); Spacer(Modifier.width(6.dp)); Text("SMS", fontWeight = FontWeight.SemiBold) }
+                                OutlinedButton(
+                                    onClick = { openComposer("WhatsApp") },
+                                    border = BorderStroke(1.dp, Color.White.copy(alpha = 0.7f)),
+                                    colors = ButtonDefaults.outlinedButtonColors(contentColor = Color.White),
+                                    contentPadding = PaddingValues(horizontal = 14.dp, vertical = 8.dp)
+                                ) { Icon(Icons.Default.Chat, null, Modifier.size(18.dp)); Spacer(Modifier.width(6.dp)); Text("WhatsApp") }
+                            }
+                        }
                     }
-                    val attentionCount = messages.count { it.status in listOf("FAILED", "PERMISSION_REQUIRED", "AWAITING_USER") || it.deliveryStatus in listOf("SEND_FAILED", "DELIVERY_FAILED") }
+
                     if (attentionCount > 0) {
                         Card(
-                            modifier = Modifier.fillMaxWidth().padding(bottom = 12.dp),
+                            modifier = Modifier.fillMaxWidth().padding(top = 12.dp).clickable { page = "Scheduled"; statusFilter = "ATTENTION" },
+                            shape = RoundedCornerShape(18.dp),
                             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.errorContainer)
                         ) {
                             Row(Modifier.padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
                                 Icon(Icons.Default.Warning, contentDescription = null, tint = MaterialTheme.colorScheme.error)
                                 Spacer(Modifier.width(10.dp))
                                 Column(Modifier.weight(1f)) {
-                                    Text("$attentionCount message(s) need attention", fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onSurface)
-                                    Text("Review permission issues, failed actions or WhatsApp messages awaiting you.", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                    Text("$attentionCount message(s) need attention", fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onErrorContainer)
+                                    Text("Failed sends, missing permissions or WhatsApp chats waiting for your tap.", fontSize = 12.sp, color = MaterialTheme.colorScheme.onErrorContainer.copy(alpha = 0.8f))
                                 }
-                                TextButton(onClick = { page = "Scheduled"; statusFilter = "ATTENTION" }) { Text("Review") }
+                                Text("Review", fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.error)
                             }
                         }
                     }
-                    Card(
-                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer),
-                        shape = RoundedCornerShape(22.dp)
-                    ) {
-                        Column(Modifier.padding(20.dp)) {
-                            Text("Make every message count", fontSize = 19.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onPrimaryContainer)
-                            Text(
-                                "Prepare an SMS or WhatsApp reminder in seconds.",
-                                color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.82f),
-                                modifier = Modifier.padding(top = 6.dp)
+
+                    SectionHeader("Overview")
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                        StatTile("Scheduled", upcoming.size.toString(), Icons.Default.Schedule, SamColors.Indigo, Modifier.weight(1f)) { page = "Scheduled"; statusFilter = "SCHEDULED" }
+                        StatTile("Sent / done", sentCount.toString(), Icons.Default.Send, SamColors.Teal, Modifier.weight(1f)) { page = "Scheduled"; statusFilter = "SENT" }
+                    }
+                    Spacer(Modifier.height(10.dp))
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                        StatTile("SMS delivered", deliveredCount.toString(), Icons.Default.DoneAll, SamColors.Green, Modifier.weight(1f)) { page = "Scheduled"; statusFilter = "DELIVERED" }
+                        StatTile("Need attention", attentionCount.toString(), Icons.Default.ErrorOutline, if (attentionCount > 0) SamColors.Red else SamColors.Slate, Modifier.weight(1f)) { page = "Scheduled"; statusFilter = "ATTENTION" }
+                    }
+
+                    SectionHeader("Quick actions")
+                    Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        listOf(
+                            Triple("Bulk message", Icons.Default.Groups) { page = "Contacts" },
+                            Triple("Social post", Icons.Default.Campaign) { openComposer("Social") },
+                            Triple("Import CSV", Icons.Default.FileUpload, onImportCsv),
+                            Triple("Export CSV", Icons.Default.FileDownload, onExportCsv),
+                            Triple("Backup", Icons.Default.CloudUpload) { page = "Settings" }
+                        ).forEach { (label, icon, action) ->
+                            AssistChip(
+                                onClick = action,
+                                label = { Text(label) },
+                                leadingIcon = { Icon(icon, contentDescription = null, modifier = Modifier.size(18.dp), tint = MaterialTheme.colorScheme.primary) },
+                                shape = RoundedCornerShape(14.dp)
                             )
-                            Button(
-                                onClick = { showComposer = true },
-                                modifier = Modifier.padding(top = 14.dp),
-                                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.surface, contentColor = MaterialTheme.colorScheme.onSurface)
-                            ) {
-                                Icon(Icons.Default.Add, contentDescription = null)
-                                Text(" Schedule message")
+                        }
+                    }
+
+                    SectionHeader("Up next", actionLabel = if (upcoming.size > 5) "See all ${upcoming.size}" else null, onAction = { page = "Scheduled"; statusFilter = "SCHEDULED" })
+                    if (upcoming.isEmpty()) {
+                        SamCard { EmptyState(Icons.Default.ScheduleSend, "No upcoming messages", "Tap New message to plan an SMS, WhatsApp reminder or social post.", actionLabel = "New message", onAction = { openComposer("SMS") }) }
+                    } else {
+                        SamCard {
+                            upcoming.take(5).forEachIndexed { index, message ->
+                                if (index > 0) HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant, modifier = Modifier.padding(vertical = 4.dp))
+                                MessageCard(message, onClick = { editMessage = message; duplicateMode = false; showComposer = true })
                             }
                         }
                     }
 
                     val totalCount = messages.size
-                    val completedCount = messages.count { it.status == "COMPLETED" || (it.status == "SENT" && it.deliveryStatus !in listOf("SEND_FAILED", "DELIVERY_FAILED")) }
-                    val failedCount = messages.count { it.status in listOf("FAILED", "PERMISSION_REQUIRED") || it.deliveryStatus in listOf("SEND_FAILED", "DELIVERY_FAILED") }
-                    val deliveredCount = messages.count { it.deliveryStatus == "DELIVERED" }
-                    val smsCount = messages.count { it.channel == "SMS" }
-                    val whatsappCount = messages.count { it.channel == "WhatsApp" }
-                    val recentCount = messages.count { it.createdAt >= System.currentTimeMillis() - 7L * 24 * 60 * 60 * 1000 }
-                    Text("MESSAGE REPORTS & ANALYTICS", fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface, modifier = Modifier.padding(top = 22.dp, bottom = 8.dp))
-                    Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface), modifier = Modifier.fillMaxWidth()) {
-                        Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                            Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
-                                Stat("Total messages", totalCount.toString(), Modifier.weight(1f))
-                                Stat("Last 7 days", recentCount.toString(), Modifier.weight(1f))
+                    val processedCount = messages.count { it.status == "COMPLETED" || (it.status == "SENT" && it.deliveryStatus !in listOf("SEND_FAILED", "DELIVERY_FAILED")) }
+                    val recentCount = messages.count { it.createdAt >= now - 7L * 24 * 60 * 60 * 1000 }
+                    SectionHeader("Insights")
+                    SamCard {
+                        Row(Modifier.fillMaxWidth()) {
+                            Column(Modifier.weight(1f)) {
+                                Text("$totalCount", fontSize = 22.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
+                                Text("Total messages", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                             }
-                            Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
-                                Stat("Failed", failedCount.toString(), Modifier.weight(1f))
-                                Stat("Delivered", deliveredCount.toString(), Modifier.weight(1f))
+                            Column(Modifier.weight(1f)) {
+                                Text("$recentCount", fontSize = 22.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
+                                Text("Created last 7 days", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                             }
-                            Text("Processing completion", fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onSurface)
-                            val completionRate = if (totalCount == 0) 0f else completedCount.toFloat() / totalCount.toFloat()
-                            LinearProgressIndicator(progress = completionRate, modifier = Modifier.fillMaxWidth(), color = MaterialTheme.colorScheme.primary)
-                            Text("${(completionRate * 100).toInt()}% processed • $completedCount of $totalCount messages (excludes failed delivery records)", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                            Text("Channel distribution", fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onSurface)
-                            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) { Text("SMS", color = MaterialTheme.colorScheme.onSurfaceVariant); Text("$smsCount", fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onSurface) }
-                            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) { Text("WhatsApp", color = MaterialTheme.colorScheme.onSurfaceVariant); Text("$whatsappCount", fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onSurface) }
-                            Text("Delivery reports depend on your mobile network. A missing carrier delivery report does not necessarily mean a message failed.", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         }
+                        Spacer(Modifier.height(14.dp))
+                        val completionRate = if (totalCount == 0) 0f else processedCount.toFloat() / totalCount.toFloat()
+                        Row(Modifier.fillMaxWidth()) {
+                            Text("Processed", fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onSurface, modifier = Modifier.weight(1f))
+                            Text("${(completionRate * 100).toInt()}%  •  $processedCount of $totalCount", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
+                        Spacer(Modifier.height(6.dp))
+                        LinearProgressIndicator(
+                            progress = { completionRate },
+                            modifier = Modifier.fillMaxWidth().height(8.dp).clip(RoundedCornerShape(50)),
+                            color = SamColors.Teal,
+                            trackColor = MaterialTheme.colorScheme.surfaceVariant
+                        )
+                        Spacer(Modifier.height(14.dp))
+                        Text("Channel mix", fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onSurface)
+                        Spacer(Modifier.height(8.dp))
+                        Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                            ShareBar("SMS", messages.count { it.channel == "SMS" }, totalCount, SamColors.Indigo)
+                            ShareBar("WhatsApp", messages.count { it.channel == "WhatsApp" }, totalCount, SamColors.WhatsApp)
+                            ShareBar("Social media", messages.count { it.channel == "Social" }, totalCount, SamColors.Social)
+                        }
+                        Text("Delivery reports depend on your mobile network. A missing carrier report does not necessarily mean a message failed.", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(top = 12.dp))
                     }
 
-                    Text("RECENT SMS ATTEMPTS", fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface, modifier = Modifier.padding(top = 20.dp, bottom = 8.dp))
-                    Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface), modifier = Modifier.fillMaxWidth()) {
-                        Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                            if (attempts.isEmpty()) {
-                                Text("No SMS attempts have been recorded yet. Submission and carrier callback events will appear here.", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                            } else {
-                                attempts.take(8).forEach { attempt ->
-                                    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
-                                        Column(Modifier.weight(1f)) {
-                                            Text(attempt.recipient, fontWeight = FontWeight.SemiBold, fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurface)
-                                            val eventLabel = attempt.eventType.replace("_", " ").lowercase().replaceFirstChar { it.uppercase() }
-                                            val partLabel = if (attempt.partIndex >= 0) " • part ${attempt.partIndex + 1}/${attempt.partCount}" else ""
-                                            Text("$eventLabel$partLabel • " + SimpleDateFormat("dd MMM, HH:mm", Locale.getDefault()).format(Date(attempt.occurredAt)), fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                                            if (attempt.detail.isNotBlank()) Text(attempt.detail, fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 2)
-                                        }
-                                        Text(attempt.outcome.replace("_", " "), fontSize = 10.sp, fontWeight = FontWeight.Bold, color = if (attempt.outcome == "FAILED") MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary)
+                    SectionHeader("Recent SMS activity")
+                    SamCard {
+                        if (attempts.isEmpty()) {
+                            Text("No SMS attempts recorded yet. Submission and carrier delivery events will appear here.", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        } else {
+                            val recentAttempts = attempts.take(8)
+                            recentAttempts.forEachIndexed { index, attempt ->
+                                if (index > 0) HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant, modifier = Modifier.padding(vertical = 6.dp))
+                                val ok = attempt.outcome != "FAILED"
+                                Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
+                                    Icon(if (ok) Icons.Default.CheckCircle else Icons.Default.Cancel, contentDescription = null, tint = if (ok) SamColors.Green else SamColors.Red, modifier = Modifier.size(18.dp))
+                                    Spacer(Modifier.width(10.dp))
+                                    Column(Modifier.weight(1f)) {
+                                        Text(attempt.recipient, fontWeight = FontWeight.SemiBold, fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurface)
+                                        val eventLabel = attempt.eventType.replace("_", " ").lowercase().replaceFirstChar { it.uppercase() }
+                                        val partLabel = if (attempt.partIndex >= 0) " • part ${attempt.partIndex + 1}/${attempt.partCount}" else ""
+                                        Text("$eventLabel$partLabel • ${friendlyDateTime(attempt.occurredAt)}", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                        if (attempt.detail.isNotBlank()) Text(attempt.detail, fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 2)
                                     }
-                                    if (attempt.id != attempts.take(8).last().id) HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+                                    StatusPill(attempt.outcome.replace("_", " ").lowercase().replaceFirstChar { it.uppercase() }, if (ok) SamColors.Teal else SamColors.Red)
                                 }
                             }
                         }
                     }
-
-                    Text(
-                        "UPCOMING MESSAGES",
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.onSurface,
-                        modifier = Modifier.padding(top = 22.dp, bottom = 8.dp)
-                    )
-                    messages.filter { it.status == "SCHEDULED" }
-                        .sortedBy { it.scheduledAt }
-                        .take(5)
-                        .forEach { MessageCard(it) }
+                    Spacer(Modifier.height(88.dp))
                 }
             }
 
             "Scheduled" -> {
+                val filters = listOf(
+                    "ALL" to "All", "SCHEDULED" to "Upcoming", "ATTENTION" to "Needs attention", "PAUSED" to "Paused",
+                    "SENT" to "Sent", "DELIVERED" to "Delivered", "FAILED" to "Failed", "DELIVERY_ISSUES" to "SMS issues", "COMPLETED" to "Done"
+                )
+                fun matchesFilter(message: MessageEntity, key: String): Boolean = when (key) {
+                    "ALL" -> true
+                    "FAILED" -> message.isFailed()
+                    "SENT" -> message.status == "SENT" && message.deliveryStatus !in listOf("SEND_FAILED", "DELIVERY_FAILED")
+                    "ATTENTION" -> message.needsAttention()
+                    "DELIVERED" -> message.deliveryStatus == "DELIVERED"
+                    "DELIVERY_ISSUES" -> message.deliveryStatus in listOf("SEND_FAILED", "DELIVERY_FAILED")
+                    else -> message.status == key
+                }
                 val visibleMessages = messages.filter { message ->
-                    (statusFilter == "ALL" ||
-                        (statusFilter == "FAILED" && (message.status in listOf("FAILED", "PERMISSION_REQUIRED") || message.deliveryStatus in listOf("SEND_FAILED", "DELIVERY_FAILED"))) ||
-                        (statusFilter == "SENT" && message.status == "SENT" && message.deliveryStatus !in listOf("SEND_FAILED", "DELIVERY_FAILED")) ||
-                        message.status == statusFilter ||
-                        (statusFilter == "ATTENTION" && (message.status in listOf("FAILED", "PERMISSION_REQUIRED", "AWAITING_USER") || message.deliveryStatus in listOf("SEND_FAILED", "DELIVERY_FAILED"))) ||
-                        (statusFilter == "DELIVERED" && message.deliveryStatus == "DELIVERED") ||
-                        (statusFilter == "DELIVERY_ISSUES" && message.deliveryStatus in listOf("SEND_FAILED", "DELIVERY_FAILED"))) &&
-                        (message.recipient.contains(searchText, true) ||
+                    matchesFilter(message, statusFilter) &&
+                        (searchText.isBlank() ||
+                            message.recipient.contains(searchText, true) ||
                             message.body.contains(searchText, true) ||
                             message.channel.contains(searchText, true) ||
                             message.category.contains(searchText, true) ||
+                            message.locationLabel.contains(searchText, true) ||
                             message.status.contains(searchText, true) ||
                             message.deliveryStatus.replace("_", " ").contains(searchText, true))
-                }.sortedBy { it.scheduledAt }
+                }.let { list -> if (sortNewestFirst) list.sortedByDescending { it.scheduledAt } else list.sortedBy { it.scheduledAt } }
                 Column(
-                    modifier = Modifier.padding(padding).fillMaxSize().padding(horizontal = 16.dp, vertical = 12.dp)
+                    modifier = Modifier.padding(padding).fillMaxSize().padding(top = 10.dp)
                 ) {
-                    Text("Your messages", fontSize = 24.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
                     OutlinedTextField(
                         value = searchText,
                         onValueChange = { searchText = it },
-                        modifier = Modifier.fillMaxWidth().padding(top = 10.dp, bottom = 8.dp),
-                        label = { Text("Search recipient, message or category") },
+                        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
+                        placeholder = { Text("Search recipient, message, category…") },
                         leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
-                        singleLine = true
+                        trailingIcon = { if (searchText.isNotEmpty()) IconButton(onClick = { searchText = "" }) { Icon(Icons.Default.Close, contentDescription = "Clear search") } },
+                        singleLine = true,
+                        shape = RoundedCornerShape(16.dp)
                     )
-                    FlowRow(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(6.dp),
-                        verticalArrangement = Arrangement.spacedBy(4.dp)
+                    LazyRow(
+                        contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
-                        listOf("ALL" to "All", "SCHEDULED" to "Upcoming", "PAUSED" to "Paused", "SENT" to "Sent", "FAILED" to "Failed", "DELIVERED" to "SMS delivered", "DELIVERY_ISSUES" to "SMS issues", "ATTENTION" to "Needs attention").forEach { (key, label) ->
-                            FilterChip(selected = statusFilter == key, onClick = { statusFilter = key }, label = { Text(label, fontSize = 11.sp) })
+                        items(filters, key = { it.first }) { (key, label) ->
+                            val count = messages.count { matchesFilter(it, key) }
+                            val checkIcon: @Composable () -> Unit = { Icon(Icons.Default.Check, contentDescription = null, modifier = Modifier.size(16.dp)) }
+                            FilterChip(
+                                selected = statusFilter == key,
+                                onClick = { statusFilter = key },
+                                label = { Text("$label  $count", fontSize = 12.sp) },
+                                leadingIcon = if (statusFilter == key) checkIcon else null
+                            )
+                        }
+                    }
+                    Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Text("${visibleMessages.size} message(s)", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.weight(1f))
+                        TextButton(onClick = { sortNewestFirst = !sortNewestFirst }) {
+                            Icon(Icons.Default.SwapVert, contentDescription = null, modifier = Modifier.size(18.dp))
+                            Spacer(Modifier.width(4.dp))
+                            Text(if (sortNewestFirst) "Latest first" else "Soonest first", fontSize = 12.sp)
                         }
                     }
                     if (visibleMessages.isEmpty()) {
-                        Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                            Text("No messages match your search.", color = MaterialTheme.colorScheme.onSurfaceVariant)
-                        }
+                        EmptyState(
+                            if (searchText.isNotBlank()) Icons.Default.SearchOff else Icons.Default.Inbox,
+                            if (searchText.isNotBlank()) "No matches" else "Nothing here yet",
+                            if (searchText.isNotBlank()) "Try a different name, number or keyword." else "Messages in this view will appear here.",
+                            actionLabel = if (searchText.isBlank() && statusFilter in listOf("ALL", "SCHEDULED")) "New message" else null,
+                            onAction = { openComposer("SMS") }
+                        )
                     } else {
                         LazyColumn(
-                            modifier = Modifier.fillMaxSize().padding(top = 8.dp),
+                            modifier = Modifier.fillMaxSize(),
+                            contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 4.dp, bottom = 96.dp),
                             verticalArrangement = Arrangement.spacedBy(10.dp)
                         ) {
                             items(visibleMessages, key = { it.id }) { message ->
-                                Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
-                                    Column(Modifier.padding(12.dp)) {
-                                        MessageCard(message)
-                                        FlowRow(
-                                            modifier = Modifier.fillMaxWidth(),
-                                            horizontalArrangement = Arrangement.End,
-                                            verticalArrangement = Arrangement.spacedBy(0.dp)
-                                        ) {
-                                            TextButton(onClick = {
-                                                editMessage = message.copy(
-                                                    id = 0L,
-                                                    scheduledAt = System.currentTimeMillis() + 3_600_000L,
-                                                    status = "SCHEDULED",
-                                                    repeatRule = "NONE",
-                                                    createdAt = System.currentTimeMillis()
-                                                )
-                                                duplicateMode = true
-                                                showComposer = true
-                                            }) { Text("Duplicate") }
-                                            if (message.status == "SCHEDULED") {
-                                                TextButton(onClick = { editMessage = message; showComposer = true }) { Text("Edit") }
-                                                TextButton(onClick = { togglePause(message) }) { Text("Pause") }
-                                                TextButton(onClick = { complete(message) }) { Text("Mark done") }
+                                var menuOpen by remember { mutableStateOf(false) }
+                                Card(
+                                    shape = RoundedCornerShape(18.dp),
+                                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                                    border = BorderStroke(1.dp, if (message.needsAttention()) MaterialTheme.colorScheme.error.copy(alpha = 0.45f) else MaterialTheme.colorScheme.outlineVariant)
+                                ) {
+                                    Column(Modifier.padding(start = 14.dp, end = 6.dp, top = 10.dp, bottom = 4.dp)) {
+                                        MessageCard(message, onClick = if (message.status in listOf("SCHEDULED", "PAUSED")) { { editMessage = message; duplicateMode = false; showComposer = true } } else null)
+                                        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.End) {
+                                            when {
+                                                message.needsAttention() -> TextButton(onClick = { retry(message); notify("Retrying ${message.recipient} in 30 seconds.") }) {
+                                                    Icon(Icons.Default.Refresh, null, Modifier.size(18.dp)); Spacer(Modifier.width(4.dp)); Text("Retry")
+                                                }
+                                                message.status == "SCHEDULED" -> TextButton(onClick = { togglePause(message); notify("Paused. Resume any time.") }) {
+                                                    Icon(Icons.Default.Pause, null, Modifier.size(18.dp)); Spacer(Modifier.width(4.dp)); Text("Pause")
+                                                }
+                                                message.status == "PAUSED" -> TextButton(onClick = { togglePause(message); notify("Resumed.") }) {
+                                                    Icon(Icons.Default.PlayArrow, null, Modifier.size(18.dp)); Spacer(Modifier.width(4.dp)); Text("Resume")
+                                                }
                                             }
-                                            if (message.status == "PAUSED") {
-                                                TextButton(onClick = { togglePause(message) }) { Text("Resume") }
-                                                TextButton(onClick = { editMessage = message; showComposer = true }) { Text("Edit") }
+                                            if (message.status in listOf("SCHEDULED", "PAUSED")) {
+                                                TextButton(onClick = { editMessage = message; duplicateMode = false; showComposer = true }) {
+                                                    Icon(Icons.Default.Edit, null, Modifier.size(18.dp)); Spacer(Modifier.width(4.dp)); Text("Edit")
+                                                }
                                             }
-                                            if (message.status in listOf("FAILED", "PERMISSION_REQUIRED", "AWAITING_USER") || message.deliveryStatus in listOf("SEND_FAILED", "DELIVERY_FAILED")) {
-                                                TextButton(onClick = { retry(message) }) { Text("Retry") }
+                                            Box {
+                                                IconButton(onClick = { menuOpen = true }) { Icon(Icons.Default.MoreVert, contentDescription = "More actions") }
+                                                DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
+                                                    DropdownMenuItem(text = { Text("Duplicate") }, leadingIcon = { Icon(Icons.Default.ContentCopy, null) }, onClick = {
+                                                        menuOpen = false
+                                                        editMessage = message.copy(id = 0L, scheduledAt = System.currentTimeMillis() + 3_600_000L, status = "SCHEDULED", deliveryStatus = "PENDING", repeatRule = "NONE", createdAt = System.currentTimeMillis())
+                                                        duplicateMode = true
+                                                        showComposer = true
+                                                    })
+                                                    if (message.status == "SCHEDULED") DropdownMenuItem(text = { Text("Mark as done") }, leadingIcon = { Icon(Icons.Default.TaskAlt, null) }, onClick = {
+                                                        menuOpen = false; complete(message); notify("Marked as done.")
+                                                    })
+                                                    DropdownMenuItem(text = { Text("Copy message text") }, leadingIcon = { Icon(Icons.Default.ContentPaste, null) }, onClick = {
+                                                        menuOpen = false
+                                                        val clipboard = context.getSystemService(android.content.Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
+                                                        clipboard.setPrimaryClip(android.content.ClipData.newPlainText("SAM message", message.body))
+                                                        notify("Message text copied.")
+                                                    })
+                                                    HorizontalDivider()
+                                                    DropdownMenuItem(text = { Text("Delete", color = MaterialTheme.colorScheme.error) }, leadingIcon = { Icon(Icons.Default.DeleteOutline, null, tint = MaterialTheme.colorScheme.error) }, onClick = {
+                                                        menuOpen = false; pendingRemoval = message
+                                                    })
+                                                }
                                             }
-                                            TextButton(onClick = { pendingRemoval = message }) { Text("Cancel", color = MaterialTheme.colorScheme.error) }
                                         }
                                     }
                                 }
@@ -1121,6 +1279,7 @@ private fun SchedulerScreen(
                                     .replace("{phone}", contact.phone, ignoreCase = true)
                                 save(null, contact.phone, personalised, channel, scheduledAt, "NONE", "Bulk", emptyList(), "TIME", null, null, 150f, "", "", null)
                             }
+                            notify("${selected.size} $channel message(s) scheduled for ${friendlyDateTime(scheduledAt)}.")
                         }
                         if (channel == "SMS") requestSmsPermission(scheduleAll) else scheduleAll()
                     },
@@ -1163,30 +1322,61 @@ private fun SchedulerScreen(
             }
 
             "Calendar" -> {
-                val grouped = messages.sortedBy { it.scheduledAt }.groupBy {
-                    SimpleDateFormat("EEE, dd MMM yyyy", Locale.getDefault()).format(Date(it.scheduledAt))
-                }
+                var showHistory by remember { mutableStateOf(false) }
+                val agendaSource = if (showHistory)
+                    messages.filter { it.status !in listOf("SCHEDULED", "PAUSED") }.sortedByDescending { it.scheduledAt }
+                else messages.filter { it.status in listOf("SCHEDULED", "PAUSED") && it.triggerType == "TIME" }.sortedBy { it.scheduledAt }
+                val arrivalReminders = if (showHistory) emptyList() else messages.filter { it.status in listOf("SCHEDULED", "PAUSED") && it.triggerType == "LOCATION" }
+                val grouped = agendaSource.groupBy { dayHeading(it.scheduledAt) }
                 LazyColumn(
-                    modifier = Modifier.padding(padding).fillMaxSize().padding(18.dp)
+                    modifier = Modifier.padding(padding).fillMaxSize(),
+                    contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 12.dp, bottom = 96.dp)
                 ) {
-                    item {
-                        Text("Schedule calendar", fontSize = 24.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
+                    item(key = "agenda_toggle") {
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            FilterChip(selected = !showHistory, onClick = { showHistory = false }, label = { Text("Upcoming") }, leadingIcon = { Icon(Icons.Default.Upcoming, null, Modifier.size(16.dp)) })
+                            FilterChip(selected = showHistory, onClick = { showHistory = true }, label = { Text("History") }, leadingIcon = { Icon(Icons.Default.History, null, Modifier.size(16.dp)) })
+                        }
+                    }
+                    if (arrivalReminders.isNotEmpty()) {
+                        item(key = "arrival_header") {
+                            Row(Modifier.padding(top = 16.dp, bottom = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+                                Icon(Icons.Default.Place, null, tint = MaterialTheme.colorScheme.secondary, modifier = Modifier.size(18.dp))
+                                Spacer(Modifier.width(6.dp))
+                                Text("When I arrive", fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onBackground, modifier = Modifier.weight(1f))
+                                StatusPill("${arrivalReminders.size}", MaterialTheme.colorScheme.secondary)
+                            }
+                        }
+                        items(arrivalReminders, key = { "loc_${it.id}" }) { message ->
+                            SamCard(Modifier.padding(bottom = 8.dp)) { MessageCard(message, onClick = { editMessage = message; duplicateMode = false; showComposer = true }) }
+                        }
                     }
                     grouped.forEach { (day, dayMessages) ->
                         item(key = "day_$day") {
-                            Text(
-                                day,
-                                color = MaterialTheme.colorScheme.primary,
-                                fontWeight = FontWeight.Bold,
-                                modifier = Modifier.padding(top = 14.dp, bottom = 6.dp)
-                            )
+                            Row(Modifier.padding(top = 16.dp, bottom = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+                                Text(day, fontWeight = FontWeight.Bold, color = if (day == "Today") MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onBackground, modifier = Modifier.weight(1f))
+                                StatusPill("${dayMessages.size}", MaterialTheme.colorScheme.primary)
+                            }
                         }
-                        items(dayMessages, key = { it.id }) { message ->
-                            MessageCard(message)
+                        item(key = "group_$day") {
+                            SamCard(Modifier.padding(bottom = 4.dp)) {
+                                dayMessages.forEachIndexed { index, message ->
+                                    if (index > 0) HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant, modifier = Modifier.padding(vertical = 4.dp))
+                                    MessageCard(message, showTimeOnly = true, onClick = if (message.status in listOf("SCHEDULED", "PAUSED")) { { editMessage = message; duplicateMode = false; showComposer = true } } else null)
+                                }
+                            }
                         }
                     }
-                    if (messages.isEmpty()) {
-                        item { Text("No messages scheduled yet.", color = MaterialTheme.colorScheme.onSurfaceVariant) }
+                    if (agendaSource.isEmpty() && arrivalReminders.isEmpty()) {
+                        item(key = "agenda_empty") {
+                            EmptyState(
+                                Icons.Default.EventAvailable,
+                                if (showHistory) "No history yet" else "Your agenda is clear",
+                                if (showHistory) "Sent, completed and failed messages will be listed here." else "Scheduled messages appear here, grouped by day.",
+                                actionLabel = if (showHistory) null else "New message",
+                                onAction = { openComposer("SMS") }
+                            )
+                        }
                     }
                 }
             }
@@ -1215,7 +1405,7 @@ private fun SchedulerScreen(
                                 Text("Publishing workspace", fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onPrimaryContainer)
                             }
                             Text("Prepare a post with a caption and media, choose a social app, then schedule when SAM should bring it up for review.", color = MaterialTheme.colorScheme.onPrimaryContainer)
-                            Button(onClick = { showComposer = true }, modifier = Modifier.fillMaxWidth()) {
+                            Button(onClick = { openComposer("Social") }, modifier = Modifier.fillMaxWidth()) {
                                 Icon(Icons.Default.Add, contentDescription = null)
                                 Spacer(Modifier.width(6.dp))
                                 Text("Create social post")
@@ -1605,11 +1795,18 @@ private fun SchedulerScreen(
             "Settings" -> {
                 Column(Modifier.padding(padding).fillMaxSize()
                     .verticalScroll(rememberScrollState()).padding(18.dp)) {
-                    Text("Settings", fontSize = 24.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
+                    Text("Tune how SAM looks, sends and protects your data.", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 13.sp)
+                    SettingsSection("Appearance", "Choose a light, dark or automatic theme", Icons.Default.Palette, SamColors.Social) {
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            listOf("System" to Icons.Default.BrightnessAuto, "Light" to Icons.Default.LightMode, "Dark" to Icons.Default.DarkMode).forEach { (mode, icon) ->
+                                FilterChip(selected = themeMode == mode, onClick = { onThemeChange(mode) }, label = { Text(mode) }, leadingIcon = { Icon(icon, null, Modifier.size(16.dp)) })
+                            }
+                        }
+                    }
                     val context = androidx.compose.ui.platform.LocalContext.current
                     // Reading this state makes the permission list recompose after returning from Android Settings.
                     val permissionRefresh = permissionRefreshTick.intValue
-                    Text("Permissions centre", fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onSurface, modifier = Modifier.padding(top = 16.dp))
+                    SettingsSection("Permissions", "Access SAM needs to send and remind on time", Icons.Default.Security) {
                     Text("SAM requests sensitive access only when a feature needs it. Photos and videos can be selected using Android's system picker without broad gallery access.", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 12.sp)
                     val permissionRows = listOf(
                         "Notifications" to android.Manifest.permission.POST_NOTIFICATIONS,
@@ -1645,12 +1842,13 @@ private fun SchedulerScreen(
                         val intent = android.content.Intent(android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS, android.net.Uri.parse("package:" + context.packageName))
                         context.startActivity(intent)
                     }, modifier = Modifier.fillMaxWidth()) { Icon(Icons.Default.Security, contentDescription = null); Spacer(Modifier.width(6.dp)); Text("Manage SAM permissions") }
+                    }
+                    SettingsSection("Quiet hours", "Hold messages during your rest window", Icons.Default.Bedtime, SamColors.Indigo) {
                     val quietPrefs = remember { context.getSharedPreferences("sam_quiet_hours", android.content.Context.MODE_PRIVATE) }
                     var quietEnabled by remember { mutableStateOf(quietPrefs.getBoolean("enabled", false)) }
                     var quietStart by remember { mutableStateOf(quietPrefs.getString("start", "22:00") ?: "22:00") }
                     var quietEnd by remember { mutableStateOf(quietPrefs.getString("end", "07:00") ?: "07:00") }
                     var quietMessage by remember { mutableStateOf("") }
-                    Text("Quiet hours", fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onSurface, modifier = Modifier.padding(top = 16.dp))
                     Text("Scheduled SMS and WhatsApp reminders will be deferred during this daily window. Your original schedule is preserved.", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 12.sp)
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Checkbox(checked = quietEnabled, onCheckedChange = { quietEnabled = it })
@@ -1670,7 +1868,8 @@ private fun SchedulerScreen(
                         }
                     }, modifier = Modifier.fillMaxWidth()) { Text("Save quiet hours") }
                     if (quietMessage.isNotBlank()) Text(quietMessage, color = MaterialTheme.colorScheme.primary, fontSize = 12.sp)
-                    Text("Incoming SMS automation", fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onSurface, modifier = Modifier.padding(top = 20.dp))
+                    }
+                    SettingsSection("Incoming SMS automation", "Automatic replies and forwarding", Icons.Default.AutoMode, SamColors.Teal) {
                     Text("Set optional automatic replies and forward incoming SMS messages to a number you choose.", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 12.sp)
                     val automationPrefs = remember { context.getSharedPreferences("sam_sms_automation", android.content.Context.MODE_PRIVATE) }
                     var autoReplyEnabled by remember { mutableStateOf(automationPrefs.getBoolean("auto_reply_enabled", false)) }
@@ -1733,7 +1932,8 @@ private fun SchedulerScreen(
                     }, modifier = Modifier.fillMaxWidth()) { Text("Save SMS automation rules") }
                     if (automationMessage.isNotBlank()) Text(automationMessage, color = MaterialTheme.colorScheme.primary, fontSize = 12.sp)
                     Text("Requires incoming SMS and SMS sending permissions. Carrier charges may apply. Forwarding copies message content to the destination number.", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 11.sp)
-                    Text("App security", fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onSurface, modifier = Modifier.padding(top = 18.dp))
+                    }
+                    SettingsSection("Security & backup", "App lock, encrypted backup and restore", Icons.Default.Shield, SamColors.Amber) {
                     val securityPrefs = remember { context.getSharedPreferences("sam_app_security", android.content.Context.MODE_PRIVATE) }
                     var biometricEnabled by remember { mutableStateOf(securityPrefs.getBoolean("biometric_enabled", false)) }
                     var securityMessage by remember { mutableStateOf("") }
@@ -1759,7 +1959,8 @@ private fun SchedulerScreen(
                         })
                     }
                     if (securityMessage.isNotBlank()) Text(securityMessage, color = MaterialTheme.colorScheme.primary, fontSize = 12.sp)
-                    Text("Data protection", fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onSurface, modifier = Modifier.padding(top = 16.dp))
+                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+                    Text("Encrypted backup", fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onSurface)
                     var backupPasswordInput by remember { mutableStateOf("") }
                     var backupPasswordVisible by remember { mutableStateOf(false) }
                     OutlinedTextField(
@@ -1779,7 +1980,10 @@ private fun SchedulerScreen(
                     }
                     if (securityMessage.isNotBlank()) Text(securityMessage, color = MaterialTheme.colorScheme.primary, fontSize = 12.sp)
 
-                    OutlinedButton(onClick = onImportCsv, modifier = Modifier.fillMaxWidth().padding(top = 8.dp)) {
+                    }
+                    SettingsSection("Import & export", "Move messages in and out using CSV files", Icons.Default.ImportExport, SamColors.Teal) {
+                    Text("CSV columns: Recipient, Message, Channel, Scheduled At (yyyy-MM-dd HH:mm:ss), optional Repeat Rule, Category, WhatsApp App.", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    OutlinedButton(onClick = onImportCsv, modifier = Modifier.fillMaxWidth()) {
                         Icon(Icons.Default.FileUpload, contentDescription = null)
                         Spacer(Modifier.width(8.dp))
                         Text("Import messages from CSV")
@@ -1789,6 +1993,8 @@ private fun SchedulerScreen(
                         Spacer(Modifier.width(8.dp))
                         Text("Export message history (CSV)")
                     }
+                    }
+                    SettingsSection("How SAM works", "Good to know", Icons.Default.Lightbulb, SamColors.Amber) {
                     listOf(
                         "Notifications: allow reminders in Android settings.",
                         "SMS: uses the Android default SMS SIM; change the preferred SIM in Android SIM settings.",
@@ -1796,8 +2002,11 @@ private fun SchedulerScreen(
                         "WhatsApp: opens a prepared chat; you review and tap Send.",
                         "Privacy: scheduled messages are stored on this device."
                     ).forEach { setting ->
-                        Text(setting, modifier = Modifier.fillMaxWidth().padding(vertical = 12.dp))
+                        Row(verticalAlignment = Alignment.Top) { Icon(Icons.Default.CheckCircle, null, tint = SamColors.Teal, modifier = Modifier.size(16.dp).padding(top = 2.dp)); Spacer(Modifier.width(8.dp)); Text(setting, fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurface) }
                     }
+                    }
+                    AboutSection()
+                    Spacer(Modifier.height(24.dp))
                 }
             }
         }
@@ -1813,10 +2022,16 @@ private fun SchedulerScreen(
             onCaptureVideo = onCaptureVideo,
             onPickRecipient = onPickRecipient,
             duplicateMode = duplicateMode,
+            initialChannel = composerChannel,
             onClose = { showComposer = false; editMessage = null; duplicateMode = false },
             requestSmsPermission = requestSmsPermission,
             onSave = { id, recipient, body, channel, scheduledAt, repeatRule, category, attachments, triggerType, latitude, longitude, radiusMeters, locationLabel, whatsappPackage, campaignId ->
                 save(if (duplicateMode) null else id, recipient, body, channel, scheduledAt, repeatRule, category, attachments, triggerType, latitude, longitude, radiusMeters, locationLabel, whatsappPackage, campaignId)
+                notify(
+                    if (triggerType == "LOCATION") "Arrival reminder saved for ${locationLabel.ifBlank { "your destination" }}."
+                    else if (id != null && !duplicateMode) "Changes saved • ${friendlyDateTime(scheduledAt)}"
+                    else "$channel scheduled for ${friendlyDateTime(scheduledAt)} (${countdown(scheduledAt)})."
+                )
                 showComposer = false
                 editMessage = null
                 duplicateMode = false
@@ -2127,33 +2342,67 @@ private fun Stat(title: String, value: String, modifier: Modifier = Modifier) {
     }
 }
 
+/** Maps the last 9 digits of a phone number to a saved contact name, so lists show people, not numbers. */
+private val LocalContactNames = staticCompositionLocalOf<Map<String, String>> { emptyMap() }
+
+private fun phoneKey(phone: String): String = phone.filter(Char::isDigit).takeLast(9)
+
 @Composable
-private fun MessageCard(message: MessageEntity) {
+private fun MessageCard(message: MessageEntity, onClick: (() -> Unit)? = null, showTimeOnly: Boolean = false) {
+    val names = LocalContactNames.current
+    val displayName = names[phoneKey(message.recipient)]
+    val visual = statusVisual(message)
     Row(
-        modifier = Modifier.fillMaxWidth().padding(vertical = 6.dp),
-        verticalAlignment = Alignment.CenterVertically
+        modifier = Modifier.fillMaxWidth()
+            .clip(RoundedCornerShape(12.dp))
+            .then(if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier)
+            .padding(vertical = 6.dp),
+        verticalAlignment = Alignment.Top
     ) {
-        Icon(
-            if (message.channel == "SMS") Icons.Default.Sms else Icons.Default.Chat,
-            contentDescription = message.channel,
-            tint = MaterialTheme.colorScheme.primary,
-            modifier = Modifier.size(30.dp)
-        )
-        Spacer(Modifier.width(10.dp))
+        ChannelAvatar(message.channel)
+        Spacer(Modifier.width(12.dp))
         Column(Modifier.weight(1f)) {
-            Text(message.recipient, fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onSurface)
-            Text(message.body, maxLines = 2, fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            Text(message.category, fontSize = 10.sp, color = MaterialTheme.colorScheme.primary)
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    displayName ?: message.recipient,
+                    fontWeight = FontWeight.SemiBold, fontSize = 15.sp,
+                    color = MaterialTheme.colorScheme.onSurface,
+                    maxLines = 1, overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f, fill = false)
+                )
+                Spacer(Modifier.width(8.dp))
+                StatusPill(visual.label, visual.color, visual.icon)
+            }
+            if (displayName != null) Text(message.recipient, fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
             Text(
-                "${message.channel} • " + SimpleDateFormat("dd MMM yyyy, HH:mm", Locale.getDefault())
-                    .format(Date(message.scheduledAt)),
-                fontSize = 11.sp,
-                color = MaterialTheme.colorScheme.primary
+                message.body, maxLines = 2, overflow = TextOverflow.Ellipsis, fontSize = 13.sp,
+                color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(top = 2.dp)
             )
-        }
-        Column(horizontalAlignment = Alignment.End) {
-            Text(message.status.lowercase(), fontSize = 10.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            if (message.channel == "SMS") Text(message.deliveryStatus.replace("_", " ").lowercase(), fontSize = 9.sp, color = if (message.deliveryStatus == "DELIVERED") Color(0xFF237A45) else MaterialTheme.colorScheme.onSurfaceVariant)
+            Row(Modifier.padding(top = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+                val whenText = when {
+                    message.triggerType == "LOCATION" -> message.locationLabel.ifBlank { "On arrival" }
+                    showTimeOnly -> SimpleDateFormat("HH:mm", Locale.getDefault()).format(Date(message.scheduledAt))
+                    else -> friendlyDateTime(message.scheduledAt)
+                }
+                Icon(
+                    if (message.triggerType == "LOCATION") Icons.Default.Place else Icons.Default.AccessTime,
+                    contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(13.dp)
+                )
+                Spacer(Modifier.width(4.dp))
+                Text(whenText, fontSize = 11.5.sp, fontWeight = FontWeight.Medium, color = MaterialTheme.colorScheme.primary, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
+                if (message.status == "SCHEDULED" && message.triggerType == "TIME" && message.scheduledAt > System.currentTimeMillis()) {
+                    Text("  •  " + countdown(message.scheduledAt), fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1)
+                }
+            }
+            val extras = buildList {
+                add(message.category)
+                repeatLabel(message.repeatRule).takeIf { it.isNotBlank() }?.let { add("Repeats $it") }
+                val attachmentCount = runCatching { JSONArray(message.attachmentsJson).length() }.getOrDefault(0)
+                if (attachmentCount > 0) add("$attachmentCount attachment(s)")
+                if (message.channel == "SMS" && message.deliveryStatus !in listOf("PENDING", "DELIVERED", "SEND_FAILED", "DELIVERY_FAILED"))
+                    add(message.deliveryStatus.replace("_", " ").lowercase().replaceFirstChar { it.uppercase() })
+            }
+            Text(extras.joinToString("  •  "), fontSize = 10.5.sp, color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.85f), modifier = Modifier.padding(top = 2.dp), maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
     }
 }
@@ -2169,6 +2418,7 @@ private fun Composer(
     onCaptureVideo: () -> Unit,
     onPickRecipient: () -> Unit,
     duplicateMode: Boolean = false,
+    initialChannel: String = "SMS",
     onClose: () -> Unit,
     requestSmsPermission: (() -> Unit) -> Unit,
     onSave: (Long?, String, String, String, Long, String, String, List<String>, String, Double?, Double?, Float, String, String, String?) -> Unit
@@ -2176,7 +2426,7 @@ private fun Composer(
     var recipient by remember(initialMessage?.id) { mutableStateOf(initialMessage?.recipient ?: "") }
     LaunchedEffect(pickedRecipientNumber) { if (pickedRecipientNumber.isNotBlank()) recipient = pickedRecipientNumber }
     var body by remember(initialMessage?.id) { mutableStateOf(initialMessage?.body ?: "") }
-    var channel by remember(initialMessage?.id) { mutableStateOf(initialMessage?.channel ?: "SMS") }
+    var channel by remember(initialMessage?.id) { mutableStateOf(initialMessage?.channel ?: initialChannel) }
     var whatsappPackage by remember(initialMessage?.id) { mutableStateOf(initialMessage?.whatsappPackage ?: "") }
     var whatsappMenuExpanded by remember { mutableStateOf(false) }
     var socialMenuExpanded by remember { mutableStateOf(false) }
@@ -2232,315 +2482,466 @@ private fun Composer(
     }
     val selectedWhatsAppMissing = whatsappPackage.isNotBlank() && whatsappApps.none { it.packageName == whatsappPackage }
 
-    AlertDialog(
-        modifier = Modifier.fillMaxWidth(0.94f).widthIn(max = 560.dp),
-        properties = DialogProperties(usePlatformDefaultWidth = false),
+    val submit: () -> Unit = {
+        val action = {
+            try {
+                val scheduledAt = SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.US)
+                    .apply { isLenient = false }
+                    .parse("$date $time")!!.time
+                when {
+                    recipient.isBlank() -> error = "Enter who should receive this message."
+                    body.isBlank() -> error = "Write the message you want to send."
+                    recipient.count { it.isDigit() } < 7 -> error = "Enter a valid phone number with country code where required."
+                    triggerType == "TIME" && scheduledAt <= System.currentTimeMillis() -> error = "Choose a future date and time."
+                    triggerType == "LOCATION" && ((latitudeText.toDoubleOrNull()?.let { it !in -90.0..90.0 } ?: true) || (longitudeText.toDoubleOrNull()?.let { it !in -180.0..180.0 } ?: true)) -> error = "Enter valid latitude and longitude coordinates."
+                    triggerType == "LOCATION" && (radiusText.toFloatOrNull()?.let { it !in 100f..1000f } ?: true) -> error = "Arrival radius must be between 100 and 1000 metres."
+                    else -> {
+                        error = ""
+                        onSave(initialMessage?.id, recipient.trim(), body.trim(), channel, scheduledAt, repeatRule, category, attachments, triggerType, latitudeText.toDoubleOrNull(), longitudeText.toDoubleOrNull(), radiusText.toFloatOrNull() ?: 150f, locationLabel.trim(), whatsappPackage, selectedCampaignId.takeIf { channel == "Social" && it.isNotBlank() })
+                    }
+                }
+            } catch (_: Exception) {
+                error = "Enter a valid date and time."
+            }
+        }
+        if (channel == "SMS") requestSmsPermission(action) else action()
+    }
+    val parsedAt = runCatching { SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.US).apply { isLenient = false }.parse("$date $time")!!.time }.getOrNull()
+    val names = LocalContactNames.current
+    val recipientName = names[phoneKey(recipient)]
+    fun setFrom(millis: Long) {
+        date = SimpleDateFormat("yyyy-MM-dd", Locale.US).format(Date(millis))
+        time = SimpleDateFormat("HH:mm", Locale.US).format(Date(millis))
+    }
+
+    androidx.compose.ui.window.Dialog(
         onDismissRequest = onClose,
-        title = { Text(when { duplicateMode -> "Duplicate message"; initialMessage == null -> "Schedule a message"; else -> "Edit scheduled message" }) },
-        text = {
-            Column(
-                modifier = Modifier.fillMaxWidth()
-                    .heightIn(max = (configuration.screenHeightDp * 0.56f).dp)
-                    .verticalScroll(rememberScrollState()),
-                verticalArrangement = Arrangement.spacedBy(10.dp)
-            ) {
-                FlowRow(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    verticalArrangement = Arrangement.spacedBy(4.dp)
+        properties = DialogProperties(usePlatformDefaultWidth = false, dismissOnClickOutside = false)
+    ) {
+        Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
+            Column(Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.safeDrawing)) {
+                // Header
+                Row(
+                    Modifier.fillMaxWidth().background(MaterialTheme.colorScheme.surface).padding(horizontal = 4.dp, vertical = 6.dp),
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                    FilterChip(selected = channel == "SMS", onClick = { channel = "SMS" }, label = { Text("SMS") })
-                    FilterChip(selected = channel == "WhatsApp", onClick = { channel = "WhatsApp" }, label = { Text("WhatsApp") })
-                    FilterChip(selected = channel == "Social", onClick = { channel = "Social" }, label = { Text("Social media") })
-                }
-                if (channel == "Social") {
-                    val socialTargets = listOf(
-                        "com.facebook.katana" to "Facebook",
-                        "com.instagram.android" to "Instagram",
-                        "com.zhiliaoapp.musically" to "TikTok",
-                        "com.snapchat.android" to "Snapchat",
-                        "org.telegram.messenger" to "Telegram",
-                        "com.twitter.android" to "X",
-                        "com.linkedin.android" to "LinkedIn",
-                        "com.pinterest" to "Pinterest"
+                    IconButton(onClick = onClose) { Icon(Icons.Default.Close, contentDescription = "Close") }
+                    Text(
+                        when { duplicateMode -> "Duplicate message"; initialMessage == null -> "New message"; else -> "Edit message" },
+                        fontWeight = FontWeight.Bold, fontSize = 18.sp, color = MaterialTheme.colorScheme.onSurface, modifier = Modifier.weight(1f)
                     )
-                    Text("Social destination", fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onSurface)
-                    Box {
-                        OutlinedButton(onClick = { socialMenuExpanded = true }, modifier = Modifier.fillMaxWidth()) {
-                            Icon(Icons.Default.Share, contentDescription = null)
-                            Spacer(Modifier.width(8.dp))
-                            Text(socialTargets.firstOrNull { it.first == whatsappPackage }?.second ?: "Choose social app", modifier = Modifier.weight(1f))
-                            Icon(Icons.Default.ArrowDropDown, contentDescription = "Choose social app")
-                        }
-                        DropdownMenu(expanded = socialMenuExpanded, onDismissRequest = { socialMenuExpanded = false }) {
-                            socialTargets.forEach { (pkg, label) ->
-                                DropdownMenuItem(
-                                    text = { Text(label) },
-                                    leadingIcon = { Icon(Icons.Default.Share, contentDescription = null) },
-                                    trailingIcon = { if (whatsappPackage == pkg) Icon(Icons.Default.Check, contentDescription = "Selected") },
-                                    onClick = { whatsappPackage = pkg; socialMenuExpanded = false }
-                                )
-                            }
-                        }
-                    }
-                    Text("Campaign", fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onSurface)
-                    Box {
-                        OutlinedButton(onClick = { campaignMenuExpanded = true }, modifier = Modifier.fillMaxWidth()) {
-                            Text(socialCampaignOptions.firstOrNull { it.first == selectedCampaignId }?.second ?: "No campaign", modifier = Modifier.weight(1f))
-                            Icon(Icons.Default.ArrowDropDown, contentDescription = "Choose campaign")
-                        }
-                        DropdownMenu(expanded = campaignMenuExpanded, onDismissRequest = { campaignMenuExpanded = false }) {
-                            DropdownMenuItem(text = { Text("No campaign") }, onClick = { selectedCampaignId = ""; campaignMenuExpanded = false })
-                            socialCampaignOptions.forEach { (id, name) ->
-                                DropdownMenuItem(text = { Text(name) }, trailingIcon = { if (selectedCampaignId == id) Icon(Icons.Default.Check, contentDescription = "Selected") }, onClick = { selectedCampaignId = id; campaignMenuExpanded = false })
-                            }
-                        }
-                    }
-                    if (socialCampaignOptions.isEmpty()) Text("Create a campaign in Social Centre first. You can still schedule this post without one.", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    Text("At the scheduled time SAM opens the selected app with your text and media ready. Review and publish inside that app. Direct publishing will activate only for accounts and platforms whose official API access has been approved and connected.", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    TextButton(onClick = submit) { Text("Save", fontWeight = FontWeight.Bold) }
                 }
-                if (channel == "WhatsApp") {
-                    Text("WhatsApp application", fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onSurface)
-                    Box {
-                        OutlinedButton(onClick = { whatsappMenuExpanded = true }, modifier = Modifier.fillMaxWidth()) {
-                            Icon(Icons.Default.Chat, contentDescription = null)
-                            Spacer(Modifier.width(8.dp))
-                            Text(whatsappApps.firstOrNull { it.packageName == whatsappPackage }?.label ?: "Ask every time", modifier = Modifier.weight(1f))
-                            Icon(Icons.Default.ArrowDropDown, contentDescription = "Choose WhatsApp application")
-                        }
-                        DropdownMenu(expanded = whatsappMenuExpanded, onDismissRequest = { whatsappMenuExpanded = false }) {
-                            DropdownMenuItem(text = { Text("Ask every time") }, onClick = { whatsappPackage = ""; whatsappMenuExpanded = false })
-                            whatsappApps.forEach { app ->
-                                DropdownMenuItem(
-                                    text = { Text(app.label) },
-                                    leadingIcon = { Icon(Icons.Default.Chat, contentDescription = null) },
-                                    trailingIcon = { if (whatsappPackage == app.packageName) Icon(Icons.Default.Check, contentDescription = "Selected") },
-                                    onClick = { whatsappPackage = app.packageName; whatsappMenuExpanded = false }
-                                )
-                            }
-                        }
-                    }
-                    if (whatsappApps.isEmpty()) {
-                        Text("No supported WhatsApp app was detected. Install WhatsApp or WhatsApp Business, or choose Ask every time to let Android handle the link.", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    }
-                    if (selectedWhatsAppMissing) {
-                        Text("Your previously selected WhatsApp app is no longer available. Choose another app or Ask every time.", fontSize = 12.sp, color = MaterialTheme.colorScheme.error)
-                    }
-                    Text("The selected app will be opened when this reminder is due. You will still review and send the message yourself.", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                }
-                Text("Quick templates", fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onSurface)
-                FlowRow(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(6.dp),
-                    verticalArrangement = Arrangement.spacedBy(4.dp)
+                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+
+                Column(
+                    Modifier.weight(1f).fillMaxWidth().verticalScroll(rememberScrollState()).padding(horizontal = 16.dp, vertical = 12.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
-                    listOf(
-                        "Greeting" to "Hello! I hope you are doing well.",
-                        "Reminder" to "This is a friendly reminder about our earlier arrangement.",
-                        "Birthday" to "Wishing you a very happy birthday. May your new year be filled with blessings!",
-                        "Meeting" to "This is a reminder of our scheduled meeting. Kindly be on time."
-                    ).forEach { (label, template) ->
-                        AssistChip(onClick = { body = template }, label = { Text(label, fontSize = 12.sp) })
-                    }
-                }
-                Text("Category", fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onSurface)
-                FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    listOf("General", "Personal", "Family", "Work", "School", "Business", "Bulk", "Birthday", "Reminder").forEach { value ->
-                        FilterChip(selected = category == value, onClick = { category = value }, label = { Text(value, fontSize = 11.sp) })
-                    }
-                }
-                Text("Schedule trigger", fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onSurface)
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    FilterChip(selected = triggerType == "TIME", onClick = { triggerType = "TIME" }, label = { Text("Date & time") })
-                    FilterChip(selected = triggerType == "LOCATION", onClick = { triggerType = "LOCATION" }, label = { Text("When I arrive") })
-                }
-                if (triggerType == "LOCATION") {
-                    Text("Search for a destination to fill in its coordinates. Place lookup may require an internet connection and availability of Android's geocoder. You can still enter coordinates manually.", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    OutlinedTextField(
-                        value = locationSearch,
-                        onValueChange = { locationSearch = it; locationSearchMessage = "" },
-                        label = { Text("Search place or address") },
-                        placeholder = { Text("e.g. Kejetia Market, Kumasi") },
-                        singleLine = true,
-                        modifier = Modifier.fillMaxWidth()
-                    )
-                    Button(
-                        onClick = {
-                            val query = locationSearch.trim()
-                            if (query.length < 3) {
-                                locationSearchMessage = "Enter at least 3 characters to search."
-                            } else {
-                                isSearchingLocation = true
-                                locationSearchMessage = "Searching for the place…"
-                                locationSearchScope.launch {
-                                    val result = withContext(Dispatchers.IO) {
-                                        runCatching {
-                                            @Suppress("DEPRECATION")
-                                            Geocoder(context, Locale.getDefault()).getFromLocationName(query, 1)
-                                        }.getOrNull()?.firstOrNull()
-                                    }
-                                    isSearchingLocation = false
-                                    if (result != null) {
-                                        latitudeText = result.latitude.toString()
-                                        longitudeText = result.longitude.toString()
-                                        locationLabel = result.getAddressLine(0) ?: query
-                                        locationSearch = locationLabel
-                                        locationSearchMessage = "Location found. Confirm the coordinates below."
-                                    } else {
-                                        locationSearchMessage = "No result found. Check the spelling or enter coordinates manually."
+                    // 1. Channel
+                    ComposerStep(1, "Send with") {
+                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            listOf("SMS" to "SMS", "WhatsApp" to "WhatsApp", "Social" to "Social").forEach { (key, label) ->
+                                val selected = channel == key
+                                val tint = channelColor(key)
+                                Column(
+                                    Modifier.weight(1f).clip(RoundedCornerShape(14.dp))
+                                        .background(if (selected) tint.copy(alpha = 0.14f) else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f))
+                                        .clickable { channel = key }
+                                        .padding(vertical = 12.dp),
+                                    horizontalAlignment = Alignment.CenterHorizontally
+                                ) {
+                                    Icon(channelIcon(key), contentDescription = null, tint = if (selected) tint else MaterialTheme.colorScheme.onSurfaceVariant)
+                                    Text(label, fontSize = 12.sp, fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal, color = if (selected) tint else MaterialTheme.colorScheme.onSurfaceVariant)
+                                }
+                            }
+                        }
+                        if (channel == "Social") {
+                            val socialTargets = listOf(
+                                "com.facebook.katana" to "Facebook",
+                                "com.instagram.android" to "Instagram",
+                                "com.zhiliaoapp.musically" to "TikTok",
+                                "com.snapchat.android" to "Snapchat",
+                                "org.telegram.messenger" to "Telegram",
+                                "com.twitter.android" to "X",
+                                "com.linkedin.android" to "LinkedIn",
+                                "com.pinterest" to "Pinterest"
+                            )
+                            Box {
+                                OutlinedButton(onClick = { socialMenuExpanded = true }, modifier = Modifier.fillMaxWidth()) {
+                                    Icon(Icons.Default.Share, contentDescription = null)
+                                    Spacer(Modifier.width(8.dp))
+                                    Text(socialTargets.firstOrNull { it.first == whatsappPackage }?.second ?: "Choose social app", modifier = Modifier.weight(1f))
+                                    Icon(Icons.Default.ArrowDropDown, contentDescription = "Choose social app")
+                                }
+                                DropdownMenu(expanded = socialMenuExpanded, onDismissRequest = { socialMenuExpanded = false }) {
+                                    socialTargets.forEach { (pkg, label) ->
+                                        DropdownMenuItem(
+                                            text = { Text(label) },
+                                            leadingIcon = { Icon(Icons.Default.Share, contentDescription = null) },
+                                            trailingIcon = { if (whatsappPackage == pkg) Icon(Icons.Default.Check, contentDescription = "Selected") },
+                                            onClick = { whatsappPackage = pkg; socialMenuExpanded = false }
+                                        )
                                     }
                                 }
                             }
-                        },
-                        enabled = !isSearchingLocation,
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        if (isSearchingLocation) {
-                            CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp)
+                            Box {
+                                OutlinedButton(onClick = { campaignMenuExpanded = true }, modifier = Modifier.fillMaxWidth()) {
+                                    Icon(Icons.Default.Flag, contentDescription = null)
+                                    Spacer(Modifier.width(8.dp))
+                                    Text(socialCampaignOptions.firstOrNull { it.first == selectedCampaignId }?.second ?: "No campaign", modifier = Modifier.weight(1f))
+                                    Icon(Icons.Default.ArrowDropDown, contentDescription = "Choose campaign")
+                                }
+                                DropdownMenu(expanded = campaignMenuExpanded, onDismissRequest = { campaignMenuExpanded = false }) {
+                                    DropdownMenuItem(text = { Text("No campaign") }, onClick = { selectedCampaignId = ""; campaignMenuExpanded = false })
+                                    socialCampaignOptions.forEach { (id, name) ->
+                                        DropdownMenuItem(text = { Text(name) }, trailingIcon = { if (selectedCampaignId == id) Icon(Icons.Default.Check, contentDescription = "Selected") }, onClick = { selectedCampaignId = id; campaignMenuExpanded = false })
+                                    }
+                                }
+                            }
+                            ComposerHint("At the scheduled time SAM opens the selected app with your text and media ready. You review and publish inside that app.")
+                        }
+                        if (channel == "WhatsApp") {
+                            Box {
+                                OutlinedButton(onClick = { whatsappMenuExpanded = true }, modifier = Modifier.fillMaxWidth()) {
+                                    Icon(Icons.Default.Chat, contentDescription = null)
+                                    Spacer(Modifier.width(8.dp))
+                                    Text(whatsappApps.firstOrNull { it.packageName == whatsappPackage }?.label ?: "Ask every time", modifier = Modifier.weight(1f))
+                                    Icon(Icons.Default.ArrowDropDown, contentDescription = "Choose WhatsApp application")
+                                }
+                                DropdownMenu(expanded = whatsappMenuExpanded, onDismissRequest = { whatsappMenuExpanded = false }) {
+                                    DropdownMenuItem(text = { Text("Ask every time") }, onClick = { whatsappPackage = ""; whatsappMenuExpanded = false })
+                                    whatsappApps.forEach { app ->
+                                        DropdownMenuItem(
+                                            text = { Text(app.label) },
+                                            leadingIcon = { Icon(Icons.Default.Chat, contentDescription = null) },
+                                            trailingIcon = { if (whatsappPackage == app.packageName) Icon(Icons.Default.Check, contentDescription = "Selected") },
+                                            onClick = { whatsappPackage = app.packageName; whatsappMenuExpanded = false }
+                                        )
+                                    }
+                                }
+                            }
+                            if (whatsappApps.isEmpty()) ComposerHint("No WhatsApp app was detected. Install WhatsApp or WhatsApp Business, or keep Ask every time.")
+                            if (selectedWhatsAppMissing) Text("Your previously selected WhatsApp app is no longer installed. Choose another app or Ask every time.", fontSize = 12.sp, color = MaterialTheme.colorScheme.error)
+                            ComposerHint("When the message is due, SAM opens the chat with your text ready. You tap Send in WhatsApp.")
+                        }
+                        if (channel == "SMS") ComposerHint("SMS is sent automatically from your default SIM at the scheduled time.")
+                    }
+
+                    // 2. Recipient
+                    ComposerStep(2, "To") {
+                        val savedAsText: (@Composable () -> Unit)? = recipientName?.let { name -> @Composable { Text("Saved as $name", color = MaterialTheme.colorScheme.secondary) } }
+                        OutlinedTextField(
+                            value = recipient,
+                            onValueChange = { recipient = it },
+                            modifier = Modifier.fillMaxWidth(),
+                            placeholder = { Text("Phone number, e.g. 024 000 0000") },
+                            leadingIcon = { Icon(Icons.Default.Person, contentDescription = null) },
+                            trailingIcon = { IconButton(onClick = onPickRecipient) { Icon(Icons.Default.Contacts, contentDescription = "Choose from contacts", tint = MaterialTheme.colorScheme.primary) } },
+                            supportingText = savedAsText,
+                            keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(keyboardType = androidx.compose.ui.text.input.KeyboardType.Phone),
+                            singleLine = true,
+                            shape = RoundedCornerShape(14.dp)
+                        )
+                    }
+
+                    // 3. Message
+                    ComposerStep(3, "Message") {
+                        OutlinedTextField(
+                            value = body,
+                            onValueChange = { body = it },
+                            modifier = Modifier.fillMaxWidth(),
+                            placeholder = { Text("Type your message…") },
+                            minLines = 4,
+                            shape = RoundedCornerShape(14.dp),
+                            supportingText = {
+                                if (channel == "SMS" && body.isNotEmpty()) {
+                                    val info = runCatching { android.telephony.SmsMessage.calculateLength(body, false) }.getOrNull()
+                                    if (info != null) Text("${body.length} characters • ${info[0]} SMS part(s) • ${info[2]} left in this part")
+                                } else Text("${body.length} characters")
+                            }
+                        )
+                        Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                            listOf(
+                                "Greeting" to "Hello! I hope you are doing well.",
+                                "Reminder" to "This is a friendly reminder about our earlier arrangement.",
+                                "Birthday" to "Wishing you a very happy birthday. May your new year be filled with blessings!",
+                                "Meeting" to "This is a reminder of our scheduled meeting. Kindly be on time.",
+                                "Thank you" to "Thank you very much. I truly appreciate it."
+                            ).forEach { (label, template) ->
+                                AssistChip(onClick = { body = template }, label = { Text(label, fontSize = 12.sp) }, leadingIcon = { Icon(Icons.Default.AutoAwesome, null, Modifier.size(14.dp)) })
+                            }
+                        }
+                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            listOf(
+                                Triple("Photo", Icons.Default.PhotoCamera, onCapturePhoto),
+                                Triple("Video", Icons.Default.Videocam, onCaptureVideo),
+                                Triple("Attach", Icons.Default.AttachFile, onPickAttachments)
+                            ).forEach { (label, icon, action) ->
+                                OutlinedButton(onClick = action, modifier = Modifier.weight(1f), contentPadding = PaddingValues(horizontal = 6.dp, vertical = 8.dp)) {
+                                    Icon(icon, contentDescription = null, modifier = Modifier.size(18.dp))
+                                    Spacer(Modifier.width(5.dp))
+                                    Text(label, fontSize = 12.sp, maxLines = 1, softWrap = false)
+                                }
+                            }
+                        }
+                        if (attachments.isNotEmpty()) {
+                            if (channel == "SMS") Text("Attachments are not sent by SMS. They are kept for WhatsApp and social posts.", fontSize = 11.sp, color = SamColors.Amber)
+                            attachments.forEach { uri ->
+                                Row(
+                                    Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp)).background(MaterialTheme.colorScheme.surfaceVariant).padding(start = 10.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Icon(Icons.Default.InsertDriveFile, null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(18.dp))
+                                    Spacer(Modifier.width(8.dp))
+                                    Text(android.net.Uri.decode(uri.substringAfterLast("/")), modifier = Modifier.weight(1f), maxLines = 1, overflow = TextOverflow.Ellipsis, fontSize = 12.sp)
+                                    IconButton(onClick = { attachments = attachments - uri }) { Icon(Icons.Default.Close, contentDescription = "Remove attachment", modifier = Modifier.size(18.dp)) }
+                                }
+                            }
+                        }
+                    }
+
+                    // 4. When
+                    ComposerStep(4, "When") {
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            FilterChip(selected = triggerType == "TIME", onClick = { triggerType = "TIME" }, label = { Text("Date & time") }, leadingIcon = { Icon(Icons.Default.AccessTime, null, Modifier.size(16.dp)) })
+                            FilterChip(selected = triggerType == "LOCATION", onClick = { triggerType = "LOCATION" }, label = { Text("When I arrive") }, leadingIcon = { Icon(Icons.Default.Place, null, Modifier.size(16.dp)) })
+                        }
+                        if (triggerType == "TIME") {
+                            Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                                val presets = listOf(
+                                    "In 1 hour" to { System.currentTimeMillis() + 3_600_000L },
+                                    "Tonight 7 pm" to {
+                                        java.util.Calendar.getInstance().apply {
+                                            set(java.util.Calendar.HOUR_OF_DAY, 19); set(java.util.Calendar.MINUTE, 0); set(java.util.Calendar.SECOND, 0)
+                                            if (timeInMillis <= System.currentTimeMillis()) add(java.util.Calendar.DAY_OF_YEAR, 1)
+                                        }.timeInMillis
+                                    },
+                                    "Tomorrow 8 am" to {
+                                        java.util.Calendar.getInstance().apply {
+                                            add(java.util.Calendar.DAY_OF_YEAR, 1)
+                                            set(java.util.Calendar.HOUR_OF_DAY, 8); set(java.util.Calendar.MINUTE, 0); set(java.util.Calendar.SECOND, 0)
+                                        }.timeInMillis
+                                    },
+                                    "Next Monday 8 am" to {
+                                        java.util.Calendar.getInstance().apply {
+                                            add(java.util.Calendar.DAY_OF_YEAR, 1)
+                                            while (get(java.util.Calendar.DAY_OF_WEEK) != java.util.Calendar.MONDAY) add(java.util.Calendar.DAY_OF_YEAR, 1)
+                                            set(java.util.Calendar.HOUR_OF_DAY, 8); set(java.util.Calendar.MINUTE, 0); set(java.util.Calendar.SECOND, 0)
+                                        }.timeInMillis
+                                    }
+                                )
+                                presets.forEach { (label, compute) ->
+                                    SuggestionChip(onClick = { setFrom(compute()) }, label = { Text(label, fontSize = 12.sp) })
+                                }
+                            }
+                            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                PickerField(
+                                    label = "Date",
+                                    value = parsedAt?.let { SimpleDateFormat("EEE, d MMM yyyy", Locale.getDefault()).format(Date(it)) } ?: date,
+                                    icon = Icons.Default.CalendarMonth,
+                                    modifier = Modifier.weight(1.2f)
+                                ) {
+                                    val cal = java.util.Calendar.getInstance().apply { setTime(runCatching { SimpleDateFormat("yyyy-MM-dd", Locale.US).parse(date)!! }.getOrDefault(Date())) }
+                                    android.app.DatePickerDialog(context, { _, y, m, d -> date = String.format(Locale.US, "%04d-%02d-%02d", y, m + 1, d) }, cal.get(java.util.Calendar.YEAR), cal.get(java.util.Calendar.MONTH), cal.get(java.util.Calendar.DAY_OF_MONTH)).apply {
+                                        datePicker.minDate = System.currentTimeMillis() - 1000L
+                                    }.show()
+                                }
+                                PickerField(label = "Time", value = time, icon = Icons.Default.Schedule, modifier = Modifier.weight(0.8f)) {
+                                    val cal = java.util.Calendar.getInstance().apply { setTime(runCatching { SimpleDateFormat("HH:mm", Locale.US).parse(time)!! }.getOrDefault(Date())) }
+                                    android.app.TimePickerDialog(context, { _, h, m -> time = String.format(Locale.US, "%02d:%02d", h, m) }, cal.get(java.util.Calendar.HOUR_OF_DAY), cal.get(java.util.Calendar.MINUTE), true).show()
+                                }
+                            }
+                            if (parsedAt != null) {
+                                val past = parsedAt <= System.currentTimeMillis()
+                                Text(
+                                    if (past) "This time has already passed — pick a future time." else "Sends ${countdown(parsedAt)}",
+                                    fontSize = 12.sp, color = if (past) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.secondary, fontWeight = FontWeight.Medium
+                                )
+                            }
+                        } else {
+                            ComposerHint("Search for a destination to fill in its coordinates. Place lookup may need internet access. You can also enter coordinates manually.")
+                            OutlinedTextField(
+                                value = locationSearch,
+                                onValueChange = { locationSearch = it; locationSearchMessage = "" },
+                                label = { Text("Search place or address") },
+                                placeholder = { Text("e.g. Kejetia Market, Kumasi") },
+                                singleLine = true,
+                                modifier = Modifier.fillMaxWidth(),
+                                shape = RoundedCornerShape(14.dp),
+                                trailingIcon = {
+                                    if (isSearchingLocation) CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
+                                    else IconButton(onClick = {
+                                        val query = locationSearch.trim()
+                                        if (query.length < 3) {
+                                            locationSearchMessage = "Enter at least 3 characters to search."
+                                        } else {
+                                            isSearchingLocation = true
+                                            locationSearchMessage = "Searching for the place…"
+                                            locationSearchScope.launch {
+                                                val result = withContext(Dispatchers.IO) {
+                                                    runCatching {
+                                                        @Suppress("DEPRECATION")
+                                                        Geocoder(context, Locale.getDefault()).getFromLocationName(query, 1)
+                                                    }.getOrNull()?.firstOrNull()
+                                                }
+                                                isSearchingLocation = false
+                                                if (result != null) {
+                                                    latitudeText = result.latitude.toString()
+                                                    longitudeText = result.longitude.toString()
+                                                    locationLabel = result.getAddressLine(0) ?: query
+                                                    locationSearch = locationLabel
+                                                    locationSearchMessage = "Location found. Confirm the details below."
+                                                } else {
+                                                    locationSearchMessage = "No result found. Check the spelling or enter coordinates manually."
+                                                }
+                                            }
+                                        }
+                                    }) { Icon(Icons.Default.Search, contentDescription = "Find destination") }
+                                }
+                            )
+                            if (locationSearchMessage.isNotBlank()) Text(locationSearchMessage, fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            OutlinedTextField(locationLabel, { locationLabel = it }, label = { Text("Selected place / address") }, singleLine = true, modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(14.dp))
+                            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                OutlinedTextField(latitudeText, { latitudeText = it }, label = { Text("Latitude") }, modifier = Modifier.weight(1f), singleLine = true, shape = RoundedCornerShape(14.dp))
+                                OutlinedTextField(longitudeText, { longitudeText = it }, label = { Text("Longitude") }, modifier = Modifier.weight(1f), singleLine = true, shape = RoundedCornerShape(14.dp))
+                            }
+                            Text("Arrival radius: ${radiusText.toFloatOrNull()?.toInt() ?: 150} m", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurface)
+                            Slider(
+                                value = (radiusText.toFloatOrNull() ?: 150f).coerceIn(100f, 1000f),
+                                onValueChange = { radiusText = ((it / 50f).toInt() * 50).toString() },
+                                valueRange = 100f..1000f
+                            )
+                        }
+                        Text("Repeat", fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                            listOf("NONE" to "Never", "DAILY" to "Daily", "WEEKLY" to "Weekly", "MONTHLY" to "Monthly", "YEARLY" to "Yearly").forEach { (key, label) ->
+                                FilterChip(selected = repeatRule == key, onClick = { repeatRule = key }, label = { Text(label, fontSize = 12.sp) })
+                            }
+                        }
+                    }
+
+                    // 5. Category
+                    ComposerStep(5, "Category") {
+                        FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                            listOf("General", "Personal", "Family", "Work", "School", "Business", "Bulk", "Birthday", "Reminder").forEach { value ->
+                                FilterChip(selected = category == value, onClick = { category = value }, label = { Text(value, fontSize = 12.sp) })
+                            }
+                        }
+                    }
+                    Spacer(Modifier.height(8.dp))
+                }
+
+                // Summary + save bar
+                Surface(color = MaterialTheme.colorScheme.surface, tonalElevation = 3.dp, shadowElevation = 8.dp) {
+                    Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp)) {
+                        if (error.isNotBlank()) {
+                            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(bottom = 8.dp)) {
+                                Icon(Icons.Default.ErrorOutline, null, tint = MaterialTheme.colorScheme.error, modifier = Modifier.size(18.dp))
+                                Spacer(Modifier.width(6.dp))
+                                Text(error, color = MaterialTheme.colorScheme.error, fontSize = 13.sp)
+                            }
+                        }
+                        val summaryWho = recipientName ?: recipient.ifBlank { "…" }
+                        val summaryWhen = if (triggerType == "LOCATION") "on arrival at ${locationLabel.ifBlank { "your destination" }}"
+                            else parsedAt?.let { friendlyDateTime(it) } ?: "—"
+                        val repeatText = repeatLabel(repeatRule).takeIf { it.isNotBlank() }?.let { " • repeats ${it.lowercase()}" } ?: ""
+                        Text(
+                            "${if (channel == "Social") "Social post" else channel} to $summaryWho • $summaryWhen$repeatText",
+                            fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 2, overflow = TextOverflow.Ellipsis
+                        )
+                        Spacer(Modifier.height(8.dp))
+                        Button(
+                            onClick = submit,
+                            modifier = Modifier.fillMaxWidth().height(50.dp),
+                            shape = RoundedCornerShape(14.dp)
+                        ) {
+                            Icon(Icons.Default.ScheduleSend, contentDescription = null)
                             Spacer(Modifier.width(8.dp))
+                            Text(if (duplicateMode || initialMessage == null) "Schedule message" else "Save changes", fontWeight = FontWeight.Bold)
                         }
-                        Text(if (isSearchingLocation) "Searching…" else "Find destination")
-                    }
-                    if (locationSearchMessage.isNotBlank()) {
-                        Text(locationSearchMessage, fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    }
-                    OutlinedTextField(locationLabel, { locationLabel = it }, label = { Text("Selected place / address") }, singleLine = true, modifier = Modifier.fillMaxWidth())
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        OutlinedTextField(latitudeText, { latitudeText = it }, label = { Text("Latitude") }, modifier = Modifier.weight(1f), singleLine = true)
-                        OutlinedTextField(longitudeText, { longitudeText = it }, label = { Text("Longitude") }, modifier = Modifier.weight(1f), singleLine = true)
-                    }
-                    OutlinedTextField(radiusText, { radiusText = it }, label = { Text("Arrival radius (metres, 100–1000)") }, modifier = Modifier.fillMaxWidth(), singleLine = true)
-                }
-                Text("Repeat", fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onSurface)
-                FlowRow(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(6.dp),
-                    verticalArrangement = Arrangement.spacedBy(4.dp)
-                ) {
-                    listOf("NONE" to "Never", "DAILY" to "Daily", "WEEKLY" to "Weekly", "MONTHLY" to "Monthly", "YEARLY" to "Yearly").forEach { (key, label) ->
-                        FilterChip(selected = repeatRule == key, onClick = { repeatRule = key }, label = { Text(label, fontSize = 12.sp) })
                     }
                 }
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    OutlinedTextField(
-                        value = recipient,
-                        onValueChange = { recipient = it },
-                        modifier = Modifier.weight(1f),
-                        label = { Text("Recipient / phone number") },
-                        singleLine = true
-                    )
-                    OutlinedButton(onClick = onPickRecipient) {
-                        Icon(Icons.Default.Contacts, contentDescription = "Choose contact")
-                    }
-                }
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    OutlinedButton(
-                        onClick = onCapturePhoto,
-                        modifier = Modifier.weight(1f).heightIn(min = 48.dp),
-                        contentPadding = PaddingValues(horizontal = 6.dp, vertical = 8.dp)
-                    ) {
-                        Icon(Icons.Default.PhotoCamera, contentDescription = null, modifier = Modifier.size(18.dp))
-                        Spacer(Modifier.width(5.dp))
-                        Text("Photo", fontSize = 11.sp, maxLines = 1, softWrap = false)
-                    }
-                    OutlinedButton(
-                        onClick = onCaptureVideo,
-                        modifier = Modifier.weight(1f).heightIn(min = 48.dp),
-                        contentPadding = PaddingValues(horizontal = 6.dp, vertical = 8.dp)
-                    ) {
-                        Icon(Icons.Default.Videocam, contentDescription = null, modifier = Modifier.size(18.dp))
-                        Spacer(Modifier.width(5.dp))
-                        Text("Video", fontSize = 11.sp, maxLines = 1, softWrap = false)
-                    }
-                    OutlinedButton(
-                        onClick = onPickAttachments,
-                        modifier = Modifier.weight(1f).heightIn(min = 48.dp),
-                        contentPadding = PaddingValues(horizontal = 6.dp, vertical = 8.dp)
-                    ) {
-                        Icon(Icons.Default.AttachFile, contentDescription = null, modifier = Modifier.size(18.dp))
-                        Spacer(Modifier.width(5.dp))
-                        Text("Media", fontSize = 11.sp, maxLines = 1, softWrap = false)
-                    }
-                }
-                if (attachments.isNotEmpty()) {
-                    Text("${attachments.size} attachment(s) selected", color = MaterialTheme.colorScheme.primary, fontSize = 12.sp)
-                    attachments.forEach { uri -> Row(verticalAlignment = Alignment.CenterVertically) { Text(uri.substringAfterLast("/"), modifier = Modifier.weight(1f), maxLines = 1); IconButton(onClick = { attachments = attachments - uri }) { Icon(Icons.Default.Close, contentDescription = "Remove attachment") } } }
-                }
-                OutlinedTextField(
-                    value = body,
-                    onValueChange = { body = it },
-                    modifier = Modifier.fillMaxWidth(),
-                    label = { Text("Message") },
-                    minLines = 3
-                )
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
-                    OutlinedButton(onClick = {
-                        val cal = java.util.Calendar.getInstance().apply { setTime(runCatching { SimpleDateFormat("yyyy-MM-dd", Locale.US).parse(date)!! }.getOrDefault(Date())) }
-                        android.app.DatePickerDialog(context, { _, y, m, d -> date = String.format(Locale.US, "%04d-%02d-%02d", y, m + 1, d) }, cal.get(java.util.Calendar.YEAR), cal.get(java.util.Calendar.MONTH), cal.get(java.util.Calendar.DAY_OF_MONTH)).show()
-                    }, modifier = Modifier.weight(1f)) { Icon(Icons.Default.CalendarMonth, contentDescription = null); Text("Choose date") }
-                    OutlinedButton(onClick = {
-                        val cal = java.util.Calendar.getInstance().apply { setTime(runCatching { SimpleDateFormat("HH:mm", Locale.US).parse(time)!! }.getOrDefault(Date())) }
-                        android.app.TimePickerDialog(context, { _, h, m -> time = String.format(Locale.US, "%02d:%02d", h, m) }, cal.get(java.util.Calendar.HOUR_OF_DAY), cal.get(java.util.Calendar.MINUTE), true).show()
-                    }, modifier = Modifier.weight(1f)) { Icon(Icons.Default.Schedule, contentDescription = null); Text("Choose time") }
-                }
-                OutlinedTextField(
-                    value = date,
-                    onValueChange = { date = it },
-                    modifier = Modifier.fillMaxWidth(),
-                    label = { Text("Date") },
-                    supportingText = { Text("Enter as YYYY-MM-DD") },
-                    singleLine = true
-                )
-                OutlinedTextField(
-                    value = time,
-                    onValueChange = { time = it },
-                    modifier = Modifier.fillMaxWidth(),
-                    label = { Text("Time") },
-                    supportingText = { Text("24-hour format, HH:mm") },
-                    singleLine = true
-                )
-                if (error.isNotBlank()) Text(error, color = MaterialTheme.colorScheme.error)
-                Text(
-                    "SMS is submitted automatically with permission. WhatsApp opens a prepared chat for your final confirmation.",
-                    fontSize = 11.sp,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
             }
-        },
-        confirmButton = {
-            Button(onClick = {
-                val action = {
-                    try {
-                        val scheduledAt = SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.US)
-                            .apply { isLenient = false }
-                            .parse("$date $time")!!.time
-                        when {
-                            recipient.isBlank() || body.isBlank() -> error = "Enter recipient and message."
-                            recipient.count { it.isDigit() } < 7 -> error = "Enter a valid phone number with country code where required."
-                            triggerType == "TIME" && scheduledAt <= System.currentTimeMillis() -> error = "Choose a future date and time."
-                            triggerType == "LOCATION" && ((latitudeText.toDoubleOrNull()?.let { it !in -90.0..90.0 } ?: true) || (longitudeText.toDoubleOrNull()?.let { it !in -180.0..180.0 } ?: true)) -> error = "Enter valid latitude and longitude coordinates."
-                            triggerType == "LOCATION" && (radiusText.toFloatOrNull()?.let { it !in 100f..1000f } ?: true) -> error = "Arrival radius must be between 100 and 1000 metres."
-                            else -> onSave(initialMessage?.id, recipient.trim(), body.trim(), channel, scheduledAt, repeatRule, category, attachments, triggerType, latitudeText.toDoubleOrNull(), longitudeText.toDoubleOrNull(), radiusText.toFloatOrNull() ?: 150f, locationLabel.trim(), whatsappPackage, selectedCampaignId.takeIf { channel == "Social" && it.isNotBlank() })
-                        }
-                    } catch (_: Exception) {
-                        error = "Enter a valid date and time."
-                    }
-                }
-                if (channel == "SMS") requestSmsPermission(action) else action()
-            }) {
-                Text(if (duplicateMode || initialMessage == null) "Save schedule" else "Save changes")
-            }
-        },
-        dismissButton = {
-            TextButton(onClick = onClose) { Text("Cancel") }
         }
-    )
+    }
+}
+
+@Composable
+private fun ComposerStep(number: Int, title: String, content: @Composable ColumnScope.() -> Unit) {
+    SamCard {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Box(Modifier.size(24.dp).clip(CircleShape).background(MaterialTheme.colorScheme.primary), contentAlignment = Alignment.Center) {
+                Text("$number", color = MaterialTheme.colorScheme.onPrimary, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+            }
+            Spacer(Modifier.width(10.dp))
+            Text(title, fontWeight = FontWeight.Bold, fontSize = 15.sp, color = MaterialTheme.colorScheme.onSurface)
+        }
+        Spacer(Modifier.height(12.dp))
+        Column(verticalArrangement = Arrangement.spacedBy(10.dp), content = content)
+    }
+}
+
+@Composable
+private fun ComposerHint(text: String) {
+    Row(verticalAlignment = Alignment.Top) {
+        Icon(Icons.Default.Info, null, tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(14.dp).padding(top = 2.dp))
+        Spacer(Modifier.width(6.dp))
+        Text(text, fontSize = 11.5.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+    }
+}
+
+@Composable
+private fun PickerField(label: String, value: String, icon: androidx.compose.ui.graphics.vector.ImageVector, modifier: Modifier = Modifier, onClick: () -> Unit) {
+    Column(
+        modifier.clip(RoundedCornerShape(14.dp))
+            .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.7f))
+            .clickable(onClick = onClick)
+            .padding(horizontal = 12.dp, vertical = 10.dp)
+    ) {
+        Text(label, fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Icon(icon, null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(16.dp))
+            Spacer(Modifier.width(6.dp))
+            Text(value, fontWeight = FontWeight.SemiBold, fontSize = 14.sp, color = MaterialTheme.colorScheme.onSurface, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        }
+    }
+}
+
+@Composable
+private fun AboutSection() {
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val version = remember {
+        runCatching { context.packageManager.getPackageInfo(context.packageName, 0).versionName }.getOrNull() ?: ""
+    }
+    SettingsSection("About SAM", "Version $version", Icons.Default.Info, SamColors.Indigo) {
+        Text(
+            "SAM Message Scheduler plans SMS, WhatsApp reminders and social posts, sends them on time and keeps a full delivery history on your device.",
+            fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurface
+        )
+        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+        Text("DEVELOPER", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Text("Samuel Kwame Dordzie", fontWeight = FontWeight.Bold, fontSize = 15.sp, color = MaterialTheme.colorScheme.onSurface)
+        Text("T.I. Ahmadiyya Girls' SHS, Asokore", fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+            OutlinedButton(
+                onClick = { runCatching { context.startActivity(android.content.Intent(android.content.Intent.ACTION_DIAL, android.net.Uri.parse("tel:0246652528"))) } },
+                modifier = Modifier.weight(1f),
+                contentPadding = PaddingValues(horizontal = 8.dp, vertical = 8.dp)
+            ) { Icon(Icons.Default.Call, null, Modifier.size(16.dp)); Spacer(Modifier.width(6.dp)); Text("0246652528", fontSize = 12.sp, maxLines = 1) }
+            OutlinedButton(
+                onClick = {
+                    runCatching {
+                        context.startActivity(android.content.Intent(android.content.Intent.ACTION_SENDTO, android.net.Uri.parse("mailto:sdordzie@gmail.com")).apply {
+                            putExtra(android.content.Intent.EXTRA_SUBJECT, "SAM Message Scheduler $version")
+                        })
+                    }
+                },
+                modifier = Modifier.weight(1f),
+                contentPadding = PaddingValues(horizontal = 8.dp, vertical = 8.dp)
+            ) { Icon(Icons.Default.Email, null, Modifier.size(16.dp)); Spacer(Modifier.width(6.dp)); Text("Email", fontSize = 12.sp, maxLines = 1) }
+        }
+        Text("sdordzie@gmail.com", fontSize = 12.sp, color = MaterialTheme.colorScheme.primary)
+        Text("© ${java.util.Calendar.getInstance().get(java.util.Calendar.YEAR)} Samuel Kwame Dordzie. All rights reserved.", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+    }
 }

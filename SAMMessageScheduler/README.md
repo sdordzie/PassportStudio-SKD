@@ -2,6 +2,16 @@
 
 Native Android app using Kotlin, Jetpack Compose, Room and WorkManager.
 
+## 6.18.0 professional UI refresh
+- New indigo/teal brand theme with matching light and dark modes, plus an Appearance setting (System, Light, Dark).
+- Dashboard: greeting hero with a live "Next up" countdown, tappable overview tiles, quick actions, insights with channel mix, and a cleaner SMS activity log.
+- Full-screen, step-by-step composer (channel, recipient, message, timing, category) with one-tap time presets, SMS character and part counter, arrival-radius slider and a live summary before saving.
+- Message cards show contact names instead of bare numbers, colour-coded status pills, friendly dates ("Tomorrow, 08:00") and countdowns.
+- Messages screen: filter chips with live counts, sort toggle, clear-search, focused actions plus an overflow menu (duplicate, mark done, copy text, delete).
+- Agenda: Upcoming/History views grouped by Today, Tomorrow and dates, with arrival reminders listed separately.
+- Settings reorganised into cards; new About section with developer details.
+- Snackbar confirmations after scheduling, pausing, resuming and retrying.
+
 ## Phase 13 contact centre
 - New Contacts tab with local contact storage in Room.
 - Add contacts manually or pick an existing phone contact through Android's contact picker; SAM only receives the selected contact's name and phone number.

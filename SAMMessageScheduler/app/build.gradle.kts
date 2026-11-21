@@ -11,8 +11,8 @@ android {
         applicationId = "com.bigsammy.sammessagescheduler"
         minSdk = 26
         targetSdk = 35
-        versionCode = 60
-        versionName = "6.18.1"
+        versionCode = 61
+        versionName = "6.18.2"
     }
     // Permanent release key supplied by CI secrets (SAM_KEYSTORE_PATH / SAM_KEYSTORE_PASSWORD).
     // Every build signed with this key installs over the previous one without losing data.

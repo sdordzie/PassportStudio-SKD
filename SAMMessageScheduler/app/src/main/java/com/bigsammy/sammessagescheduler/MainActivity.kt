@@ -848,6 +848,9 @@ private fun SchedulerScreen(
     fun openComposer(channel: String = "SMS") { composerChannel = channel; editMessage = null; duplicateMode = false; showComposer = true }
     fun notify(text: String) { uiScope.launch { snackbarHostState.currentSnackbarData?.dismiss(); snackbarHostState.showSnackbar(text) } }
 
+    // Explicit stacking container: the full-screen composer is layered above the Scaffold.
+    Box(Modifier.fillMaxSize()) {
+
     Scaffold(
         containerColor = MaterialTheme.colorScheme.background,
         snackbarHost = { SnackbarHost(snackbarHostState) },
@@ -2081,6 +2084,7 @@ private fun SchedulerScreen(
             }
         )
     }
+    }
 }
 
 
@@ -2515,10 +2519,10 @@ private fun Composer(
         time = SimpleDateFormat("HH:mm", Locale.US).format(Date(millis))
     }
 
-    androidx.compose.ui.window.Dialog(
-        onDismissRequest = onClose,
-        properties = DialogProperties(usePlatformDefaultWidth = false, dismissOnClickOutside = false, decorFitsSystemWindows = false)
-    ) {
+    // Drawn as a full-screen layer inside the activity (not a separate dialog window), so it gets the
+    // same reliable status-bar, navigation-bar and keyboard insets as the rest of the app on every phone.
+    androidx.activity.compose.BackHandler(onBack = onClose)
+    Box(Modifier.fillMaxSize()) {
         Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
             Column(Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.safeDrawing)) {
                 // Header

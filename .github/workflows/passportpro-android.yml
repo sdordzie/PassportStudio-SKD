@@ -12,8 +12,10 @@ permissions:
 
 jobs:
   build:
-    name: Build debug APK
+    name: Build APK
     runs-on: ubuntu-latest
+    env:
+      HAS_KEYSTORE: ${{ secrets.PASSPORTPRO_KEYSTORE_BASE64 != '' }}
     steps:
       - uses: actions/checkout@v4
       - name: Set up JDK 17
@@ -31,10 +33,39 @@ jobs:
           packages: platform-tools
       - name: Install Android SDK Platform and Build Tools
         run: sdkmanager "platforms;android-35" "build-tools;35.0.0"
-      - name: Build debug APK
+
+      # Signed release APK — installs over earlier signed versions and keeps data.
+      - name: Restore signing key
+        if: env.HAS_KEYSTORE == 'true'
+        run: echo "${{ secrets.PASSPORTPRO_KEYSTORE_BASE64 }}" | base64 -d > "$RUNNER_TEMP/passportpro-release.jks"
+      - name: Build signed release APK
+        if: env.HAS_KEYSTORE == 'true'
+        working-directory: AndroidNative
+        env:
+          KEYSTORE_FILE: ${{ runner.temp }}/passportpro-release.jks
+          KEYSTORE_PASSWORD: ${{ secrets.PASSPORTPRO_KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.PASSPORTPRO_KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.PASSPORTPRO_KEY_PASSWORD }}
+        run: |
+          gradle --no-daemon assembleRelease
+          VERSION=$(grep -oP 'versionName = "\K[^"]+' app/build.gradle.kts)
+          cp app/build/outputs/apk/release/app-release.apk "PassportProStudio-$VERSION.apk"
+      - name: Upload signed APK
+        if: env.HAS_KEYSTORE == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: PassportProStudio-signed-apk
+          path: AndroidNative/PassportProStudio-*.apk
+          if-no-files-found: error
+          retention-days: 30
+
+      # Fallback while the signing secrets are not set up yet.
+      - name: Build debug APK (no signing key configured)
+        if: env.HAS_KEYSTORE != 'true'
         working-directory: AndroidNative
         run: gradle --no-daemon assembleDebug
-      - name: Upload APK artifact
+      - name: Upload debug APK
+        if: env.HAS_KEYSTORE != 'true'
         uses: actions/upload-artifact@v4
         with:
           name: PassportProStudio-debug-apk

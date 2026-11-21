@@ -149,75 +149,75 @@ internal fun PrintDesignerScreen(modifier: Modifier = Modifier) {
 
     if (showStudioPicker) {
         Dialog(onDismissRequest = { showStudioPicker = false }) {
-            Surface(color = Color(0xFF101522), shape = RoundedCornerShape(22.dp), modifier = Modifier.fillMaxWidth().fillMaxHeight(.88f)) {
+            Surface(color = Ink, shape = RoundedCornerShape(22.dp), modifier = Modifier.fillMaxWidth().fillMaxHeight(.88f)) {
                 Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                    Text("STUDIO PHOTO LIBRARY", color = Color(0xFFE4B45D), fontSize = 11.sp, fontWeight = FontWeight.Bold)
-                    Text("Select a captured or edited photo", color = Color.White, fontSize = 18.sp, fontWeight = FontWeight.Bold)
+                    Text("STUDIO PHOTO LIBRARY", color = BrandAccent, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                    Text("Select a captured or edited photo", color = PrimaryText, fontSize = 18.sp, fontWeight = FontWeight.Bold)
                     if (studioPhotos.isEmpty()) {
-                        Box(Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) { Text("No saved photos found. Capture or edit a photo first.", color = Color(0xFF9AA7B8)) }
+                        Box(Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) { Text("No saved photos found. Capture or edit a photo first.", color = Muted) }
                     } else {
                         LazyVerticalGrid(columns = GridCells.Fixed(3), modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                             items(studioPhotos, key = { it.absolutePath }) { file ->
                                 val thumb = remember(file.absolutePath, file.lastModified()) { BitmapFactory.decodeFile(file.absolutePath, BitmapFactory.Options().apply { inSampleSize = 4 }) }
-                                Surface(color = Color(0xFF1B2433), shape = RoundedCornerShape(10.dp), onClick = {
+                                Surface(color = Panel, shape = RoundedCornerShape(10.dp), onClick = {
                                     val decoded = BitmapFactory.decodeFile(file.absolutePath)
                                     if (decoded != null) { photo = decoded.copy(Bitmap.Config.ARGB_8888, false); photoName = file.name; status = "Studio photo selected."; showStudioPicker = false }
                                     else status = "Unable to open selected photo."
                                 }) {
                                     Column(Modifier.padding(5.dp)) {
                                         if (thumb != null) Image(thumb.asImageBitmap(), null, Modifier.fillMaxWidth().height(112.dp), contentScale = ContentScale.Crop)
-                                        Text(if (file.parentFile?.name == "Edited") "EDITED" else "CAPTURED", color = Color(0xFFE4B45D), fontSize = 9.sp, fontWeight = FontWeight.Bold)
-                                        Text(file.name, color = Color.White, fontSize = 9.sp, maxLines = 1)
+                                        Text(if (file.parentFile?.name == "Edited") "EDITED" else "CAPTURED", color = BrandAccent, fontSize = 9.sp, fontWeight = FontWeight.Bold)
+                                        Text(file.name, color = PrimaryText, fontSize = 9.sp, maxLines = 1)
                                     }
                                 }
                             }
                         }
                     }
-                    OutlinedButton(onClick = { showStudioPicker = false }, modifier = Modifier.fillMaxWidth()) { Text("CLOSE") }
+                    StudioButton("Close", onClick = { showStudioPicker = false }, tone = ButtonTone.Secondary, compact = true, modifier = Modifier.fillMaxWidth())
                 }
             }
         }
     }
 
     Column(modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        Text("PROFESSIONAL PRINT DESIGNER", color=Color(0xFFE4B45D), fontSize=11.sp, fontWeight=FontWeight.Bold, letterSpacing=1.3.sp)
-        Text("Print-ready photo sheets", color=Color.White, fontSize=24.sp, fontWeight=FontWeight.Bold)
-        Text("Arrange passport and ID photographs on printable sheets. Works offline.", color=Color(0xFF9AA7B8), fontSize=12.sp)
+        Text("PROFESSIONAL PRINT DESIGNER", color=BrandAccent, fontSize=11.sp, fontWeight=FontWeight.Bold, letterSpacing=1.3.sp)
+        Text("Print-ready photo sheets", color=PrimaryText, fontSize=24.sp, fontWeight=FontWeight.Bold)
+        Text("Arrange passport and ID photographs on printable sheets. Works offline.", color=Muted, fontSize=12.sp)
 
-        Surface(color=Color(0xFF1B2433), shape=RoundedCornerShape(16.dp), modifier=Modifier.fillMaxWidth()) {
+        Surface(color=Panel, shape=RoundedCornerShape(16.dp), modifier=Modifier.fillMaxWidth()) {
             Column(Modifier.padding(14.dp), verticalArrangement=Arrangement.spacedBy(10.dp)) {
-                Button(onClick={libraryRefresh++; showStudioPicker=true}, modifier=Modifier.fillMaxWidth(), colors=ButtonDefaults.buttonColors(containerColor=Color(0xFFE4B45D),contentColor=Color(0xFF101522))) {
-                    Icon(Icons.Default.PhotoLibrary,null); Spacer(Modifier.width(8.dp)); Text("CHOOSE FROM STUDIO GALLERY",fontWeight=FontWeight.Bold)
+                ButtonPair {
+                    StudioButton("Studio gallery", onClick={libraryRefresh++; showStudioPicker=true}, icon=Icons.Default.PhotoLibrary, compact=true, modifier=Modifier.weight(1f))
+                    StudioButton("From phone", onClick={picker.launch("image/*")}, icon=Icons.Default.AddPhotoAlternate, tone=ButtonTone.Secondary, compact=true, modifier=Modifier.weight(1f))
                 }
-                OutlinedButton(onClick={picker.launch("image/*")}, modifier=Modifier.fillMaxWidth()) { Text("IMPORT FROM PHONE") }
-                Text(photoName,color=Color(0xFF9AA7B8),fontSize=12.sp)
+                Text(photoName,color=Muted,fontSize=12.sp)
                 photo?.let { Image(it.asImageBitmap(),null,Modifier.fillMaxWidth().height(190.dp),contentScale=ContentScale.Fit) }
             }
         }
 
-        Text("PHOTO SIZE",color=Color(0xFF9AA7B8),fontSize=11.sp,fontWeight=FontWeight.Bold)
+        Text("PHOTO SIZE",color=Muted,fontSize=11.sp,fontWeight=FontWeight.Bold)
         Column(verticalArrangement=Arrangement.spacedBy(6.dp)) {
             photoPresets.forEach { preset ->
                 FilterChip(selected=selectedPreset==preset,onClick={selectedPreset=preset},label={Text(preset.label)},modifier=Modifier.fillMaxWidth())
             }
         }
         if (selectedPreset.unit == "px") {
-            Text("Pixel dimensions are preserved as the intended output size at the selected print resolution.",color=Color(0xFF9AA7B8),fontSize=11.sp)
+            Text("Pixel dimensions are preserved as the intended output size at the selected print resolution.",color=Muted,fontSize=11.sp)
         }
 
-        Text("PAPER SIZE",color=Color(0xFF9AA7B8),fontSize=11.sp,fontWeight=FontWeight.Bold)
+        Text("PAPER SIZE",color=Muted,fontSize=11.sp,fontWeight=FontWeight.Bold)
         Row(horizontalArrangement=Arrangement.spacedBy(8.dp)) {
             FilterChip(selected=paper=="A4",onClick={paper="A4"},label={Text("A4")})
             FilterChip(selected=paper=="4×6",onClick={paper="4×6"},label={Text("4 × 6 inch")})
         }
-        Text("COPIES: $copies",color=Color.White,fontSize=12.sp,fontWeight=FontWeight.SemiBold)
+        Text("Copies: $copies",color=PrimaryText,fontSize=12.sp,fontWeight=FontWeight.SemiBold)
         Slider(value=copies.toFloat(),onValueChange={copies=it.toInt()},valueRange=1f..40f,steps=38)
-        Text("GAP: $gapMm mm",color=Color.White,fontSize=12.sp)
+        Text("Gap between photos: $gapMm mm",color=PrimaryText,fontSize=12.sp)
         Slider(value=gapMm.toFloat(),onValueChange={gapMm=it.toInt()},valueRange=0f..10f,steps=9)
-        Text("PAGE MARGIN: $marginMm mm",color=Color.White,fontSize=12.sp)
+        Text("Page margin: $marginMm mm",color=PrimaryText,fontSize=12.sp)
         Slider(value=marginMm.toFloat(),onValueChange={marginMm=it.toInt()},valueRange=0f..20f,steps=19)
-        Text("PRINT RESOLUTION: $dpi DPI",color=Color.White,fontSize=12.sp)
-        Row(horizontalArrangement=Arrangement.spacedBy(8.dp)) {
+        Text("Print resolution: $dpi DPI",color=PrimaryText,fontSize=12.sp)
+        Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement=Arrangement.spacedBy(8.dp)) {
             listOf(150,300,600).forEach { value -> FilterChip(selected=dpi==value,onClick={dpi=value},label={Text("$value DPI")}) }
         }
 
@@ -229,15 +229,15 @@ internal fun PrintDesignerScreen(modifier: Modifier = Modifier) {
         val cols = floor((pageW-2*marginMm+gapMm)/(photoWmm+gapMm)).toInt().coerceAtLeast(0)
         val rows = floor((pageH-2*marginMm+gapMm)/(photoHmm+gapMm)).toInt().coerceAtLeast(0)
         val count = min(copies,cols*rows)
-        Surface(color=Color(0xFF1B2433),shape=RoundedCornerShape(16.dp),modifier=Modifier.fillMaxWidth()) {
+        Surface(color=Panel,shape=RoundedCornerShape(16.dp),modifier=Modifier.fillMaxWidth()) {
             Column(Modifier.padding(14.dp),verticalArrangement=Arrangement.spacedBy(6.dp)) {
-                Text("LAYOUT SUMMARY",color=Color(0xFFE4B45D),fontSize=11.sp,fontWeight=FontWeight.Bold)
-                Text("$cols columns × $rows rows • $count photo(s) on one sheet",color=Color.White,fontSize=14.sp,fontWeight=FontWeight.SemiBold)
-                Text("Selected size: ${selectedPreset.label} • Paper: $paper • $dpi DPI",color=Color(0xFF9AA7B8),fontSize=11.sp)
-                Text("The PDF uses physical page dimensions. Printer margins and borderless capability depend on the printer.",color=Color(0xFF9AA7B8),fontSize=10.sp)
+                Text("LAYOUT SUMMARY",color=BrandAccent,fontSize=11.sp,fontWeight=FontWeight.Bold)
+                Text("$cols columns × $rows rows • $count photo(s) on one sheet",color=PrimaryText,fontSize=14.sp,fontWeight=FontWeight.SemiBold)
+                Text("Selected size: ${selectedPreset.label} • Paper: $paper • $dpi DPI",color=Muted,fontSize=11.sp)
+                Text("The PDF uses physical page dimensions. Printer margins and borderless capability depend on the printer.",color=Muted,fontSize=10.sp)
             }
         }
-        Button(onClick={
+        StudioButton(text=if(busy) "Creating PDF…" else "Create & share PDF", icon=Icons.Default.PictureAsPdf, busy=busy, modifier=Modifier.fillMaxWidth(), onClick={
             val src=previewSource
             if(src==null) status="Choose a photograph first."
             else {
@@ -254,9 +254,7 @@ internal fun PrintDesignerScreen(modifier: Modifier = Modifier) {
                 } catch(e:Exception) { status="PDF export failed: ${e.localizedMessage ?: "unknown error"}" }
                 finally { busy=false }
             }
-        },enabled=!busy,modifier=Modifier.fillMaxWidth(),colors=ButtonDefaults.buttonColors(containerColor=Color(0xFFE4B45D),contentColor=Color(0xFF101522))) {
-            Icon(Icons.Default.PictureAsPdf,null); Spacer(Modifier.width(8.dp)); Text(if(busy) "CREATING PDF…" else "CREATE & SHARE PRINT PDF",fontWeight=FontWeight.Bold)
-        }
-        Text(status,color=Color(0xFF9AA7B8),fontSize=11.sp)
+        })
+        Text(status,color=Muted,fontSize=11.sp)
     }
 }

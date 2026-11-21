@@ -100,26 +100,64 @@ internal data class DeliverySize(
     val headFraction: Float
 )
 
-internal fun deliverySizes(context: Context): List<DeliverySize> {
-    val sizes = mutableListOf<DeliverySize>()
-    val prefs = context.getSharedPreferences("passportpro_editor_defaults", Context.MODE_PRIVATE)
-    if (prefs.getBoolean("use_custom_dimensions", false)) {
-        val w = prefs.getString("width", "600")?.toFloatOrNull()
-        val h = prefs.getString("height", "800")?.toFloatOrNull()
-        val unit = prefs.getString("unit", "px") ?: "px"
-        val dpi = prefs.getInt("dpi", 300)
-        if (w != null && h != null && w > 0f && h > 0f) {
-            val factor = when (unit) { "mm" -> dpi / 25.4f; "cm" -> dpi / 2.54f; "in" -> dpi.toFloat(); else -> 1f }
-            val pw = (w * factor).toInt().coerceIn(50, 6000)
-            val ph = (h * factor).toInt().coerceIn(50, 6000)
-            fun clean(v: Float) = if (v % 1f == 0f) v.toInt().toString() else v.toString()
-            sizes += DeliverySize("studio", "Studio size", "${clean(w)} × ${clean(h)} $unit", pw.toFloat() / ph, pw, ph, 0.72f)
-        }
+internal data class CustomSizeSpec(val width: Float, val height: Float, val unit: String, val dpi: Int) {
+    fun pixels(): Pair<Int, Int> {
+        val factor = when (unit) { "mm" -> dpi / 25.4f; "cm" -> dpi / 2.54f; "in" -> dpi.toFloat(); else -> 1f }
+        return (width * factor).toInt().coerceIn(50, 6000) to (height * factor).toInt().coerceIn(50, 6000)
     }
-    sizes += DeliverySize("passport", "Passport", "35 × 45 mm", 35f / 45f, 827, 1063, 0.74f)
-    sizes += DeliverySize("visa", "Visa", "2 × 2 in", 1f, 1200, 1200, 0.60f)
+    fun label(): String {
+        fun clean(v: Float) = if (v % 1f == 0f) v.toInt().toString() else v.toString()
+        return "${clean(width)} × ${clean(height)} $unit"
+    }
+}
+
+private const val EDITOR_PREFS = "passportpro_editor_defaults"
+
+/** The custom size shared by the camera and the Photo Editor ("Set as default" in the editor). */
+internal fun readCustomSize(context: Context): CustomSizeSpec? {
+    val prefs = context.getSharedPreferences(EDITOR_PREFS, Context.MODE_PRIVATE)
+    if (!prefs.getBoolean("use_custom_dimensions", false)) return null
+    val w = prefs.getString("width", null)?.toFloatOrNull() ?: return null
+    val h = prefs.getString("height", null)?.toFloatOrNull() ?: return null
+    if (w <= 0f || h <= 0f) return null
+    return CustomSizeSpec(w, h, prefs.getString("unit", "mm") ?: "mm", prefs.getInt("dpi", 300))
+}
+
+internal fun writeCustomSize(context: Context, spec: CustomSizeSpec) {
+    fun clean(v: Float) = if (v % 1f == 0f) v.toInt().toString() else v.toString()
+    context.getSharedPreferences(EDITOR_PREFS, Context.MODE_PRIVATE).edit()
+        .putString("width", clean(spec.width))
+        .putString("height", clean(spec.height))
+        .putString("unit", spec.unit)
+        .putInt("dpi", spec.dpi)
+        .putBoolean("use_custom_dimensions", true)
+        .apply()
+}
+
+internal fun deliverySizes(context: Context): List<DeliverySize> {
+    val sizes = mutableListOf(
+        DeliverySize("passport", "Passport", "35 × 45 mm", 35f / 45f, 827, 1063, 0.74f),
+        DeliverySize("visa", "Visa", "2 × 2 in", 1f, 1200, 1200, 0.60f),
+        DeliverySize("id", "ID photo", "30 × 40 mm", 30f / 40f, 709, 945, 0.70f)
+    )
+    readCustomSize(context)?.let { spec ->
+        val (pw, ph) = spec.pixels()
+        sizes += DeliverySize("custom", "Custom", spec.label(), pw.toFloat() / ph, pw, ph, 0.72f)
+    }
     sizes += DeliverySize("full", "Full photo", "No crop", null, 0, 0, 0f)
     return sizes
+}
+
+/** The size chosen before capture; remembered between customers. */
+internal fun readSelectedSize(context: Context): DeliverySize {
+    val sizes = deliverySizes(context)
+    val key = context.getSharedPreferences(QUICK_PREFS, Context.MODE_PRIVATE).getString("size", null)
+        ?.let { if (it == "studio") "custom" else it }
+    return sizes.firstOrNull { it.key == key } ?: sizes.first()
+}
+
+internal fun writeSelectedSize(context: Context, key: String) {
+    context.getSharedPreferences(QUICK_PREFS, Context.MODE_PRIVATE).edit().putString("size", key).apply()
 }
 
 internal data class DeliveryBackground(val key: String, val label: String, val color: Int?)
@@ -349,8 +387,9 @@ internal fun QuickFinishScreen(
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val prefs = remember { context.getSharedPreferences(QUICK_PREFS, Context.MODE_PRIVATE) }
-    val sizes = remember { deliverySizes(context) }
-    var sizeKey by remember { mutableStateOf(prefs.getString("size", null)?.takeIf { k -> sizes.any { it.key == k } } ?: sizes.first().key) }
+    var sizes by remember { mutableStateOf(deliverySizes(context)) }
+    var sizeKey by remember { mutableStateOf(readSelectedSize(context).key) }
+    var showSizePicker by remember { mutableStateOf(false) }
     var backgroundKey by remember { mutableStateOf(prefs.getString("background", "white") ?: "white") }
     var autoSend by remember { mutableStateOf(readAutoSend(context)) }
     var brightnessDraft by remember { mutableFloatStateOf(0f) }
@@ -456,9 +495,9 @@ internal fun QuickFinishScreen(
     ) {
         // Header
         Row(verticalAlignment = Alignment.CenterVertically) {
-            IconButton(onClick = onRetake) { Icon(Icons.Default.ArrowBack, contentDescription = "Back to camera", tint = Accent) }
+            IconButton(onClick = onRetake) { Icon(Icons.Default.ArrowBack, contentDescription = "Back to camera", tint = BrandAccent) }
             Column(Modifier.weight(1f)) {
-                Text("READY TO DELIVER", color = Accent, fontSize = 11.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.4.sp)
+                Text("READY TO DELIVER", color = BrandAccent, fontSize = 11.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.4.sp)
                 Text(
                     when {
                         error != null -> "Something went wrong"
@@ -469,11 +508,7 @@ internal fun QuickFinishScreen(
                     color = PrimaryText, fontSize = 20.sp, fontWeight = FontWeight.Bold
                 )
             }
-            TextButton(onClick = onFineTune, enabled = !working) {
-                Icon(Icons.Default.Tune, contentDescription = null, tint = Accent, modifier = Modifier.size(18.dp))
-                Spacer(Modifier.width(6.dp))
-                Text("Fine-tune", color = Accent, fontWeight = FontWeight.SemiBold)
-            }
+            StudioButton("Fine-tune", onClick = onFineTune, enabled = !working, icon = Icons.Default.Tune, tone = ButtonTone.Quiet, compact = true)
         }
 
         // Preview
@@ -490,7 +525,7 @@ internal fun QuickFinishScreen(
                     contentScale = ContentScale.Fit
                 )
             } else if (error == null) {
-                CircularProgressIndicator(color = Accent)
+                CircularProgressIndicator(color = BrandAccent)
             }
             if (error != null) {
                 Text(error!!, color = Color(0xFFFF8A80), textAlign = TextAlign.Center, modifier = Modifier.padding(24.dp))
@@ -522,9 +557,10 @@ internal fun QuickFinishScreen(
                 sizes.forEach { option ->
                     OptionPill(selected = option.key == sizeKey, title = option.label, subtitle = option.detail) {
                         sizeKey = option.key
-                        prefs.edit().putString("size", option.key).apply()
+                        writeSelectedSize(context, option.key)
                     }
                 }
+                OptionPill(selected = false, title = "Custom…", subtitle = "Set your size") { showSizePicker = true }
             }
             SectionLabel("Background")
             Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -543,7 +579,7 @@ internal fun QuickFinishScreen(
                     onValueChangeFinished = { brightness = brightnessDraft },
                     valueRange = -0.25f..0.25f,
                     modifier = Modifier.weight(1f).padding(horizontal = 8.dp),
-                    colors = SliderDefaults.colors(thumbColor = Accent, activeTrackColor = Accent)
+                    colors = SliderDefaults.colors(thumbColor = BrandAccent, activeTrackColor = BrandAccent)
                 )
                 Text("${(brightnessDraft * 100).toInt()}%", color = Muted, fontSize = 11.sp, modifier = Modifier.width(38.dp))
             }
@@ -552,7 +588,7 @@ internal fun QuickFinishScreen(
                 color = Panel, shape = RoundedCornerShape(14.dp), modifier = Modifier.fillMaxWidth()
             ) {
                 Row(Modifier.padding(horizontal = 14.dp, vertical = 11.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Icon(Icons.Default.Bolt, contentDescription = null, tint = Accent, modifier = Modifier.size(20.dp))
+                    Icon(Icons.Default.Bolt, contentDescription = null, tint = BrandAccent, modifier = Modifier.size(20.dp))
                     Spacer(Modifier.width(10.dp))
                     Column(Modifier.weight(1f)) {
                         Text(autoSend.label, color = PrimaryText, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
@@ -567,42 +603,23 @@ internal fun QuickFinishScreen(
         }
 
         // Actions
-        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            Button(
-                onClick = { send(viaWhatsApp = true) },
-                enabled = !working && !sending,
-                modifier = Modifier.weight(1f).height(56.dp),
-                shape = RoundedCornerShape(16.dp),
-                colors = ButtonDefaults.buttonColors(containerColor = WhatsAppGreen, contentColor = Color(0xFF06291A))
-            ) {
-                Icon(Icons.Default.Send, contentDescription = null)
-                Spacer(Modifier.width(8.dp))
-                Text("WhatsApp", fontWeight = FontWeight.Bold)
-            }
-            Button(
-                onClick = { send(viaWhatsApp = false) },
-                enabled = !working && !sending,
-                modifier = Modifier.weight(1f).height(56.dp),
-                shape = RoundedCornerShape(16.dp),
-                colors = ButtonDefaults.buttonColors(containerColor = Accent, contentColor = Color(0xFF101522))
-            ) {
-                if (sending) CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp, color = Color(0xFF101522))
-                else Icon(Icons.Default.Share, contentDescription = null)
-                Spacer(Modifier.width(8.dp))
-                Text("Share", fontWeight = FontWeight.Bold)
-            }
+        ButtonPair {
+            StudioButton("WhatsApp", onClick = { send(viaWhatsApp = true) }, enabled = !working, busy = sending, icon = Icons.Default.Send, tone = ButtonTone.WhatsApp, modifier = Modifier.weight(1f))
+            StudioButton("Share", onClick = { send(viaWhatsApp = false) }, enabled = !working, busy = sending, icon = Icons.Default.Share, modifier = Modifier.weight(1f))
         }
-        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            OutlinedButton(onClick = onRetake, modifier = Modifier.weight(1f), shape = RoundedCornerShape(14.dp), border = BorderStroke(1.dp, Muted.copy(alpha = .5f))) {
-                Icon(Icons.Default.Replay, contentDescription = null, tint = PrimaryText, modifier = Modifier.size(18.dp)); Spacer(Modifier.width(6.dp)); Text("Retake", color = PrimaryText)
-            }
-            OutlinedButton(onClick = { saveOnly() }, enabled = !working, modifier = Modifier.weight(1f), shape = RoundedCornerShape(14.dp), border = BorderStroke(1.dp, Muted.copy(alpha = .5f))) {
-                Icon(Icons.Default.Download, contentDescription = null, tint = PrimaryText, modifier = Modifier.size(18.dp)); Spacer(Modifier.width(6.dp)); Text("Save", color = PrimaryText)
-            }
-            OutlinedButton(onClick = onNextCustomer, modifier = Modifier.weight(1f), shape = RoundedCornerShape(14.dp), border = BorderStroke(1.dp, Accent.copy(alpha = .7f))) {
-                Icon(Icons.Default.AddAPhoto, contentDescription = null, tint = Accent, modifier = Modifier.size(18.dp)); Spacer(Modifier.width(6.dp)); Text("Next", color = Accent)
-            }
+        ButtonPair {
+            StudioButton("Retake", onClick = onRetake, icon = Icons.Default.Replay, tone = ButtonTone.Secondary, compact = true, modifier = Modifier.weight(1f))
+            StudioButton("Save", onClick = { saveOnly() }, enabled = !working, icon = Icons.Default.Download, tone = ButtonTone.Secondary, compact = true, modifier = Modifier.weight(1f))
+            StudioButton("Next", onClick = onNextCustomer, icon = Icons.Default.AddAPhoto, tone = ButtonTone.Secondary, compact = true, modifier = Modifier.weight(1f))
         }
+    }
+
+    if (showSizePicker) {
+        SizePickerSheet(
+            selectedKey = sizeKey,
+            onSelect = { key -> sizes = deliverySizes(context); sizeKey = key },
+            onDismiss = { showSizePicker = false }
+        )
     }
 }
 
@@ -616,11 +633,11 @@ private fun OptionPill(selected: Boolean, title: String, subtitle: String, onCli
     Surface(
         onClick = onClick,
         shape = RoundedCornerShape(14.dp),
-        color = if (selected) Accent.copy(alpha = .16f) else Panel,
-        border = BorderStroke(if (selected) 1.5.dp else 1.dp, if (selected) Accent else Muted.copy(alpha = .3f))
+        color = if (selected) BrandAccent.copy(alpha = .14f) else Panel,
+        border = BorderStroke(if (selected) 1.5.dp else 1.dp, if (selected) BrandAccent else Muted.copy(alpha = .3f))
     ) {
         Column(Modifier.padding(horizontal = 14.dp, vertical = 9.dp)) {
-            Text(title, color = if (selected) Accent else PrimaryText, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+            Text(title, color = if (selected) BrandAccent else PrimaryText, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
             Text(subtitle, color = Muted, fontSize = 10.sp)
         }
     }
@@ -631,7 +648,7 @@ private fun ColourSwatch(option: DeliveryBackground, selected: Boolean, onClick:
     Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.clickable(onClick = onClick)) {
         Box(
             Modifier.size(40.dp)
-                .border(BorderStroke(if (selected) 3.dp else 1.dp, if (selected) Accent else Muted.copy(alpha = .4f)), CircleShape)
+                .border(BorderStroke(if (selected) 3.dp else 1.dp, if (selected) BrandAccent else Muted.copy(alpha = .4f)), CircleShape)
                 .padding(if (selected) 5.dp else 2.dp)
                 .clip(CircleShape)
                 .background(option.color?.let { Color(it) } ?: Color(0xFF3A4352)),
@@ -641,6 +658,6 @@ private fun ColourSwatch(option: DeliveryBackground, selected: Boolean, onClick:
             else if (selected) Icon(Icons.Default.Check, contentDescription = null, tint = if (option.key == "white" || option.key == "sky" || option.key == "grey") Color(0xFF101522) else Color.White, modifier = Modifier.size(16.dp))
         }
         Spacer(Modifier.height(4.dp))
-        Text(option.label, color = if (selected) Accent else Muted, fontSize = 10.sp)
+        Text(option.label, color = if (selected) BrandAccent else Muted, fontSize = 10.sp)
     }
 }

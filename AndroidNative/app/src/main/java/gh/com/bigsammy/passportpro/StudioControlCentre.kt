@@ -10,10 +10,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Print
-import androidx.compose.material.icons.filled.Security
-import androidx.compose.material.icons.filled.Settings
-import androidx.compose.material.icons.filled.Storage
+import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
@@ -27,7 +24,7 @@ import androidx.compose.ui.unit.sp
 import java.io.File
 import java.security.MessageDigest
 
-private val ControlGold = Color(0xFFE4B45D)
+private val ControlGold: Color @Composable get() = BrandAccent
 private val ControlPanel: Color @Composable get() = if (LocalPassportDark.current) Color(0xFF1B2433) else Color.White
 private val ControlMuted: Color @Composable get() = if (LocalPassportDark.current) Color(0xFF9AA7B8) else Color(0xFF667085)
 
@@ -83,14 +80,12 @@ internal fun StudioControlCentreScreen(modifier: Modifier = Modifier, appearance
         }
 
         ControlCard("PRINTER & PRINT SERVICES", "Connect or configure a printer through Android. Actual printer options depend on the installed manufacturer print service.") {
-            Button(onClick = { runCatching { context.startActivity(Intent(Settings.ACTION_PRINT_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) } }, modifier = Modifier.fillMaxWidth(), colors = ButtonDefaults.buttonColors(containerColor = ControlGold, contentColor = Color(0xFF101522))) {
-                Icon(Icons.Default.Print, null); Spacer(Modifier.width(8.dp)); Text("OPEN ANDROID PRINT SETTINGS")
-            }
+            StudioButton("Open Android print settings", icon = Icons.Default.Print, modifier = Modifier.fillMaxWidth(), onClick = { runCatching { context.startActivity(Intent(Settings.ACTION_PRINT_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) } })
             Text("Use Print Designer to create the PDF, then select the printer and verify paper size, scaling, colour and margins in the print preview.", color = ControlMuted, fontSize = 11.sp)
         }
 
         ControlCard("CUSTOMER PHOTO PRIVACY", "Passport photographs and customer contact details are sensitive personal information. Keep the phone secured and share only with the customer's permission.") {
-            Text("Photo retention preference", color = Color.White, fontWeight = FontWeight.SemiBold, fontSize = 12.sp)
+            Text("Photo retention preference", color = PrimaryText, fontWeight = FontWeight.SemiBold, fontSize = 12.sp)
             ExposedSetting("Retention policy", if (retention == 0) "Keep until manually deleted" else "$retention days (reminder only)", listOf("Keep until manually deleted", "30 days (reminder only)", "90 days (reminder only)", "180 days (reminder only)"), false, {}) {
                 retention = when {
                     it.startsWith("30") -> 30
@@ -103,20 +98,33 @@ internal fun StudioControlCentreScreen(modifier: Modifier = Modifier, appearance
             Text("This setting records your chosen policy only; it does not automatically delete customer files. Review and delete records/photos manually when retention is no longer necessary.", color = ControlMuted, fontSize = 11.sp)
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 Icon(Icons.Default.Security, tint = ControlGold, contentDescription = null)
-                Text("Enable your device screen lock and avoid leaving customer images in public/shared folders.", color = Color.White, fontSize = 12.sp)
+                Text("Enable your device screen lock and avoid leaving customer images in public/shared folders.", color = PrimaryText, fontSize = 12.sp)
             }
         }
 
         ControlCard("SYSTEM HEALTH & RELEASE INFO", "Run a lightweight local check. No customer data is uploaded.") {
-            Button(onClick = {
+            StudioButton("Run studio health check", icon = Icons.Default.Storage, tone = ButtonTone.Secondary, modifier = Modifier.fillMaxWidth(), onClick = {
                 diagnostic = runCatching { runStudioDiagnostics(context) }.fold({ it }, { "Check could not complete: ${it.localizedMessage ?: "unknown error"}" })
-            }, modifier = Modifier.fillMaxWidth(), colors = ButtonDefaults.buttonColors(containerColor = ControlGold, contentColor = Color(0xFF101522))) {
-                Icon(Icons.Default.Storage, null); Spacer(Modifier.width(8.dp)); Text("RUN STUDIO HEALTH CHECK")
-            }
-            Text(diagnostic, color = Color.White, fontSize = 12.sp)
+            })
+            Text(diagnostic, color = PrimaryText, fontSize = 12.sp)
             val version = remember { runCatching { context.packageManager.getPackageInfo(context.packageName, 0).versionName ?: "Unknown" }.getOrDefault("Unknown") }
             Text("PassportPro Studio v$version • Android ${Build.VERSION.RELEASE} • API ${Build.VERSION.SDK_INT}", color = ControlMuted, fontSize = 11.sp)
             Text("For a safe upgrade, create a full backup before installing a newer build.", color = ControlMuted, fontSize = 11.sp)
+        }
+
+        ControlCard("ABOUT & DEVELOPER", "PassportPro Studio — passport photo capture, editing, printing and studio management.") {
+            Text("Samuel Kwame Dordzie", color = PrimaryText, fontSize = 15.sp, fontWeight = FontWeight.Bold)
+            Text("T.I. Ahmadiyya Girls' SHS, Asokore", color = ControlMuted, fontSize = 12.sp)
+            Text("Phone: 0246652528", color = PrimaryText, fontSize = 12.sp)
+            Text("Email: sdordzie@gmail.com", color = PrimaryText, fontSize = 12.sp)
+            ButtonPair {
+                StudioButton("Call", icon = Icons.Default.Call, tone = ButtonTone.Secondary, compact = true, modifier = Modifier.weight(1f), onClick = {
+                    runCatching { context.startActivity(Intent(Intent.ACTION_DIAL, android.net.Uri.parse("tel:0246652528")).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }
+                })
+                StudioButton("Email", icon = Icons.Default.Email, tone = ButtonTone.Secondary, compact = true, modifier = Modifier.weight(1f), onClick = {
+                    runCatching { context.startActivity(Intent(Intent.ACTION_SENDTO, android.net.Uri.parse("mailto:sdordzie@gmail.com")).putExtra(Intent.EXTRA_SUBJECT, "PassportPro Studio").addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }
+                })
+            }
         }
     }
 }

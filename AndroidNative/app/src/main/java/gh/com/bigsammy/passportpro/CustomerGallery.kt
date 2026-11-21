@@ -15,13 +15,9 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.PersonAdd
-import androidx.compose.material.icons.filled.Share
-import androidx.compose.material.icons.filled.Photo
-import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.Delete
-import androidx.compose.material.icons.filled.AutoFixHigh
-import androidx.compose.material.icons.filled.AddPhotoAlternate
+import androidx.compose.material.icons.filled.*
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.background
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -77,44 +73,54 @@ internal fun CustomersScreen(modifier: Modifier = Modifier) {
     var selectedCustomerIds by remember { mutableStateOf(setOf<Long>()) }
     var confirmDeleteCustomers by remember { mutableStateOf(false) }
     Column(modifier.fillMaxSize().padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-        Text("CUSTOMER MANAGEMENT", color=if (LocalPassportDark.current) Color(0xFFE4B45D) else Color(0xFF9A6418), fontSize=11.sp, fontWeight=FontWeight.Bold)
+        Text("CUSTOMER MANAGEMENT", color=BrandAccent, fontSize=11.sp, fontWeight=FontWeight.Bold)
         Text("Customer records", color=PrimaryText, fontSize=24.sp, fontWeight=FontWeight.Bold)
         Text("Save customer contacts and notes locally on this device.", color=Muted, fontSize=12.sp)
         OutlinedTextField(value=name,onValueChange={name=it},label={Text("Customer name")},singleLine=true,modifier=Modifier.fillMaxWidth(), colors = studioOutlinedTextFieldColors())
         OutlinedTextField(value=phone,onValueChange={phone=it},label={Text("Phone / WhatsApp number")},singleLine=true,modifier=Modifier.fillMaxWidth(), colors = studioOutlinedTextFieldColors())
         OutlinedTextField(value=notes,onValueChange={notes=it},label={Text("Notes (optional)")},modifier=Modifier.fillMaxWidth(),minLines=2, colors = studioOutlinedTextFieldColors())
-        Button(onClick={
+        StudioButton("Save customer", onClick={
             if(name.isNotBlank()) { db.add(name,phone,notes); name=""; phone=""; notes=""; customers=db.all() }
-        },enabled=name.isNotBlank(),modifier=Modifier.fillMaxWidth(),colors=ButtonDefaults.buttonColors(containerColor=Color(0xFFE4B45D),contentColor=Ink)) {
-            Icon(Icons.Default.PersonAdd,null); Spacer(Modifier.width(8.dp)); Text("SAVE CUSTOMER",fontWeight=FontWeight.Bold)
-        }
+        }, enabled=name.isNotBlank(), icon=Icons.Default.PersonAdd, modifier=Modifier.fillMaxWidth())
         Row(verticalAlignment=Alignment.CenterVertically) {
-            Text("SAVED CUSTOMERS",color=Color(0xFF9AA7B8),fontSize=11.sp,fontWeight=FontWeight.Bold)
-            Spacer(Modifier.weight(1f)); Text("${customers.size} records",color=Color(0xFFE4B45D),fontSize=11.sp)
+            SectionHeading("Saved customers")
+            Spacer(Modifier.weight(1f))
+            Text("${customers.size} records",color=BrandAccent,fontSize=11.sp)
         }
         if(customers.isNotEmpty()) {
-            Row(verticalAlignment=Alignment.CenterVertically) {
-                TextButton(onClick={selectionMode=!selectionMode; selectedCustomerIds=emptySet()}) { Text(if(selectionMode) "Cancel selection" else "Select customers",color=Color(0xFFE4B45D)) }
-                if(selectionMode) {
-                    TextButton(onClick={selectedCustomerIds=if(selectedCustomerIds.size==customers.size) emptySet() else customers.map { it.id }.toSet()}) { Text(if(selectedCustomerIds.size==customers.size) "Deselect all" else "Select all",color=Color.White) }
-                    Text(selectedCustomerIds.size.toString()+" selected",color=Color(0xFF9AA7B8),fontSize=11.sp,modifier=Modifier.weight(1f))
-                    Button(onClick={confirmDeleteCustomers=true},enabled=selectedCustomerIds.isNotEmpty(),colors=ButtonDefaults.buttonColors(containerColor=Color(0xFFB93838))) { Text("Delete") }
-                }
-            }
+            SelectionBar(
+                active = selectionMode,
+                selectedCount = selectedCustomerIds.size,
+                allSelected = selectedCustomerIds.size == customers.size,
+                startLabel = "Select customers",
+                onToggleMode = { selectionMode = !selectionMode; selectedCustomerIds = emptySet() },
+                onToggleAll = { selectedCustomerIds = if (selectedCustomerIds.size == customers.size) emptySet() else customers.map { it.id }.toSet() },
+                onDelete = { confirmDeleteCustomers = true }
+            )
         }
         if(customers.isEmpty()) {
             Surface(color=Panel,shape=RoundedCornerShape(16.dp),modifier=Modifier.fillMaxWidth()) {
-                Text("No customers yet. Add your first customer above.",color=Color(0xFF9AA7B8),modifier=Modifier.padding(18.dp),fontSize=13.sp)
+                Text("No customers yet. Add your first customer above.",color=Muted,modifier=Modifier.padding(18.dp),fontSize=13.sp)
             }
         } else LazyColumn(verticalArrangement=Arrangement.spacedBy(8.dp),modifier=Modifier.weight(1f)) {
             items(customers,key={it.id}) { customer ->
-                Surface(color=if(customer.id in selectedCustomerIds) if (LocalPassportDark.current) Color(0xFF34445C) else Color(0xFFE8D8B8) else Color(0xFF1B2433),shape=RoundedCornerShape(14.dp),modifier=Modifier.fillMaxWidth()) {
-                    Column(Modifier.padding(14.dp),verticalArrangement=Arrangement.spacedBy(4.dp)) {
-                        if(selectionMode) TextButton(onClick={selectedCustomerIds=if(customer.id in selectedCustomerIds) selectedCustomerIds-customer.id else selectedCustomerIds+customer.id}) { Text(if(customer.id in selectedCustomerIds) "✓ Selected" else "Select customer",color=Color(0xFFE4B45D)) }
-                        Text(customer.name,color=Color.White,fontWeight=FontWeight.SemiBold,fontSize=16.sp)
-                        if(customer.phone.isNotBlank()) Text(customer.phone,color=Color(0xFFE4B45D),fontSize=13.sp)
-                        if(customer.notes.isNotBlank()) Text(customer.notes,color=Color(0xFF9AA7B8),fontSize=12.sp)
-                        Text(SimpleDateFormat("dd MMM yyyy, HH:mm",Locale.getDefault()).format(Date(customer.created)),color=Muted,fontSize=10.sp)
+                val picked = customer.id in selectedCustomerIds
+                Surface(
+                    onClick={ selectedCustomerIds = if (picked) selectedCustomerIds - customer.id else selectedCustomerIds + customer.id },
+                    enabled=selectionMode,
+                    color=if(picked) BrandAccent.copy(alpha=.14f) else Panel,
+                    border=if(picked) BorderStroke(1.5.dp, BrandAccent) else null,
+                    shape=RoundedCornerShape(14.dp),
+                    modifier=Modifier.fillMaxWidth()
+                ) {
+                    Row(Modifier.padding(14.dp), verticalAlignment=Alignment.CenterVertically) {
+                        Column(Modifier.weight(1f),verticalArrangement=Arrangement.spacedBy(4.dp)) {
+                            Text(customer.name,color=PrimaryText,fontWeight=FontWeight.SemiBold,fontSize=16.sp)
+                            if(customer.phone.isNotBlank()) Text(customer.phone,color=BrandAccent,fontSize=13.sp)
+                            if(customer.notes.isNotBlank()) Text(customer.notes,color=Muted,fontSize=12.sp)
+                            Text(SimpleDateFormat("dd MMM yyyy, HH:mm",Locale.getDefault()).format(Date(customer.created)),color=Muted,fontSize=10.sp)
+                        }
+                        if(selectionMode) Checkbox(checked=picked, onCheckedChange=null)
                     }
                 }
             }
@@ -124,12 +130,12 @@ internal fun CustomersScreen(modifier: Modifier = Modifier) {
         onDismissRequest={confirmDeleteCustomers=false},
         title={Text("Delete selected customers?")},
         text={Text("Permanently delete "+selectedCustomerIds.size+" selected customer records? This cannot be undone.")},
-        confirmButton={TextButton(onClick={
+        confirmButton={StudioButton("Delete", tone=ButtonTone.Danger, compact=true, icon=Icons.Default.Delete, onClick={
             val count=db.delete(selectedCustomerIds)
             customers=db.all(); selectedCustomerIds=emptySet(); selectionMode=false; confirmDeleteCustomers=false
             android.widget.Toast.makeText(context,count.toString()+" customer record(s) deleted",android.widget.Toast.LENGTH_SHORT).show()
-        }) { Text("Delete permanently",color=Color(0xFFB93838)) }},
-        dismissButton={TextButton(onClick={confirmDeleteCustomers=false}) { Text("Cancel") }}
+        })},
+        dismissButton={StudioButton("Cancel", tone=ButtonTone.Secondary, compact=true, onClick={confirmDeleteCustomers=false})}
     )
 
 }
@@ -155,43 +161,33 @@ internal fun GalleryScreen(modifier: Modifier = Modifier, onEdit: (String) -> Un
         selectedPaths = if (path in selectedPaths) selectedPaths - path else selectedPaths + path
     }
     Column(modifier.fillMaxSize().padding(horizontal = 14.dp, vertical = 12.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-        Text("PHOTO LIBRARY • STUDIO", color = if (LocalPassportDark.current) Color(0xFFE4B45D) else Color(0xFF9A6418), fontSize = 11.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.2.sp)
+        Text("PHOTO LIBRARY • STUDIO", color = BrandAccent, fontSize = 11.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.2.sp)
         Row(verticalAlignment = Alignment.CenterVertically) {
             Column(Modifier.weight(1f)) {
                 Text("Studio gallery", color = PrimaryText, fontSize = 25.sp, fontWeight = FontWeight.Bold)
                 Text("${files.size} photographs • Stored securely on this device", color = Muted, fontSize = 11.sp)
             }
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                TextButton(onClick = onPickDevice) { Icon(Icons.Default.AddPhotoAlternate, null); Text("Device photos") }
-                TextButton(onClick = { refresh++ }) { Text("Refresh", color = if (LocalPassportDark.current) Color(0xFFE4B45D) else Color(0xFF9A6418)) }
-            }
+            IconButton(onClick = { refresh++ }) { Icon(Icons.Default.Refresh, contentDescription = "Refresh", tint = BrandAccent) }
         }
+        StudioButton("Edit a photo from this phone", onClick = onPickDevice, icon = Icons.Default.AddPhotoAlternate, tone = ButtonTone.Secondary, compact = true, modifier = Modifier.fillMaxWidth())
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             Surface(color = Panel, shape = RoundedCornerShape(12.dp)) { Text("CAPTURED  ${files.count { it.parentFile?.name != "Edited" }}", color = PrimaryText, modifier = Modifier.padding(10.dp), fontSize = 10.sp) }
-            Surface(color = Panel, shape = RoundedCornerShape(12.dp)) { Text("EDITED  ${files.count { it.parentFile?.name == "Edited" }}", color = if (LocalPassportDark.current) Color(0xFFE4B45D) else Color(0xFF9A6418), modifier = Modifier.padding(10.dp), fontSize = 10.sp) }
+            Surface(color = Panel, shape = RoundedCornerShape(12.dp)) { Text("EDITED  ${files.count { it.parentFile?.name == "Edited" }}", color = BrandAccent, modifier = Modifier.padding(10.dp), fontSize = 10.sp) }
         }
         if (files.isNotEmpty()) {
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                TextButton(onClick = {
-                    selectionMode = !selectionMode
-                    selectedPaths = emptySet()
-                }) { Text(if (selectionMode) "Cancel selection" else "Select photos", color = if (LocalPassportDark.current) Color(0xFFE4B45D) else Color(0xFF9A6418)) }
-                if (selectionMode) {
-                    TextButton(onClick = {
-                        selectedPaths = if (selectedPaths.size == files.size) emptySet() else files.map { it.absolutePath }.toSet()
-                    }) { Text(if (selectedPaths.size == files.size) "Deselect all" else "Select all", color = PrimaryText) }
-                    Text("${selectedPaths.size} selected", color = Muted, fontSize = 11.sp)
-                    Spacer(Modifier.weight(1f))
-                    Button(onClick = { confirmDelete = true }, enabled = selectedPaths.isNotEmpty(),
-                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFB93838))) {
-                        Icon(Icons.Default.Delete, null); Spacer(Modifier.width(4.dp)); Text("Delete")
-                    }
-                }
-            }
+            SelectionBar(
+                active = selectionMode,
+                selectedCount = selectedPaths.size,
+                allSelected = selectedPaths.size == files.size,
+                startLabel = "Select photos",
+                onToggleMode = { selectionMode = !selectionMode; selectedPaths = emptySet() },
+                onToggleAll = { selectedPaths = if (selectedPaths.size == files.size) emptySet() else files.map { it.absolutePath }.toSet() },
+                onDelete = { confirmDelete = true }
+            )
         }
         if (files.isEmpty()) {
             Column(Modifier.weight(1f).fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
-                Icon(Icons.Default.Photo, null, tint = Color(0xFFE4B45D), modifier = Modifier.size(56.dp))
+                Icon(Icons.Default.Photo, null, tint = BrandAccent, modifier = Modifier.size(56.dp))
                 Text("Your studio is waiting for its first photo", color = PrimaryText, fontSize = 17.sp, fontWeight = FontWeight.Bold)
                 Text("Captured and edited photographs will appear here automatically.", color = Muted, fontSize = 12.sp)
             }
@@ -202,19 +198,22 @@ internal fun GalleryScreen(modifier: Modifier = Modifier, onEdit: (String) -> Un
                     val thumb = remember(file.absolutePath, file.lastModified()) {
                         BitmapFactory.decodeFile(file.absolutePath, BitmapFactory.Options().apply { inSampleSize = 4 })
                     }
-                    Surface(color = if (isSelected) Color(0xFF34445C) else Panel, shape = RoundedCornerShape(13.dp),
+                    Surface(color = if (isSelected) BrandAccent.copy(alpha = .16f) else Panel, shape = RoundedCornerShape(13.dp), border = if (isSelected) BorderStroke(2.dp, BrandAccent) else null,
                         onClick = {
                             if (selectionMode) toggleSelection(file) else selectedFile = file
                         }) {
                         Column(Modifier.padding(6.dp), verticalArrangement = Arrangement.spacedBy(5.dp)) {
                             Box {
                                 if (thumb != null) Image(thumb.asImageBitmap(), "Photo thumbnail", Modifier.fillMaxWidth().height(142.dp), contentScale = ContentScale.Crop)
-                                else Box(Modifier.fillMaxWidth().height(142.dp), contentAlignment = Alignment.Center) { Icon(Icons.Default.Photo, null, tint = Color(0xFF9AA7B8)) }
-                                if (selectionMode) Surface(color = if (isSelected) Color(0xFFE4B45D) else Ink.copy(alpha = .78f), shape = RoundedCornerShape(50), modifier = Modifier.align(Alignment.TopEnd).padding(5.dp)) {
-                                    Text(if (isSelected) "✓" else " ", color = Color(0xFF101522), modifier = Modifier.padding(horizontal = 9.dp, vertical = 3.dp), fontWeight = FontWeight.Bold)
-                                }
+                                else Box(Modifier.fillMaxWidth().height(142.dp), contentAlignment = Alignment.Center) { Icon(Icons.Default.Photo, null, tint = Muted) }
+                                if (selectionMode) Icon(
+                                    if (isSelected) Icons.Default.CheckCircle else Icons.Default.RadioButtonUnchecked,
+                                    contentDescription = if (isSelected) "Selected" else "Not selected",
+                                    tint = if (isSelected) Color(0xFFE4B45D) else Color.White,
+                                    modifier = Modifier.align(Alignment.TopEnd).padding(6.dp).size(24.dp).background(Color.Black.copy(alpha = .35f), RoundedCornerShape(50))
+                                )
                             }
-                            Text(if (file.parentFile?.name == "Edited") "EDITED PHOTO" else "ORIGINAL CAPTURE", color = if (LocalPassportDark.current) Color(0xFFE4B45D) else Color(0xFF9A6418), fontSize = 9.sp, fontWeight = FontWeight.Bold)
+                            Text(if (file.parentFile?.name == "Edited") "EDITED PHOTO" else "ORIGINAL CAPTURE", color = BrandAccent, fontSize = 9.sp, fontWeight = FontWeight.Bold)
                             Text(SimpleDateFormat("dd MMM yyyy • HH:mm", Locale.getDefault()).format(Date(file.lastModified())), color = Muted, fontSize = 9.sp)
                         }
                     }
@@ -228,7 +227,7 @@ internal fun GalleryScreen(modifier: Modifier = Modifier, onEdit: (String) -> Un
             title = { Text("Delete selected photographs?") },
             text = { Text("This will permanently delete ${selectedPaths.size} selected file(s) from this device. This cannot be undone.") },
             confirmButton = {
-                TextButton(onClick = {
+                StudioButton("Delete", tone = ButtonTone.Danger, compact = true, icon = Icons.Default.Delete, onClick = {
                     val targets = files.filter { it.absolutePath in selectedPaths }
                     val deleted = targets.count { it.exists() && it.delete() }
                     selectedPaths = emptySet()
@@ -236,9 +235,9 @@ internal fun GalleryScreen(modifier: Modifier = Modifier, onEdit: (String) -> Un
                     confirmDelete = false
                     refresh++
                     android.widget.Toast.makeText(context, "$deleted photograph(s) deleted", android.widget.Toast.LENGTH_SHORT).show()
-                }) { Text("Delete permanently", color = Color(0xFFB93838)) }
+                })
             },
-            dismissButton = { TextButton(onClick = { confirmDelete = false }) { Text("Cancel") } }
+            dismissButton = { StudioButton("Cancel", tone = ButtonTone.Secondary, compact = true, onClick = { confirmDelete = false }) }
         )
     }
     if (selectedFile != null) {
@@ -247,75 +246,65 @@ internal fun GalleryScreen(modifier: Modifier = Modifier, onEdit: (String) -> Un
                 Column(Modifier.padding(12.dp),verticalArrangement=Arrangement.spacedBy(9.dp)) {
                     Row(verticalAlignment=Alignment.CenterVertically) {
                         Column(Modifier.weight(1f)) {
-                            Text(if(selectedFile?.parentFile?.name=="Edited") "EDITED PHOTOGRAPH" else "ORIGINAL CAPTURE",color=if (LocalPassportDark.current) Color(0xFFE4B45D) else Color(0xFF9A6418),fontSize=10.sp,fontWeight=FontWeight.Bold)
+                            Text(if(selectedFile?.parentFile?.name=="Edited") "EDITED PHOTOGRAPH" else "ORIGINAL CAPTURE",color=BrandAccent,fontSize=10.sp,fontWeight=FontWeight.Bold)
                             Text(selectedFile?.name ?: "",color=PrimaryText,fontSize=13.sp,fontWeight=FontWeight.SemiBold,maxLines=1)
                         }
                         IconButton(onClick={selectedFile=null}) { Icon(Icons.Default.Close,"Close",tint=PrimaryText) }
                     }
                     if(selectedBitmap!=null) Image(selectedBitmap.asImageBitmap(),"Full photograph preview",Modifier.fillMaxWidth().heightIn(max=480.dp),contentScale=ContentScale.Fit)
                     Text(selectedFile?.let { SimpleDateFormat("dd MMMM yyyy, HH:mm",Locale.getDefault()).format(Date(it.lastModified())) } ?: "",color=Muted,fontSize=11.sp)
-                    // Compact, single-line actions: keep all three controls usable on narrow phones.
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(6.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Button(
-                            onClick = { selectedFile?.let { onEdit(it.absolutePath) } },
-                            modifier = Modifier.weight(1f).heightIn(min = 40.dp),
-                            contentPadding = PaddingValues(horizontal = 7.dp, vertical = 8.dp),
-                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFE4B45D), contentColor = Ink)
-                        ) {
-                            Icon(Icons.Default.AutoFixHigh, null, modifier = Modifier.size(16.dp))
-                            Spacer(Modifier.width(4.dp))
-                            Text("Re-edit", fontSize = 11.sp, maxLines = 1, softWrap = false)
-                        }
-                        Button(
-                            onClick = {
-                                selectedFile?.let { file ->
-                                    try {
-                                        val uri = FileProvider.getUriForFile(context, context.packageName + ".fileprovider", file)
-                                        val intent = Intent(Intent.ACTION_SEND).apply {
-                                            type = "image/*"
-                                            putExtra(Intent.EXTRA_STREAM, uri)
-                                            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-                                        }
-                                        context.startActivity(Intent.createChooser(intent, "Share photograph"))
-                                    } catch (e: Exception) {
-                                        android.widget.Toast.makeText(context, "Unable to share photo: ${e.localizedMessage}", android.widget.Toast.LENGTH_LONG).show()
-                                    }
+                    ButtonPair {
+                        StudioButton("WhatsApp", tone = ButtonTone.WhatsApp, icon = Icons.Default.Send, compact = true, modifier = Modifier.weight(1f), onClick = {
+                            selectedFile?.let { file -> runCatching { sharePhoto(context, file, viaWhatsApp = true) }.onSuccess { msg -> msg?.let { android.widget.Toast.makeText(context, it, android.widget.Toast.LENGTH_SHORT).show() } } }
+                        })
+                        StudioButton("Share", icon = Icons.Default.Share, compact = true, modifier = Modifier.weight(1f), onClick = {
+                            selectedFile?.let { file ->
+                                runCatching { sharePhoto(context, file, viaWhatsApp = false) }
+                                    .onFailure { e -> android.widget.Toast.makeText(context, "Unable to share photo: ${e.localizedMessage}", android.widget.Toast.LENGTH_LONG).show() }
+                            }
+                        })
+                    }
+                    ButtonPair {
+                        StudioButton("Edit", tone = ButtonTone.Secondary, icon = Icons.Default.AutoFixHigh, compact = true, modifier = Modifier.weight(1f), onClick = { selectedFile?.let { onEdit(it.absolutePath) } })
+                        StudioButton("Delete", tone = ButtonTone.Secondary, icon = Icons.Default.Delete, compact = true, modifier = Modifier.weight(1f), onClick = {
+                            selectedFile?.let { file ->
+                                if (file.exists() && file.delete()) {
+                                    selectedFile = null
+                                    refresh++
+                                    android.widget.Toast.makeText(context, "Photograph deleted", android.widget.Toast.LENGTH_SHORT).show()
+                                } else {
+                                    android.widget.Toast.makeText(context, "Unable to delete photograph", android.widget.Toast.LENGTH_LONG).show()
                                 }
-                            },
-                            modifier = Modifier.weight(1f).heightIn(min = 40.dp),
-                            contentPadding = PaddingValues(horizontal = 7.dp, vertical = 8.dp),
-                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFE4B45D), contentColor = Ink)
-                        ) {
-                            Icon(Icons.Default.Share, null, modifier = Modifier.size(16.dp))
-                            Spacer(Modifier.width(4.dp))
-                            Text("Share", fontSize = 11.sp, maxLines = 1, softWrap = false)
-                        }
-                        OutlinedButton(
-                            onClick = {
-                                selectedFile?.let { file ->
-                                    if (file.exists() && file.delete()) {
-                                        selectedFile = null
-                                        refresh++
-                                        android.widget.Toast.makeText(context, "Photograph deleted", android.widget.Toast.LENGTH_SHORT).show()
-                                    } else {
-                                        android.widget.Toast.makeText(context, "Unable to delete photograph", android.widget.Toast.LENGTH_LONG).show()
-                                    }
-                                }
-                            },
-                            modifier = Modifier.weight(1f).heightIn(min = 40.dp),
-                            contentPadding = PaddingValues(horizontal = 7.dp, vertical = 8.dp)
-                        ) {
-                            Icon(Icons.Default.Delete, null, modifier = Modifier.size(16.dp))
-                            Spacer(Modifier.width(4.dp))
-                            Text("Delete", fontSize = 11.sp, maxLines = 1, softWrap = false)
-                        }
+                            }
+                        })
                     }
                 }
             }
+        }
+    }
+}
+
+/** Shared "select / select all / delete" bar for lists, laid out so nothing wraps on small phones. */
+@Composable
+internal fun SelectionBar(
+    active: Boolean,
+    selectedCount: Int,
+    allSelected: Boolean,
+    startLabel: String,
+    onToggleMode: () -> Unit,
+    onToggleAll: () -> Unit,
+    onDelete: () -> Unit
+) {
+    if (!active) {
+        StudioButton(startLabel, onClick = onToggleMode, icon = Icons.Default.Checklist, tone = ButtonTone.Quiet, compact = true)
+        return
+    }
+    Surface(color = Panel, shape = RoundedCornerShape(14.dp), modifier = Modifier.fillMaxWidth()) {
+        Row(Modifier.padding(horizontal = 6.dp, vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+            IconButton(onClick = onToggleMode) { Icon(Icons.Default.Close, contentDescription = "Cancel selection", tint = PrimaryText) }
+            Text("$selectedCount selected", color = PrimaryText, fontSize = 14.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f), maxLines = 1)
+            StudioButton(if (allSelected) "None" else "All", onClick = onToggleAll, tone = ButtonTone.Quiet, compact = true)
+            StudioButton("Delete", onClick = onDelete, enabled = selectedCount > 0, icon = Icons.Default.Delete, tone = ButtonTone.Danger, compact = true)
         }
     }
 }

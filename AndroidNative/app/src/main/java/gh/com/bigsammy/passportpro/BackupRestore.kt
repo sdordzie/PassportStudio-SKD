@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Backup
 import androidx.compose.material.icons.filled.Restore
@@ -36,9 +37,9 @@ import java.util.zip.ZipEntry
 import java.util.zip.ZipInputStream
 import java.util.zip.ZipOutputStream
 
-private val SafeGold = Color(0xFFE4B45D)
-private val SafePanel = Color(0xFF1B2433)
-private val SafeMuted = Color(0xFF9AA7B8)
+private val SafeGold: Color @Composable get() = BrandAccent
+private val SafePanel: Color @Composable get() = Panel
+private val SafeMuted: Color @Composable get() = Muted
 
 @Composable
 internal fun BackupRestoreScreen(modifier: Modifier = Modifier) {
@@ -71,12 +72,12 @@ internal fun BackupRestoreScreen(modifier: Modifier = Modifier) {
     val open = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri -> restoreUri = uri }
     Column(modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(18.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
         Text("BACKUP & DATA PROTECTION", color = SafeGold, fontSize = 11.sp, fontWeight = FontWeight.Bold)
-        Text("Backup & Restore", color = Color.White, fontSize = 27.sp, fontWeight = FontWeight.Bold)
+        Text("Backup & Restore", color = PrimaryText, fontSize = 27.sp, fontWeight = FontWeight.Bold)
         Text("Create a portable ZIP backup containing your customer database, business jobs, captured photos and edited photos. Choose phone storage, an SD card or a cloud drive in the Android file picker.", color = SafeMuted, fontSize = 13.sp)
         Text("CHOOSE BACKUP CONTENT", color = SafeGold, fontSize = 11.sp, fontWeight = FontWeight.Bold)
-        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+        Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             listOf("Full studio", "Records only", "Photos only").forEach { scopeName ->
-                FilterChip(selected = backupScope == scopeName, onClick = { backupScope = scopeName }, label = { Text(scopeName, fontSize = 10.sp) }, enabled = !working)
+                FilterChip(selected = backupScope == scopeName, onClick = { backupScope = scopeName }, label = { Text(scopeName, fontSize = 12.sp) }, enabled = !working)
             }
         }
         BackupPanelCard("EXPORT " + backupScope.uppercase(), "Create a verified ZIP backup for the selected data. Each file is protected by a SHA-256 checksum.", Icons.Default.Backup, "Create backup", working) {
@@ -85,7 +86,7 @@ internal fun BackupRestoreScreen(modifier: Modifier = Modifier) {
         }
         Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
             Column(Modifier.weight(1f)) {
-                Text("AUTOMATIC LOCAL BACKUP", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                Text("AUTOMATIC LOCAL BACKUP", color = PrimaryText, fontWeight = FontWeight.Bold, fontSize = 13.sp)
                 Text("Create a private full backup when this screen is opened after 24 hours. Runs only while the app is opened.", color = SafeMuted, fontSize = 11.sp)
             }
             Switch(checked = autoBackup, onCheckedChange = { autoBackup = it; context.getSharedPreferences("passportpro_backup", Context.MODE_PRIVATE).edit().putBoolean("auto_enabled", it).apply() })
@@ -96,7 +97,7 @@ internal fun BackupRestoreScreen(modifier: Modifier = Modifier) {
         Surface(color = SafePanel, shape = RoundedCornerShape(16.dp), modifier = Modifier.fillMaxWidth()) {
             Column(Modifier.padding(15.dp), verticalArrangement = Arrangement.spacedBy(7.dp)) {
                 Text("IMPORTANT RESTORE NOTES", color = SafeGold, fontWeight = FontWeight.Bold, fontSize = 12.sp)
-                Text("• The archive is checked against its SHA-256 manifest before restore.\n• Current files are copied to a private safety folder before replacement.\n• Restore replaces only the data categories included in the archive.\n• Close and reopen PassportPro after restoring so all screens reload the restored data.\n• Backup files contain personal photos, phone numbers and payment records; keep them private.", color = Color.White, fontSize = 12.sp, lineHeight = 19.sp)
+                Text("• The archive is checked against its SHA-256 manifest before restore.\n• Current files are copied to a private safety folder before replacement.\n• Restore replaces only the data categories included in the archive.\n• Close and reopen PassportPro after restoring so all screens reload the restored data.\n• Backup files contain personal photos, phone numbers and payment records; keep them private.", color = PrimaryText, fontSize = 12.sp, lineHeight = 19.sp)
             }
         }
         if (working) LinearProgressIndicator(modifier = Modifier.fillMaxWidth(), color = SafeGold)
@@ -106,7 +107,7 @@ internal fun BackupRestoreScreen(modifier: Modifier = Modifier) {
         onDismissRequest = { restoreUri = null },
         title = { Text("Replace current studio data?") },
         text = { Text("This replaces the customer records, business jobs and photo folders with the selected backup. A private safety copy of current files will be made first. Continue only if this is the correct backup.") },
-        confirmButton = { TextButton(onClick = {
+        confirmButton = { StudioButton("Restore", icon = Icons.Default.Restore, compact = true, onClick = {
             val uri = restoreUri!!
             restoreUri = null
             scope.launch {
@@ -115,8 +116,8 @@ internal fun BackupRestoreScreen(modifier: Modifier = Modifier) {
                 message = result.fold({ "Restore completed. " + it + " files restored. Close and reopen PassportPro." }, { "Restore stopped: " + (it.localizedMessage ?: "Invalid backup") })
                 working = false
             }
-        }) { Text("Restore", color = SafeGold) } },
-        dismissButton = { TextButton(onClick = { restoreUri = null }) { Text("Cancel") } }
+        }) },
+        dismissButton = { StudioButton("Cancel", tone = ButtonTone.Secondary, compact = true, onClick = { restoreUri = null }) }
     )
 }
 
@@ -124,9 +125,9 @@ internal fun BackupRestoreScreen(modifier: Modifier = Modifier) {
 private fun BackupPanelCard(title: String, detail: String, icon: androidx.compose.ui.graphics.vector.ImageVector, button: String, busy: Boolean, action: () -> Unit) {
     Surface(color = SafePanel, shape = RoundedCornerShape(18.dp), modifier = Modifier.fillMaxWidth()) {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(9.dp)) {
-            Row { Icon(icon, null, tint = SafeGold); Spacer(Modifier.width(9.dp)); Text(title, color = Color.White, fontWeight = FontWeight.Bold, fontSize = 13.sp) }
+            Row { Icon(icon, null, tint = SafeGold); Spacer(Modifier.width(9.dp)); Text(title, color = PrimaryText, fontWeight = FontWeight.Bold, fontSize = 13.sp) }
             Text(detail, color = SafeMuted, fontSize = 12.sp)
-            Button(onClick = action, enabled = !busy, modifier = Modifier.fillMaxWidth(), colors = ButtonDefaults.buttonColors(containerColor = SafeGold, contentColor = Color(0xFF101522))) { Text(button, fontWeight = FontWeight.Bold) }
+            StudioButton(button, onClick = action, enabled = !busy, icon = icon, modifier = Modifier.fillMaxWidth())
         }
     }
 }

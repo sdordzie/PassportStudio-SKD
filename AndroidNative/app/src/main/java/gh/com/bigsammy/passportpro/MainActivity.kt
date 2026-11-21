@@ -79,7 +79,7 @@ import kotlinx.coroutines.withContext
 internal val LocalPassportDark = compositionLocalOf { true }
 internal val Ink: Color @Composable get() = if (LocalPassportDark.current) Color(0xFF101522) else Color(0xFFF5F6F8)
 internal val Panel: Color @Composable get() = if (LocalPassportDark.current) Color(0xFF1B2433) else Color(0xFFFFFFFF)
-private val Gold = Color(0xFFB77B24)
+private val Gold: Color @Composable get() = BrandAccent
 internal val Muted: Color @Composable get() = if (LocalPassportDark.current) Color(0xFF9AA7B8) else Color(0xFF667085)
 internal val PrimaryText: Color @Composable get() = if (LocalPassportDark.current) Color(0xFFF7F8FA) else Color(0xFF182230)
 private val Good = Color(0xFF21865A)
@@ -118,7 +118,7 @@ private fun PassportProApp() {
     var appearance by remember { mutableStateOf(appearancePrefs.getString("appearance_mode", "System default") ?: "System default") }
     val systemDark = isSystemInDarkTheme()
     val darkMode = when (appearance) { "Light" -> false; "Dark" -> true; else -> systemDark }
-    val palette = if (darkMode) darkColorScheme(primary = Color(0xFFE4B45D), background = Color(0xFF101522), surface = Color(0xFF1B2433), onBackground = Color.White, onSurface = Color.White) else lightColorScheme(primary = Color(0xFF9A6418), onPrimary = Color.White, background = Ink, onBackground = PrimaryText, surface = Panel, onSurface = PrimaryText, surfaceVariant = Color(0xFFE9EDF2), onSurfaceVariant = Muted, outline = Color(0xFF98A2B3), secondary = Color(0xFF765016))
+    val palette = passportColorScheme(darkMode)
     var tab by remember { mutableStateOf(if (onboardingPrefs.getBoolean("complete", false)) "Home" else "Welcome") }
     var editorPhotoPath by remember { mutableStateOf<String?>(null) }
     var importError by remember { mutableStateOf<String?>(null) }
@@ -135,7 +135,7 @@ private fun PassportProApp() {
                         destination.absolutePath
                     }
                 }
-                importedPath.onSuccess { editorPhotoPath = it }
+                importedPath.onSuccess { editorPhotoPath = it; tab = "Editor" }
                     .onFailure { importError = it.localizedMessage ?: "Unable to import this image." }
             }
         }
@@ -224,9 +224,7 @@ private fun Dashboard(modifier: Modifier, onCapture: () -> Unit, onNavigate: (St
                 Text("READY FOR YOUR NEXT CUSTOMER?", color = Muted, fontSize = 10.sp, fontWeight = FontWeight.Bold)
                 Text("Capture. Create. Deliver.", color = PrimaryText, fontSize = 23.sp, fontWeight = FontWeight.Bold)
                 Text("Take the photo — PassportPro frames the head, cleans the background and opens WhatsApp or the share menu straight away.", color = Muted, fontSize = 13.sp)
-                Button(onClick = onCapture, modifier = Modifier.fillMaxWidth().height(52.dp), colors = ButtonDefaults.buttonColors(containerColor = Gold, contentColor = Ink), shape = RoundedCornerShape(14.dp)) {
-                    Icon(Icons.Default.CameraAlt, null); Spacer(Modifier.width(8.dp)); Text("OPEN CAMERA STUDIO", fontWeight = FontWeight.Bold)
-                }
+                StudioButton("Open camera", onClick = onCapture, icon = Icons.Default.CameraAlt, modifier = Modifier.fillMaxWidth())
             }
         }
         Surface(onClick = { onNavigate("Guide") }, color = Gold.copy(alpha = .12f), shape = RoundedCornerShape(16.dp), modifier = Modifier.fillMaxWidth()) {
@@ -315,13 +313,13 @@ private fun WelcomeScreen(onContinue: () -> Unit) {
             }
         }
         Spacer(Modifier.height(30.dp))
-        Button(
+        StudioButton(
+            if (page == pages.lastIndex) "Enter PassportPro Studio" else "Continue",
             onClick = { if (page < pages.lastIndex) page++ else onContinue() },
-            modifier = Modifier.fillMaxWidth().height(54.dp),
-            colors = ButtonDefaults.buttonColors(containerColor = Gold, contentColor = Ink),
-            shape = RoundedCornerShape(15.dp)
-        ) { Text(if (page == pages.lastIndex) "ENTER PASSPORTPRO STUDIO" else "CONTINUE", fontWeight = FontWeight.Bold) }
-        TextButton(onClick = onContinue) { Text(if (page == pages.lastIndex) "Get started" else "Skip introduction", color = Muted) }
+            icon = if (page == pages.lastIndex) Icons.Default.Check else Icons.Default.ArrowForward,
+            modifier = Modifier.fillMaxWidth()
+        )
+        if (page < pages.lastIndex) StudioButton("Skip introduction", onClick = onContinue, tone = ButtonTone.Quiet, compact = true)
         Text("Professional photo studio • Your files stay on your device", color = Muted, fontSize = 10.sp, textAlign = androidx.compose.ui.text.style.TextAlign.Center)
     }
 }
@@ -367,7 +365,7 @@ private fun UserGuideScreen(modifier: Modifier = Modifier, onBack: () -> Unit) {
                 Text("• Use good, even lighting and keep the camera at face level.\n• Keep the background plain and avoid harsh shadows.\n• Check the crop dimensions and print preview before exporting.\n• Use 300 DPI for a good balance of print quality and file size; use 600 DPI when higher detail is needed and supported.\n• Confirm the correct printer, paper size and scaling before printing.\n• Back up regularly, especially before changing phones or restoring records.", color = Muted, fontSize = 13.sp, lineHeight = 20.sp)
             }
         }
-        Button(onClick = onBack, modifier = Modifier.fillMaxWidth(), colors = ButtonDefaults.buttonColors(containerColor = Gold, contentColor = Ink)) { Text("BACK TO STUDIO HOME", fontWeight = FontWeight.Bold) }
+        StudioButton("Back to studio home", onClick = onBack, icon = Icons.Default.Home, modifier = Modifier.fillMaxWidth())
     }
 }
 
@@ -394,17 +392,8 @@ private fun PhotoEditorEntryScreen(
             "Select an existing image from your phone, Gallery, Downloads or other available storage. You do not need to take a new picture first.",
             color = Muted, fontSize = 14.sp
         )
-        Button(
-            onClick = onPickImage,
-            modifier = Modifier.fillMaxWidth().height(54.dp),
-            colors = ButtonDefaults.buttonColors(containerColor = Gold, contentColor = Ink),
-            shape = RoundedCornerShape(14.dp)
-        ) {
-            Icon(Icons.Default.PhotoLibrary, contentDescription = null)
-            Spacer(Modifier.width(8.dp))
-            Text("CHOOSE PHOTO FROM DEVICE", fontWeight = FontWeight.Bold)
-        }
-        if (!error.isNullOrBlank()) Text(error, color = Color(0xFFFF8A80), fontSize = 12.sp)
+        StudioButton("Choose photo from device", onClick = onPickImage, icon = Icons.Default.PhotoLibrary, modifier = Modifier.fillMaxWidth())
+        if (!error.isNullOrBlank()) Text(error, color = DangerText, fontSize = 12.sp)
         Spacer(Modifier.weight(1f))
     }
 }
@@ -431,7 +420,11 @@ private fun CameraStudioScreen(modifier: Modifier = Modifier, onClose: () -> Uni
     var capturing by remember { mutableStateOf(false) }
     var shutterFlash by remember { mutableStateOf(false) }
     var autoSend by remember { mutableStateOf(readAutoSend(context)) }
+    var selectedSize by remember { mutableStateOf(readSelectedSize(context)) }
+    var showSizePicker by remember { mutableStateOf(false) }
     var message by remember { mutableStateOf("Position the face inside the guide") }
+    // The size can also be changed on the result screen, so re-read it when the camera comes back.
+    LaunchedEffect(capturedPath) { if (capturedPath == null) selectedSize = readSelectedSize(context) }
     val flashAlpha by animateFloatAsState(if (shutterFlash) 0.85f else 0f, animationSpec = tween(if (shutterFlash) 40 else 260), label = "shutter")
     LaunchedEffect(shutterFlash) { if (shutterFlash) { delay(70); shutterFlash = false } }
 
@@ -538,25 +531,34 @@ private fun CameraStudioScreen(modifier: Modifier = Modifier, onClose: () -> Uni
             if (hasPermission) {
                 AndroidView(factory = { previewView }, modifier = Modifier.fillMaxSize())
                 val guide = if (faceCount == 1) Good else Color.White
+                val frameRatio = selectedSize.ratio
+                val headFraction = selectedSize.headFraction.takeIf { it > 0f } ?: 0.6f
                 Canvas(Modifier.fillMaxSize()) {
-                    var frameW = size.width * 0.78f
-                    var frameH = frameW * 45f / 35f
-                    if (frameH > size.height * 0.78f) { frameH = size.height * 0.78f; frameW = frameH * 35f / 45f }
+                    // Frame drawn with the chosen photo shape; the head guide matches the automatic crop,
+                    // so what you line up here is what you get after capture.
+                    val ratio = frameRatio ?: (size.width / size.height)
+                    var frameW = size.width * (if (frameRatio == null) 0.94f else 0.80f)
+                    var frameH = frameW / ratio
+                    val maxH = size.height * (if (frameRatio == null) 0.94f else 0.78f)
+                    if (frameH > maxH) { frameH = maxH; frameW = frameH * ratio }
                     val left = (size.width - frameW) / 2f
                     val top = (size.height - frameH) / 2f
-                    val radius = CornerRadius(20.dp.toPx())
-                    val shade = Path().apply {
-                        fillType = PathFillType.EvenOdd
-                        addRect(Rect(0f, 0f, size.width, size.height))
-                        addRoundRect(RoundRect(left, top, left + frameW, top + frameH, radius))
+                    val radius = CornerRadius(18.dp.toPx())
+                    if (frameRatio != null) {
+                        val shade = Path().apply {
+                            fillType = PathFillType.EvenOdd
+                            addRect(Rect(0f, 0f, size.width, size.height))
+                            addRoundRect(RoundRect(left, top, left + frameW, top + frameH, radius))
+                        }
+                        drawPath(shade, Color.Black.copy(alpha = .55f))
+                        drawRoundRect(guide, Offset(left, top), Size(frameW, frameH), radius, style = Stroke(2.dp.toPx()))
                     }
-                    drawPath(shade, Color.Black.copy(alpha = .5f))
-                    drawRoundRect(guide, Offset(left, top), Size(frameW, frameH), radius, style = Stroke(2.dp.toPx()))
-                    val ovalW = frameW * 0.56f
-                    val ovalH = frameH * 0.62f
+                    val ovalH = frameH * headFraction
+                    val ovalW = (ovalH * 0.74f).coerceAtMost(frameW * 0.9f)
+                    val ovalTop = top + frameH * (1f - headFraction) * 0.42f
                     drawOval(
                         guide.copy(alpha = .9f),
-                        topLeft = Offset(left + (frameW - ovalW) / 2f, top + frameH * 0.09f),
+                        topLeft = Offset(left + (frameW - ovalW) / 2f, ovalTop),
                         size = Size(ovalW, ovalH),
                         style = Stroke(2.dp.toPx(), pathEffect = PathEffect.dashPathEffect(floatArrayOf(18f, 12f)))
                     )
@@ -564,12 +566,12 @@ private fun CameraStudioScreen(modifier: Modifier = Modifier, onClose: () -> Uni
                 Box(Modifier.fillMaxSize().background(Color.White.copy(alpha = flashAlpha)))
             } else {
                 Column(Modifier.fillMaxSize().padding(28.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
-                    Icon(Icons.Default.NoPhotography, null, tint = Gold, modifier = Modifier.size(52.dp))
+                    Icon(Icons.Default.NoPhotography, null, tint = Accent, modifier = Modifier.size(52.dp))
                     Spacer(Modifier.height(12.dp))
                     Text("Camera access needed", color = Color.White, fontSize = 18.sp, fontWeight = FontWeight.Bold)
                     Text("Allow the camera to take passport photos. You can also import a photo below.", color = Color(0xFFB9C2D0), fontSize = 13.sp, textAlign = TextAlign.Center)
                     Spacer(Modifier.height(16.dp))
-                    Button(onClick = { permissionLauncher.launch(Manifest.permission.CAMERA) }, colors = ButtonDefaults.buttonColors(containerColor = Gold, contentColor = Ink)) { Text("Allow camera", fontWeight = FontWeight.Bold) }
+                    StudioButton("Allow camera", onClick = { permissionLauncher.launch(Manifest.permission.CAMERA) }, icon = Icons.Default.CameraAlt)
                 }
             }
 
@@ -582,13 +584,13 @@ private fun CameraStudioScreen(modifier: Modifier = Modifier, onClose: () -> Uni
                     color = Color.Black.copy(alpha = .55f), shape = RoundedCornerShape(50)
                 ) {
                     Row(Modifier.padding(horizontal = 12.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-                        Icon(Icons.Default.Bolt, contentDescription = null, tint = if (autoSend == AutoSend.OFF) Color(0xFFB9C2D0) else Gold, modifier = Modifier.size(16.dp))
+                        Icon(Icons.Default.Bolt, contentDescription = null, tint = if (autoSend == AutoSend.OFF) Color(0xFFB9C2D0) else Accent, modifier = Modifier.size(16.dp))
                         Spacer(Modifier.width(5.dp))
                         Text(autoSend.label, color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
                     }
                 }
                 Spacer(Modifier.width(8.dp))
-                CameraRoundButton(if (flashOn) Icons.Default.FlashOn else Icons.Default.FlashOff, "Toggle light", tint = if (flashOn) Gold else Color.White) {
+                CameraRoundButton(if (flashOn) Icons.Default.FlashOn else Icons.Default.FlashOff, "Toggle light", tint = if (flashOn) Accent else Color.White) {
                     flashOn = !flashOn
                     boundCamera?.cameraControl?.enableTorch(flashOn)
                 }
@@ -596,7 +598,7 @@ private fun CameraStudioScreen(modifier: Modifier = Modifier, onClose: () -> Uni
             if (hasPermission) {
                 Surface(color = Color.Black.copy(alpha = .6f), shape = RoundedCornerShape(50), modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 14.dp)) {
                     Row(Modifier.padding(horizontal = 14.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-                        Icon(Icons.Default.Face, contentDescription = null, tint = if (faceCount == 1) Good else Gold, modifier = Modifier.size(16.dp))
+                        Icon(Icons.Default.Face, contentDescription = null, tint = if (faceCount == 1) Good else Accent, modifier = Modifier.size(16.dp))
                         Spacer(Modifier.width(7.dp))
                         Text(message, color = Color.White, fontSize = 12.sp)
                     }
@@ -605,15 +607,26 @@ private fun CameraStudioScreen(modifier: Modifier = Modifier, onClose: () -> Uni
         }
 
         // Bottom controls
+        Box(Modifier.fillMaxWidth().background(Color.Black).padding(top = 12.dp), contentAlignment = Alignment.Center) {
+            Surface(onClick = { showSizePicker = true }, color = Color.White.copy(alpha = .12f), shape = RoundedCornerShape(50)) {
+                Row(Modifier.padding(horizontal = 14.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Icon(Icons.Default.Crop, contentDescription = null, tint = Accent, modifier = Modifier.size(16.dp))
+                    Spacer(Modifier.width(7.dp))
+                    Text("${selectedSize.label} · ${selectedSize.detail}", color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, maxLines = 1)
+                    Spacer(Modifier.width(4.dp))
+                    Icon(Icons.Default.ExpandMore, contentDescription = "Change photo size", tint = Color.White, modifier = Modifier.size(18.dp))
+                }
+            }
+        }
         Row(
-            Modifier.fillMaxWidth().background(Color.Black).padding(horizontal = 28.dp, vertical = 18.dp),
+            Modifier.fillMaxWidth().background(Color.Black).padding(horizontal = 28.dp, vertical = 16.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
             CameraRoundButton(Icons.Default.PhotoLibrary, "Import a photo", size = 52) { importer.launch("image/*") }
             Box(
                 Modifier.size(80.dp).border(4.dp, Color.White, CircleShape).padding(7.dp).clip(CircleShape)
-                    .background(if (capturing) Color(0xFF8A93A3) else if (faceCount == 1) Gold else Color.White)
+                    .background(if (capturing) Color(0xFF8A93A3) else if (faceCount == 1) Accent else Color.White)
                     .clickable(enabled = hasPermission && !capturing && captureUseCase != null) {
                         val capture = captureUseCase ?: return@clickable
                         capturing = true
@@ -641,6 +654,13 @@ private fun CameraStudioScreen(modifier: Modifier = Modifier, onClose: () -> Uni
                 lensFacing = if (lensFacing == CameraSelector.LENS_FACING_BACK) CameraSelector.LENS_FACING_FRONT else CameraSelector.LENS_FACING_BACK
             }
         }
+    }
+    if (showSizePicker) {
+        SizePickerSheet(
+            selectedKey = selectedSize.key,
+            onSelect = { selectedSize = readSelectedSize(context) },
+            onDismiss = { showSizePicker = false }
+        )
     }
 }
 

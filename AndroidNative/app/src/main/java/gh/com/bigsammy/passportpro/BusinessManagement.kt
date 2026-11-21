@@ -18,8 +18,8 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.ReceiptLong
+import androidx.compose.material.icons.filled.*
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -39,27 +39,11 @@ private val BizGold: Color @Composable get() = if (LocalPassportDark.current) Co
 private val BizPanel: Color @Composable get() = Panel
 private val BizMuted: Color @Composable get() = Muted
 @Composable
-private fun businessPrimaryButtonColors() = ButtonDefaults.buttonColors(
-    containerColor = if (LocalPassportDark.current) Color(0xFFE4B45D) else Color(0xFF9A6418),
-    contentColor = Color.White,
-    disabledContainerColor = if (LocalPassportDark.current) Color(0xFF51432D) else Color(0xFFE8D5B5),
-    disabledContentColor = Color(0xFFECECEC)
-)
-@Composable
-private fun businessOutlinedButtonColors() = ButtonDefaults.outlinedButtonColors(
-    contentColor = if (LocalPassportDark.current) Color(0xFFE4B45D) else Color(0xFF80520F),
-    disabledContentColor = if (LocalPassportDark.current) Color(0xFFB9C2D0) else Color(0xFF596579)
-)
-@Composable
-private fun businessOutlinedBorder() = androidx.compose.foundation.BorderStroke(
-    1.5.dp, if (LocalPassportDark.current) Color(0xFF78869A) else Color(0xFF667386)
-)
-@Composable
 private fun businessChipColors() = FilterChipDefaults.filterChipColors(
     containerColor = if (LocalPassportDark.current) Color(0xFF273246) else Color(0xFFFFFFFF),
     labelColor = if (LocalPassportDark.current) Color(0xFFB9C4D3) else Color(0xFF465366),
-    selectedContainerColor = if (LocalPassportDark.current) Color(0xFF493A25) else Color(0xFFE9DDF6),
-    selectedLabelColor = if (LocalPassportDark.current) Color(0xFFFFD58A) else Color(0xFF33214B)
+    selectedContainerColor = if (LocalPassportDark.current) Color(0xFF493A25) else Color(0xFFF8E7C6),
+    selectedLabelColor = if (LocalPassportDark.current) Color(0xFFFFD58A) else Color(0xFF5A3A0A)
 )
 private val workflowStages = listOf("REGISTERED", "EDITING", "READY TO PRINT", "PRINTED", "DELIVERED")
 
@@ -234,6 +218,7 @@ private fun createProfessionalReceipt(context: Context, job: StudioJob, payments
 
 private fun money(p: Long) = "GH₵ " + String.format(Locale.US, "%.2f", p / 100.0)
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 internal fun BusinessManagementScreen(modifier: Modifier = Modifier) {
     val context = LocalContext.current
@@ -319,7 +304,7 @@ internal fun BusinessManagementScreen(modifier: Modifier = Modifier) {
                 Text("${cashbookLines.sumOf{it.count}} payment transaction(s)",color=BizMuted,fontSize=10.sp)
                 cashbookLines.forEach { Text("${it.method}: ${it.count} transaction(s) • ${money(it.amountPesewas)}",color=PrimaryText,fontSize=11.sp) }
                 if(cashbookLines.isEmpty()) Text("No payments have been recorded today.",color=BizMuted,fontSize=11.sp)
-                OutlinedButton(onClick={
+                StudioButton(onClick={
                     val rows=db.paymentsInRange(todayStart,System.currentTimeMillis()+1)
                     val report=buildString {
                         append("PASSPORTPRO STUDIO — DAILY CASHBOOK\n")
@@ -330,29 +315,26 @@ internal fun BusinessManagementScreen(modifier: Modifier = Modifier) {
                     }
                     val send=Intent(Intent.ACTION_SEND).apply{type="text/plain";putExtra(Intent.EXTRA_SUBJECT,"Daily cashbook");putExtra(Intent.EXTRA_TEXT,report)}
                     context.startActivity(Intent.createChooser(send,"Share daily cashbook"))
-                }, colors = businessOutlinedButtonColors(), border = businessOutlinedBorder()) { Text("SHARE DAILY CASHBOOK", fontWeight = FontWeight.SemiBold) }
+                }, text = "Share daily cashbook", icon = Icons.Default.Share, tone = ButtonTone.Secondary, compact = true, modifier = Modifier.fillMaxWidth())
             }
         }
         Surface(color = BizPanel, shape = RoundedCornerShape(16.dp), modifier = Modifier.fillMaxWidth()) {
             Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(7.dp)) {
                 Text("EXPENSE MANAGEMENT", color = BizGold, fontSize = 11.sp, fontWeight = FontWeight.Bold)
-                Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                    listOf("Supplies", "Transport", "Rent", "Utilities").forEach { c -> FilterChip(selected = expenseCategory == c, onClick = { expenseCategory = c }, label = { Text(c, fontSize = 9.sp, fontWeight = FontWeight.SemiBold) }, colors = businessChipColors()) }
-                }
-                Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                    listOf("Equipment", "Maintenance", "Marketing", "Other").forEach { c -> FilterChip(selected = expenseCategory == c, onClick = { expenseCategory = c }, label = { Text(c, fontSize = 9.sp, fontWeight = FontWeight.SemiBold) }, colors = businessChipColors()) }
+                FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    listOf("Supplies", "Transport", "Rent", "Utilities", "Equipment", "Maintenance", "Marketing", "Other").forEach { c -> FilterChip(selected = expenseCategory == c, onClick = { expenseCategory = c }, label = { Text(c, fontSize = 12.sp) }, colors = businessChipColors()) }
                 }
                 OutlinedTextField(expenseDescription, { expenseDescription = it }, label = { Text("Description / supplier") }, singleLine = true, modifier = Modifier.fillMaxWidth(), colors = studioOutlinedTextFieldColors())
                 OutlinedTextField(expenseAmount, { expenseAmount = it.filter { ch -> ch.isDigit() || ch == '.' } }, label = { Text("Amount (GH₵)") }, singleLine = true, modifier = Modifier.fillMaxWidth(), keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal), colors = studioOutlinedTextFieldColors())
-                Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                    listOf("Cash", "Mobile Money", "Bank", "Other").forEach { m -> FilterChip(selected = expenseMethod == m, onClick = { expenseMethod = m }, label = { Text(m, fontSize = 9.sp, fontWeight = FontWeight.SemiBold) }, colors = businessChipColors()) }
+                FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    listOf("Cash", "Mobile Money", "Bank", "Other").forEach { m -> FilterChip(selected = expenseMethod == m, onClick = { expenseMethod = m }, label = { Text(m, fontSize = 12.sp) }, colors = businessChipColors()) }
                 }
-                Button(onClick = {
+                StudioButton(text = "Save expense", icon = Icons.Default.Check, onClick = {
                     val amount = ((expenseAmount.toDoubleOrNull() ?: 0.0) * 100).toLong()
                     if (amount <= 0L) expenseMessage = "Enter a valid amount."
                     else if (db.addExpense(expenseCategory, expenseDescription, amount, expenseMethod)) { expenseAmount = ""; expenseDescription = ""; expenseMessage = "Expense recorded." }
                     else expenseMessage = "Could not save expense."
-                }, modifier = Modifier.fillMaxWidth(), colors = businessPrimaryButtonColors()) { Text("SAVE EXPENSE") }
+                }, modifier = Modifier.fillMaxWidth())
                 if (expenseMessage.isNotBlank()) Text(expenseMessage, color = BizGold, fontSize = 11.sp)
             }
         }
@@ -365,9 +347,9 @@ internal fun BusinessManagementScreen(modifier: Modifier = Modifier) {
         periodExpenses.take(10).forEach { e -> Text(e.category + " • " + e.description + " • " + money(e.amountPesewas), color = BizMuted, fontSize = 11.sp) }
         Text("Net cash movement is recorded customer payments less recorded expenses, not accounting profit.", color = BizMuted, fontSize = 10.sp)
         Text("BUSINESS ANALYTICS", color = BizGold, fontSize = 11.sp, fontWeight = FontWeight.Bold)
-        Row(horizontalArrangement = Arrangement.spacedBy(5.dp)) {
+        FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
             listOf("Today", "This week", "This month", "All time").forEach { option ->
-                FilterChip(selected = period == option, onClick = { period = option }, label = { Text(option, fontSize = 10.sp, fontWeight = FontWeight.SemiBold) }, colors = businessChipColors())
+                FilterChip(selected = period == option, onClick = { period = option }, label = { Text(option, fontSize = 12.sp) }, colors = businessChipColors())
             }
         }
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -378,7 +360,7 @@ internal fun BusinessManagementScreen(modifier: Modifier = Modifier) {
             MetricCard("RECEIVED", money(collected), Modifier.weight(1f))
             MetricCard("OUTSTANDING", money(balance), Modifier.weight(1f))
         }
-        Button(onClick = {
+        StudioButton(text = "Export payments (CSV)", icon = Icons.Default.Download, tone = ButtonTone.Secondary, compact = true, onClick = {
             val paymentsCsv = buildString {
                 append("Transaction ID,Job ID,Customer,Phone,Service,Payment Date,Method,Reference,Amount (GHS)\\n")
                 jobs.forEach { job ->
@@ -396,10 +378,8 @@ internal fun BusinessManagementScreen(modifier: Modifier = Modifier) {
                 putExtra(Intent.EXTRA_TEXT, paymentsCsv)
             }
             context.startActivity(Intent.createChooser(send, "Export payment ledger"))
-        }, modifier = Modifier.fillMaxWidth(), colors = ButtonDefaults.buttonColors(containerColor = if (LocalPassportDark.current) Color(0xFF273246) else Color(0xFFFFFFFF), contentColor = if (LocalPassportDark.current) Color(0xFFE4B45D) else Color(0xFF80520F))) {
-            Text("EXPORT PAYMENT LEDGER AS CSV", fontWeight = FontWeight.Bold)
-        }
-        Button(onClick = {
+        }, modifier = Modifier.fillMaxWidth())
+        StudioButton(text = "Export all jobs (CSV)", icon = Icons.Default.Download, tone = ButtonTone.Secondary, compact = true, onClick = {
             val csv = buildString {
                 append("Job ID,Customer,Phone,Service,Workflow,Created,Due Date,Total (GHS),Paid (GHS),Balance (GHS),Payment Status\n")
                 jobs.forEach { job ->
@@ -417,15 +397,11 @@ internal fun BusinessManagementScreen(modifier: Modifier = Modifier) {
                 putExtra(Intent.EXTRA_TEXT, csv)
             }
             context.startActivity(Intent.createChooser(send, "Export job records"))
-        }, modifier = Modifier.fillMaxWidth(), colors = ButtonDefaults.buttonColors(containerColor = BizPanel, contentColor = BizGold)) {
-            Text("EXPORT ALL JOBS AS CSV", fontWeight = FontWeight.Bold)
-        }
-        Button(onClick = {
+        }, modifier = Modifier.fillMaxWidth())
+        StudioButton(text = "Share business report", icon = Icons.Default.ReceiptLong, onClick = {
             val send = Intent(Intent.ACTION_SEND).apply { type = "text/plain"; putExtra(Intent.EXTRA_SUBJECT, "PassportPro $period business report"); putExtra(Intent.EXTRA_TEXT, reportText) }
             context.startActivity(Intent.createChooser(send, "Share business report"))
-        }, modifier = Modifier.fillMaxWidth(), colors = ButtonDefaults.buttonColors(containerColor = BizGold, contentColor = Color(0xFF101522))) {
-            Icon(Icons.Default.ReceiptLong, null); Spacer(Modifier.width(7.dp)); Text("SHARE BUSINESS REPORT", fontWeight = FontWeight.Bold)
-        }
+        }, modifier = Modifier.fillMaxWidth())
 
         Surface(color = BizPanel, shape = RoundedCornerShape(18.dp), modifier = Modifier.fillMaxWidth()) {
             Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(9.dp)) {
@@ -439,16 +415,14 @@ internal fun BusinessManagementScreen(modifier: Modifier = Modifier) {
                     OutlinedTextField(paid, { paid = it.filter { ch -> ch.isDigit() || ch == '.' } }, label = { Text("Amount paid") }, singleLine = true, modifier = Modifier.weight(1f), keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal), colors = studioOutlinedTextFieldColors())
                 }
                 Text("Balance: " + money((totalPesewas - paidPesewas).coerceAtLeast(0)), color = BizMuted, fontSize = 12.sp)
-                Button(onClick = {
+                StudioButton(text = "Save customer job", icon = Icons.Default.Add, onClick = {
                     if (customer.isBlank() || service.isBlank() || totalPesewas <= 0L) message = "Enter a customer, service and valid total amount."
                     else if (paidPesewas > totalPesewas) message = "Amount paid cannot exceed the job total."
                     else {
                         db.add(customer, phone, service, totalPesewas, paidPesewas, dueDate)
                         jobs = db.all(); customer = ""; phone = ""; service = "Passport photograph"; total = ""; paid = "0"; dueDate = ""; message = "Job saved successfully."
                     }
-                }, modifier = Modifier.fillMaxWidth(), colors = ButtonDefaults.buttonColors(containerColor = BizGold, contentColor = Color(0xFF101522))) {
-                    Icon(Icons.Default.Add, null); Spacer(Modifier.width(7.dp)); Text("SAVE CUSTOMER JOB", fontWeight = FontWeight.Bold)
-                }
+                }, modifier = Modifier.fillMaxWidth())
                 if (message.isNotBlank()) Text(message, color = BizGold, fontSize = 11.sp)
             }
         }
@@ -473,23 +447,33 @@ internal fun BusinessManagementScreen(modifier: Modifier = Modifier) {
             Spacer(Modifier.weight(1f)); Text("${jobs.size} records", color = BizMuted, fontSize = 11.sp)
         }
         if (jobs.isNotEmpty()) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                TextButton(onClick = { selectionMode = !selectionMode }, colors = ButtonDefaults.textButtonColors(contentColor = if (LocalPassportDark.current) Color(0xFFE4B45D) else Color(0xFF80520F))) { Text(if (selectionMode) "Cancel selection" else "Select jobs", fontWeight = FontWeight.SemiBold) }
-                if (selectionMode) {
-                    TextButton(onClick = { selectedIds = if (selectedIds.size == jobs.size) emptySet() else jobs.map { it.id }.toSet() }) { Text(if (selectedIds.size == jobs.size) "Deselect all" else "Select all", color = PrimaryText) }
-                    Text("${selectedIds.size} selected", color = BizMuted, fontSize = 10.sp, modifier = Modifier.weight(1f))
-                    Button(onClick = { confirmDelete = true }, enabled = selectedIds.isNotEmpty(), colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFB93838))) { Text("Delete") }
-                }
-            }
+            SelectionBar(
+                active = selectionMode,
+                selectedCount = selectedIds.size,
+                allSelected = selectedIds.size == jobs.size,
+                startLabel = "Select jobs",
+                onToggleMode = { selectionMode = !selectionMode; selectedIds = emptySet() },
+                onToggleAll = { selectedIds = if (selectedIds.size == jobs.size) emptySet() else jobs.map { it.id }.toSet() },
+                onDelete = { confirmDelete = true }
+            )
         }
         jobs.forEach { job ->
             var menuOpen by remember(job.id) { mutableStateOf(false) }
-            Surface(color = if (job.id in selectedIds) if (LocalPassportDark.current) Color(0xFF34445C) else Color(0xFFE8D8B8) else BizPanel, shape = RoundedCornerShape(14.dp), modifier = Modifier.fillMaxWidth()) {
+            val picked = job.id in selectedIds
+            Surface(
+                onClick = { selectedIds = if (picked) selectedIds - job.id else selectedIds + job.id },
+                enabled = selectionMode,
+                color = if (picked) BrandAccent.copy(alpha = .14f) else BizPanel,
+                border = if (picked) BorderStroke(1.5.dp, BrandAccent) else null,
+                shape = RoundedCornerShape(14.dp), modifier = Modifier.fillMaxWidth()
+            ) {
                 Column(Modifier.padding(13.dp), verticalArrangement = Arrangement.spacedBy(5.dp)) {
-                    if (selectionMode) TextButton(onClick = { selectedIds = if (job.id in selectedIds) selectedIds - job.id else selectedIds + job.id }) { Text(if (job.id in selectedIds) "✓ Selected" else "Select job", color = BizGold) }
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Text(job.customer, color = PrimaryText, fontWeight = FontWeight.SemiBold, fontSize = 15.sp, modifier = Modifier.weight(1f))
-                        AssistChip(onClick = {}, label = { Text(job.paymentStatus, fontSize = 9.sp) })
+                        if (selectionMode) Checkbox(checked = picked, onCheckedChange = null)
+                        else Surface(color = BrandAccent.copy(alpha = .14f), shape = RoundedCornerShape(50)) {
+                            Text(job.paymentStatus, color = BrandAccent, fontSize = 11.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp))
+                        }
                     }
                     Text(job.service, color = BizMuted, fontSize = 12.sp)
                     Text("Workflow: ${job.workflow}", color = BizGold, fontSize = 11.sp)
@@ -497,38 +481,45 @@ internal fun BusinessManagementScreen(modifier: Modifier = Modifier) {
                     Text("Total ${money(job.totalPesewas)} • Paid ${money(job.paidPesewas)} • Balance ${money(job.balancePesewas)}", color = PrimaryText, fontSize = 11.sp)
                     Text(SimpleDateFormat("dd MMM yyyy, HH:mm", Locale.getDefault()).format(Date(job.created)), color = BizMuted, fontSize = 10.sp)
                     if (!selectionMode) {
-                        if (job.balancePesewas > 0L) TextButton(onClick = { paymentJob = job; paymentAmount = ""; paymentReference = ""; paymentMethod = "Cash"; paymentMessage = "" }) { Text("RECORD PAYMENT", color = BizGold, fontSize = 11.sp) }
                         val ledger = db.payments(job.id)
                         Text("PAYMENT LEDGER • ${ledger.size} transaction(s)", color = BizMuted, fontSize = 9.sp, fontWeight = FontWeight.Bold)
                         ledger.take(3).forEach { payment ->
                             val paymentDate = SimpleDateFormat("dd MMM yyyy, HH:mm", Locale.getDefault()).format(Date(payment.created))
                             Text("${money(payment.amountPesewas)} • ${payment.method} • $paymentDate" + if (payment.reference.isNotBlank()) " • ${payment.reference}" else "", color = PrimaryText, fontSize = 10.sp)
                         }
-                        TextButton(onClick = {
-                            editJob = job
-                            editCustomer = job.customer
-                            editPhone = job.phone
-                            editService = job.service
-                            editTotal = String.format(Locale.US, "%.2f", job.totalPesewas / 100.0)
-                            editDue = job.dueDate
-                            editMessage = ""
-                        }) { Text("EDIT JOB DETAILS", color = BizGold, fontSize = 10.sp) }
-                        Box {
-                            TextButton(onClick = { menuOpen = true }) { Text("UPDATE JOB STAGE ▾", color = BizGold, fontSize = 10.sp) }
-                            DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
-                                workflowStages.forEach { stage ->
-                                    DropdownMenuItem(text = { Text(stage) }, onClick = { db.updateWorkflow(job.id, stage); jobs = db.all(); menuOpen = false })
+                        Spacer(Modifier.height(2.dp))
+                        FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            if (job.balancePesewas > 0L) StudioButton("Record payment", icon = Icons.Default.Payments, compact = true, onClick = { paymentJob = job; paymentAmount = ""; paymentReference = ""; paymentMethod = "Cash"; paymentMessage = "" })
+                            StudioButton("Receipt", icon = Icons.Default.ReceiptLong, tone = ButtonTone.Secondary, compact = true, onClick = {
+                                try {
+                                    val file=createProfessionalReceipt(context,job,db.payments(job.id).reversed())
+                                    val uri=FileProvider.getUriForFile(context,context.packageName+".fileprovider",file)
+                                    val send=Intent(Intent.ACTION_SEND).apply{type="application/pdf";putExtra(Intent.EXTRA_SUBJECT,"PassportPro receipt PP-${job.id}");putExtra(Intent.EXTRA_STREAM,uri);addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)}
+                                    context.startActivity(Intent.createChooser(send,"Share PDF customer receipt"))
+                                } catch(e:Exception) { message="Could not create receipt PDF: ${e.localizedMessage ?: "Please try again."}" }
+                            })
+                            Box {
+                                StudioButton("Stage", icon = Icons.Default.ExpandMore, tone = ButtonTone.Secondary, compact = true, onClick = { menuOpen = true })
+                                DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
+                                    workflowStages.forEach { stage ->
+                                        DropdownMenuItem(
+                                            text = { Text(stage) },
+                                            leadingIcon = if (stage == job.workflow) ({ Icon(Icons.Default.Check, contentDescription = null) }) else null,
+                                            onClick = { db.updateWorkflow(job.id, stage); jobs = db.all(); menuOpen = false }
+                                        )
+                                    }
                                 }
                             }
+                            StudioButton("Edit", icon = Icons.Default.Edit, tone = ButtonTone.Secondary, compact = true, onClick = {
+                                editJob = job
+                                editCustomer = job.customer
+                                editPhone = job.phone
+                                editService = job.service
+                                editTotal = String.format(Locale.US, "%.2f", job.totalPesewas / 100.0)
+                                editDue = job.dueDate
+                                editMessage = ""
+                            })
                         }
-                        TextButton(onClick = {
-                            try {
-                                val file=createProfessionalReceipt(context,job,db.payments(job.id).reversed())
-                                val uri=FileProvider.getUriForFile(context,context.packageName+".fileprovider",file)
-                                val send=Intent(Intent.ACTION_SEND).apply{type="application/pdf";putExtra(Intent.EXTRA_SUBJECT,"PassportPro receipt PP-${job.id}");putExtra(Intent.EXTRA_STREAM,uri);addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)}
-                                context.startActivity(Intent.createChooser(send,"Share PDF customer receipt"))
-                            } catch(e:Exception) { message="Could not create receipt PDF: ${e.localizedMessage ?: "Please try again."}" }
-                        }) { Icon(Icons.Default.ReceiptLong,null,tint=BizGold);Spacer(Modifier.width(5.dp));Text("CREATE / SHARE PDF RECEIPT",color=BizGold,fontSize=11.sp) }
                     }
                 }
             }
@@ -545,7 +536,7 @@ internal fun BusinessManagementScreen(modifier: Modifier = Modifier) {
                     Text("Total cannot be lower than payments already received (" + money(target.paidPesewas) + ").", color = BizMuted, fontSize = 10.sp)
                     if (editMessage.isNotBlank()) Text(editMessage, color = Color(0xFFE18A75), fontSize = 11.sp)
                 } },
-                confirmButton = { TextButton(onClick = {
+                confirmButton = { StudioButton("Save changes", compact = true, onClick = {
                     val amount = ((editTotal.toDoubleOrNull() ?: 0.0) * 100).toLong()
                     if (amount < target.paidPesewas) editMessage = "Total cannot be less than the amount already paid."
                     else if (db.updateJob(target, editCustomer, editPhone, editService, amount, editDue)) {
@@ -553,8 +544,8 @@ internal fun BusinessManagementScreen(modifier: Modifier = Modifier) {
                         editJob = null
                         message = "Job updated successfully."
                     } else editMessage = "Enter a valid customer, service and total."
-                }) { Text("Save changes", color = BizGold) } },
-                dismissButton = { TextButton(onClick = { editJob = null }) { Text("Cancel") } })
+                }) },
+                dismissButton = { StudioButton("Cancel", tone = ButtonTone.Secondary, compact = true, onClick = { editJob = null }) })
         }
         if (paymentJob != null) {
             val target = paymentJob!!
@@ -565,31 +556,31 @@ internal fun BusinessManagementScreen(modifier: Modifier = Modifier) {
                     Text("${target.customer} • Outstanding: ${money(target.balancePesewas)}")
                     OutlinedTextField(paymentAmount, { paymentAmount = it.filter { ch -> ch.isDigit() || ch == '.' } }, label = { Text("Amount received (GH₵)") }, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal), singleLine = true, colors = studioOutlinedTextFieldColors())
                     Text("Payment method", color = BizMuted, fontSize = 11.sp)
-                    Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                    FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                         listOf("Cash", "Mobile Money", "Bank", "Other").forEach { method ->
-                            FilterChip(selected = paymentMethod == method, onClick = { paymentMethod = method }, label = { Text(method, fontSize = 9.sp, fontWeight = FontWeight.SemiBold) }, colors = businessChipColors())
+                            FilterChip(selected = paymentMethod == method, onClick = { paymentMethod = method }, label = { Text(method, fontSize = 12.sp) }, colors = businessChipColors())
                         }
                     }
                     OutlinedTextField(paymentReference, { paymentReference = it }, label = { Text("Reference / note (optional)") }, singleLine = true, colors = studioOutlinedTextFieldColors())
                     if (paymentMessage.isNotBlank()) Text(paymentMessage, color = BizGold, fontSize = 11.sp)
                 } },
-                confirmButton = { TextButton(onClick = {
+                confirmButton = { StudioButton("Save payment", compact = true, onClick = {
                     val amount = ((paymentAmount.toDoubleOrNull() ?: 0.0) * 100).toLong()
                     if (amount <= 0L) paymentMessage = "Enter a valid payment amount."
                     else if (amount > target.balancePesewas) paymentMessage = "Payment exceeds the outstanding balance."
                     else if (db.addPayment(target.id, amount, paymentMethod, paymentReference)) {
                         jobs = db.all(); paymentJob = null; message = "Payment recorded successfully."
                     } else paymentMessage = "Payment could not be saved. Refresh and try again."
-                }) { Text("Save payment", color = BizGold) } },
-                dismissButton = { TextButton(onClick = { paymentJob = null }) { Text("Cancel") } }
+                }) },
+                dismissButton = { StudioButton("Cancel", tone = ButtonTone.Secondary, compact = true, onClick = { paymentJob = null }) }
             )
         }
         if (confirmDelete) AlertDialog(
             onDismissRequest = { confirmDelete = false },
             title = { Text("Delete selected jobs?") },
             text = { Text("Permanently delete ${selectedIds.size} selected job records? This action cannot be undone.") },
-            confirmButton = { TextButton(onClick = { val count = db.delete(selectedIds); jobs = db.all(); selectedIds = emptySet(); selectionMode = false; confirmDelete = false; message = "$count job record(s) deleted." }) { Text("Delete permanently", color = Color(0xFFB93838)) } },
-            dismissButton = { TextButton(onClick = { confirmDelete = false }) { Text("Cancel") } }
+            confirmButton = { StudioButton("Delete", tone = ButtonTone.Danger, icon = Icons.Default.Delete, compact = true, onClick = { val count = db.delete(selectedIds); jobs = db.all(); selectedIds = emptySet(); selectionMode = false; confirmDelete = false; message = "$count job record(s) deleted." }) },
+            dismissButton = { StudioButton("Cancel", tone = ButtonTone.Secondary, compact = true, onClick = { confirmDelete = false }) }
         )
         Text("Offline storage • Ghana cedi (GH₵) • Business reports and receipts shared through your phone", color = BizMuted, fontSize = 10.sp)
     }

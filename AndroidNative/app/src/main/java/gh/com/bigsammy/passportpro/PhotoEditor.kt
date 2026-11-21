@@ -26,6 +26,8 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -383,23 +385,17 @@ internal fun PhotoEditorScreen(photoPath: String, onRetake: () -> Unit, onSaved:
                         }
                     }
                 }
-                Column(horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Button(
-                            onClick = { commit(share = true, viaWhatsApp = true) },
-                            enabled = !busy,
-                            colors = ButtonDefaults.buttonColors(containerColor = WhatsAppGreen, contentColor = Color(0xFF06291A))
-                        ) { Text("WhatsApp", fontWeight = FontWeight.Bold) }
-                        Button(
-                            onClick = { commit(share = true, viaWhatsApp = false) },
-                            enabled = !busy,
-                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFE4B45D), contentColor = Color(0xFF101522))
-                        ) { Text(if (busy) "Saving…" else "Save & Share", fontWeight = FontWeight.Bold) }
+                Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    ButtonPair {
+                        StudioButton("WhatsApp", onClick = { commit(share = true, viaWhatsApp = true) }, enabled = !busy, icon = Icons.Default.Send, tone = ButtonTone.WhatsApp, modifier = Modifier.weight(1f))
+                        StudioButton("Share", onClick = { commit(share = true, viaWhatsApp = false) }, busy = busy, icon = Icons.Default.Share, modifier = Modifier.weight(1f))
                     }
-                    TextButton(onClick = { commit(share = false, viaWhatsApp = false) }, enabled = !busy) { Text("Save only") }
+                    ButtonPair {
+                        StudioButton("Cancel", onClick = { pendingSaveBitmap = null }, enabled = !busy, tone = ButtonTone.Secondary, compact = true, modifier = Modifier.weight(1f))
+                        StudioButton("Save only", onClick = { commit(share = false, viaWhatsApp = false) }, enabled = !busy, icon = Icons.Default.Download, tone = ButtonTone.Secondary, compact = true, modifier = Modifier.weight(1f))
+                    }
                 }
             },
-            dismissButton = { TextButton(onClick = { pendingSaveBitmap = null }, enabled = !busy) { Text("Cancel") } }
         )
     }
 
@@ -482,7 +478,7 @@ internal fun PhotoEditorScreen(photoPath: String, onRetake: () -> Unit, onSaved:
                     }
                 }
             } else {
-                Text("Unable to load photograph", color=Color.White)
+                Text("Unable to load photograph", color=PrimaryText)
             }
             if (busy) {
                 Surface(color=Color(0xDD101522), shape=RoundedCornerShape(12.dp), modifier=Modifier.align(Alignment.BottomCenter).padding(10.dp)) {
@@ -499,33 +495,34 @@ internal fun PhotoEditorScreen(photoPath: String, onRetake: () -> Unit, onSaved:
             Modifier.weight(1.25f).fillMaxWidth(),
             verticalArrangement=Arrangement.spacedBy(6.dp)
         ) {
-            Row(horizontalArrangement=Arrangement.spacedBy(7.dp), verticalAlignment=Alignment.CenterVertically) {
-                OutlinedButton(onClick={
+            Row(horizontalArrangement=Arrangement.spacedBy(8.dp), verticalAlignment=Alignment.CenterVertically) {
+                StudioButton("Undo", onClick = {
                     if (undoStack.isNotEmpty()) {
                         redoStack = (redoStack + currentSnapshot()).takeLast(40)
                         restoreSnapshot(undoStack.last())
                         undoStack = undoStack.dropLast(1)
                     }
-                }, enabled=!busy, modifier=Modifier.weight(1f), colors=ButtonDefaults.outlinedButtonColors(contentColor=if (LocalPassportDark.current) Color(0xFFE4B45D) else Color(0xFF80520F), disabledContentColor=if (LocalPassportDark.current) Color(0xFFB9C2D0) else Color(0xFF596579)), border=BorderStroke(1.dp, if (LocalPassportDark.current) Color(0xFF657184) else Color(0xFF7C8798))) { Text("↶ Undo", color=if (LocalPassportDark.current) Color(0xFFE4B45D) else Color(0xFF80520F), fontWeight=FontWeight.Bold) }
-                OutlinedButton(onClick={
+                }, enabled = !busy && undoStack.isNotEmpty(), icon = Icons.Default.Undo, tone = ButtonTone.Secondary, compact = true)
+                StudioButton("Redo", onClick = {
                     if (redoStack.isNotEmpty()) {
                         undoStack = (undoStack + currentSnapshot()).takeLast(40)
                         restoreSnapshot(redoStack.last())
                         redoStack = redoStack.dropLast(1)
                     }
-                }, enabled=!busy, modifier=Modifier.weight(1f), colors=ButtonDefaults.outlinedButtonColors(contentColor=if (LocalPassportDark.current) Color(0xFFE4B45D) else Color(0xFF80520F), disabledContentColor=if (LocalPassportDark.current) Color(0xFFB9C2D0) else Color(0xFF596579)), border=BorderStroke(1.dp, if (LocalPassportDark.current) Color(0xFF657184) else Color(0xFF7C8798))) { Text("Redo ↷", color=if (LocalPassportDark.current) Color(0xFFE4B45D) else Color(0xFF80520F), fontWeight=FontWeight.Bold) }
-                FilterChip(selected=showOriginal, onClick={showOriginal=!showOriginal}, label={Text(if(showOriginal) "Show edited" else "Before / after")})
+                }, enabled = !busy && redoStack.isNotEmpty(), icon = Icons.Default.Redo, tone = ButtonTone.Secondary, compact = true)
+                Spacer(Modifier.weight(1f))
+                FilterChip(selected=showOriginal, onClick={showOriginal=!showOriginal}, label={Text(if(showOriginal) "Showing original" else "Compare", maxLines = 1)})
             }
             val toolTabs = listOf("Background", "Crop", "Adjust", "Transform")
             TabRow(
                 selectedTabIndex = toolTab,
                 containerColor = Panel,
-                contentColor = Color(0xFFE4B45D),
+                contentColor = BrandAccent,
                 modifier = Modifier.clip(RoundedCornerShape(12.dp))
             ) {
                 toolTabs.forEachIndexed { index, label ->
                     Tab(selected = toolTab == index, onClick = { toolTab = index },
-                        text = { Text(label, fontSize = 12.sp, fontWeight = if (toolTab == index) FontWeight.Bold else FontWeight.Normal, color = if (toolTab == index) Color(0xFFE4B45D) else Muted, maxLines = 1) })
+                        text = { Text(label, fontSize = 12.sp, fontWeight = if (toolTab == index) FontWeight.Bold else FontWeight.Normal, color = if (toolTab == index) BrandAccent else Muted, maxLines = 1) })
                 }
             }
             Column(
@@ -548,9 +545,12 @@ internal fun PhotoEditorScreen(photoPath: String, onRetake: () -> Unit, onSaved:
                         Text("Mask smoothing",color=Muted,fontSize=10.sp)
                         listOf(0,1,2,3).forEach { level -> FilterChip(selected=maskRadius==level,onClick={maskRadius=level},label={Text(listOf("Off","Low","Medium","High")[level],fontSize=9.sp)}) }
                     }
-                    Button(
+                    StudioButton(
+                        text = if (busy) "Processing…" else "Replace background with AI",
+                        icon = Icons.Default.AutoFixHigh,
+                        busy = busy,
                         onClick = {
-                            val source = editedBase ?: return@Button
+                            val source = editedBase ?: return@StudioButton
                             busy = true
                             status = "AI is analysing your photograph…"
                             val selectedBackground = background
@@ -613,10 +613,9 @@ internal fun PhotoEditorScreen(photoPath: String, onRetake: () -> Unit, onSaved:
                                     detector.close()
                                 }
                         },
-                        enabled=!busy && editedBase!=null,
-                        modifier=Modifier.fillMaxWidth(),
-                        colors=ButtonDefaults.buttonColors(containerColor=Color(0xFFE4B45D),contentColor=Color(0xFF101522))
-                    ) { Text(if(busy) "PROCESSING…" else "REMOVE / REPLACE BACKGROUND WITH AI", fontWeight=FontWeight.Bold) }
+                        enabled=editedBase!=null,
+                        modifier=Modifier.fillMaxWidth()
+                    )
                     }
                     1 -> {
                     Text("CROP FORMAT", color=Muted, fontSize=10.sp, fontWeight=FontWeight.Bold)
@@ -646,7 +645,11 @@ internal fun PhotoEditorScreen(photoPath: String, onRetake: () -> Unit, onSaved:
                             horizontalArrangement=Arrangement.spacedBy(8.dp),
                             verticalAlignment=Alignment.CenterVertically
                         ) {
-                            OutlinedButton(
+                            StudioButton(
+                                text = if (customDefaultSaved) "Update default" else "Save as default",
+                                icon = Icons.Default.Bookmark,
+                                tone = ButtonTone.Secondary,
+                                compact = true,
                                 onClick = {
                                     val valid = customWidth.toFloatOrNull()?.let { it > 0f } == true &&
                                         customHeight.toFloatOrNull()?.let { it > 0f } == true
@@ -665,13 +668,13 @@ internal fun PhotoEditorScreen(photoPath: String, onRetake: () -> Unit, onSaved:
                                     }
                                 },
                                 modifier = Modifier.weight(1f)
-                            ) { Text(if (customDefaultSaved) "Update saved default" else "Save as default") }
+                            )
                             if (customDefaultSaved) {
-                                TextButton(onClick = {
+                                StudioButton("Turn off", tone = ButtonTone.Quiet, compact = true, onClick = {
                                     editorDefaults.edit().putBoolean("use_custom_dimensions", false).apply()
                                     customDefaultSaved = false
                                     status = "Automatic custom dimensions turned off. Saved values are retained."
-                                }) { Text("Turn off") }
+                                })
                             }
                         }
                         if (customDefaultSaved) {
@@ -690,8 +693,8 @@ internal fun PhotoEditorScreen(photoPath: String, onRetake: () -> Unit, onSaved:
                     else -> {
                     Text("TRANSFORM", color=Muted, fontSize=10.sp, fontWeight=FontWeight.Bold)
                     Row(horizontalArrangement=Arrangement.spacedBy(6.dp), modifier=Modifier.fillMaxWidth()) {
-                        OutlinedButton(onClick={ recordUndo(); rotation=(rotation+270)%360 }, modifier=Modifier.weight(1f)) { Text("↶ 90°") }
-                        OutlinedButton(onClick={ recordUndo(); rotation=(rotation+90)%360 }, modifier=Modifier.weight(1f)) { Text("90° ↷") }
+                        StudioButton("Rotate left", onClick={ recordUndo(); rotation=(rotation+270)%360 }, icon = Icons.Default.RotateLeft, tone = ButtonTone.Secondary, compact = true, modifier=Modifier.weight(1f))
+                        StudioButton("Rotate right", onClick={ recordUndo(); rotation=(rotation+90)%360 }, icon = Icons.Default.RotateRight, tone = ButtonTone.Secondary, compact = true, modifier=Modifier.weight(1f))
                     }
                     Row(horizontalArrangement=Arrangement.spacedBy(6.dp), modifier=Modifier.fillMaxWidth()) {
                         FilterChip(selected=flipHorizontal, onClick={recordUndo(); flipHorizontal=!flipHorizontal}, label={Text("Mirror ↔")})
@@ -705,7 +708,7 @@ internal fun PhotoEditorScreen(photoPath: String, onRetake: () -> Unit, onSaved:
                     }
                     if (perspectiveEnabled) {
                         Row(horizontalArrangement=Arrangement.spacedBy(8.dp)) {
-                            OutlinedButton(onClick={recordUndo(); perspectiveCorners=listOf(Offset(0f,0f),Offset(1f,0f),Offset(1f,1f),Offset(0f,1f))}) { Text("Reset corners") }
+                            StudioButton("Reset corners", onClick={recordUndo(); perspectiveCorners=listOf(Offset(0f,0f),Offset(1f,0f),Offset(1f,1f),Offset(0f,1f))}, tone = ButtonTone.Secondary, compact = true)
                             Text("The selected area is corrected to a straight rectangle.", color=Muted, fontSize=10.sp, modifier=Modifier.weight(1f))
                         }
                     }
@@ -713,9 +716,9 @@ internal fun PhotoEditorScreen(photoPath: String, onRetake: () -> Unit, onSaved:
                 }
             }
             Text(status,color=Muted,fontSize=10.sp, maxLines=2)
-            Row(horizontalArrangement=Arrangement.spacedBy(7.dp)) {
-                OutlinedButton(onClick=onRetake,enabled=!busy,modifier=Modifier.weight(1f)) { Text("Retake") }
-                OutlinedButton(onClick={
+            Row(horizontalArrangement=Arrangement.spacedBy(8.dp), verticalAlignment=Alignment.CenterVertically) {
+                StudioButton("Back", onClick=onRetake, enabled=!busy, icon = Icons.Default.ArrowBack, tone = ButtonTone.Secondary, compact = true, modifier=Modifier.weight(1f))
+                StudioButton("Reset", icon = Icons.Default.RestartAlt, tone = ButtonTone.Secondary, compact = true, onClick={
                     recordUndo(); editedBase=original; brightness=0f; contrast=1f; saturation=1f; crop="Original"; rotation=0; flipHorizontal=false; flipVertical=false; perspectiveEnabled=false; perspectiveCorners=listOf(Offset(0f,0f),Offset(1f,0f),Offset(1f,1f),Offset(0f,1f))
                     customWidth=editorDefaults.getString("width", "600") ?: "600"
                     customHeight=editorDefaults.getString("height", "800") ?: "800"
@@ -723,10 +726,14 @@ internal fun PhotoEditorScreen(photoPath: String, onRetake: () -> Unit, onSaved:
                     outputDpi=editorDefaults.getInt("dpi", 300)
                     crop=if (editorDefaults.getBoolean("use_custom_dimensions", false)) "Custom" else "Original"
                     showOriginal=false; status="Edits reset to the saved studio defaults."
-                },enabled=!busy,modifier=Modifier.weight(1f)) { Text("Reset") }
-                Button(
+                },enabled=!busy,modifier=Modifier.weight(1f))
+                StudioButton(
+                    text = "Save / Share",
+                    icon = Icons.Default.Done,
+                    busy = busy,
+                    compact = true,
                     onClick = {
-                        val base = editedBase ?: return@Button
+                        val base = editedBase ?: return@StudioButton
                         busy = true
                         status = "Preparing full-resolution save preview…"
                         scope.launch {
@@ -753,10 +760,9 @@ internal fun PhotoEditorScreen(photoPath: String, onRetake: () -> Unit, onSaved:
                             }
                         }
                     },
-                    enabled = !busy && editedBase != null,
-                    modifier = Modifier.weight(1f),
-                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFE4B45D), contentColor = Color(0xFF101522))
-                ) { Text(if (busy) "Preparing…" else "Save / Share", fontWeight = FontWeight.Bold) }
+                    enabled = editedBase != null,
+                    modifier = Modifier.weight(1.3f)
+                )
             }
         }
     }

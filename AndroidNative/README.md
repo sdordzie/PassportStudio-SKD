@@ -12,3 +12,12 @@ Camera capture, AI/manual editing, WhatsApp delivery, printing, customer managem
 - **Ready-to-deliver screen:** size presets (Studio size, Passport 35 × 45 mm, Visa 2 × 2 in, Full photo), background swatches, brightness, WhatsApp / Share / Save / Retake / Next customer. Choices are remembered.
 - **Faster camera:** full-screen viewfinder with passport frame, low-latency capture, camera pauses while the photo is processed, photo import from the camera screen.
 - **Editor:** tools grouped into Background / Crop / Adjust / Transform tabs; Save & Share and WhatsApp straight from the save dialog.
+
+## v1.2.0 — Professional finish
+
+- **Choose the photo size before you shoot.** Tap the size pill above the shutter: Passport 35 × 45 mm, Visa 2 × 2 in, ID 30 × 40 mm, Full photo, or your own custom size (mm / cm / in / px, 300 or 600 DPI). The camera frame and head guide change to match, and every photo is cropped to that size automatically. The custom size is also the Photo Editor's default.
+- **One button style everywhere.** Single-line labels that never wrap, consistent heights and colours, sentence-case text, clear primary / secondary / danger actions.
+- **Complete light and dark themes.** No stray Material purple; Print Designer, Backup, Control Centre, Customers and Gallery now read correctly in light mode.
+- **Tidier screens.** New selection bar (select, all/none, delete) for customers, photos and jobs; job cards use a compact action row (Record payment, Receipt, Stage, Edit); chip rows wrap instead of being cut off; gallery preview adds WhatsApp.
+- **About & developer** section in Studio Control Centre.
+- Fix: importing a photo from the Gallery screen now opens it in the editor.

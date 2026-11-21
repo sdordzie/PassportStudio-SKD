@@ -11,9 +11,30 @@ android {
         applicationId = "com.bigsammy.sammessagescheduler"
         minSdk = 26
         targetSdk = 35
-        versionCode = 59
-        versionName = "6.18.0"
+        versionCode = 60
+        versionName = "6.18.1"
     }
+    // Permanent release key supplied by CI secrets (SAM_KEYSTORE_PATH / SAM_KEYSTORE_PASSWORD).
+    // Every build signed with this key installs over the previous one without losing data.
+    val samKeystorePath = System.getenv("SAM_KEYSTORE_PATH")
+    val samKeystore = samKeystorePath?.let { file(it) }?.takeIf { it.exists() }
+    signingConfigs {
+        if (samKeystore != null) {
+            create("samRelease") {
+                storeFile = samKeystore
+                storePassword = System.getenv("SAM_KEYSTORE_PASSWORD")
+                keyAlias = System.getenv("SAM_KEY_ALIAS") ?: "sam"
+                keyPassword = System.getenv("SAM_KEY_PASSWORD") ?: System.getenv("SAM_KEYSTORE_PASSWORD")
+            }
+        }
+    }
+    buildTypes {
+        getByName("release") {
+            isMinifyEnabled = false
+            signingConfig = if (samKeystore != null) signingConfigs.getByName("samRelease") else signingConfigs.getByName("debug")
+        }
+    }
+    lint { checkReleaseBuilds = false }
     buildFeatures { compose = true }
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17

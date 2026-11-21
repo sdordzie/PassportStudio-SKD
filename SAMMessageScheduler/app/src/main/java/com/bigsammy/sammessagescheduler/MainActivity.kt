@@ -1728,7 +1728,7 @@ private fun SchedulerScreen(
                             onDismissRequest = { templateDialog = false },
                             title = { Text("Save platform caption") },
                             text = {
-                                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                Column(Modifier.heightIn(max = 460.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                                     OutlinedTextField(templateName, { templateName = it }, label = { Text("Template name") }, singleLine = true)
                                     Box {
                                         OutlinedButton(onClick = { templatePlatformMenu = true }, modifier = Modifier.fillMaxWidth()) {
@@ -1789,6 +1789,7 @@ private fun SchedulerScreen(
                         }
                     }
                     Text("Direct API publishing will be enabled only after the relevant platform developer approvals and secure account connections are configured. Until then, SAM uses assisted sharing and requires you to review and publish in the destination app.", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Spacer(Modifier.height(88.dp))
                 }
             }
 
@@ -2045,7 +2046,7 @@ private fun SchedulerScreen(
             onDismissRequest = onDismissImport,
             title = { Text("Review CSV import") },
             text = {
-                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Column(Modifier.heightIn(max = 460.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     Text("${importPreview.size} valid future message(s) are ready to import.")
                     if (invalidImportCount > 0) Text("$invalidImportCount row(s) will be skipped because their data is invalid or their scheduled time has passed.", color = Color(0xFF9A4D00))
                     Text("Preview", fontWeight = FontWeight.SemiBold)
@@ -2246,9 +2247,9 @@ private fun ContactsPage(
         }
         if (source == "Phone" && !contactsPermissionGranted) { Spacer(Modifier.height(8.dp)) }
         else if (visible.isEmpty()) {
-            Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { Text(if (query.isNotBlank()) "No contacts match your search." else if (source == "Phone") "No phone contacts with saved numbers were found." else "No contacts saved in SAM yet. Import one from your phone.", color = MaterialTheme.colorScheme.onSurfaceVariant) }
+            Box(Modifier.fillMaxWidth().weight(1f), contentAlignment = Alignment.Center) { Text(if (query.isNotBlank()) "No contacts match your search." else if (source == "Phone") "No phone contacts with saved numbers were found." else "No contacts saved in SAM yet. Import one from your phone.", color = MaterialTheme.colorScheme.onSurfaceVariant) }
         } else {
-            LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            LazyColumn(Modifier.fillMaxWidth().weight(1f), verticalArrangement = Arrangement.spacedBy(8.dp), contentPadding = PaddingValues(bottom = 8.dp)) {
                 items(visible, key = { it.id }) { contact ->
                     Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface), modifier = Modifier.fillMaxWidth()) {
                         Row(Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -2291,7 +2292,7 @@ private fun ContactsPage(
             onDismissRequest = { showEditor = false },
             title = { Text(if (editing == null) "Add contact" else "Edit contact") },
             text = {
-                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Column(Modifier.heightIn(max = 460.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     OutlinedTextField(name, { name = it }, label = { Text("Full name") }, singleLine = true)
                     OutlinedTextField(phone, { phone = it }, label = { Text("Phone number") }, singleLine = true)
                     OutlinedTextField(group, { group = it }, label = { Text("Group") }, singleLine = true, supportingText = { Text("Examples: Family, Staff, Students, Customers") })
@@ -2516,7 +2517,7 @@ private fun Composer(
 
     androidx.compose.ui.window.Dialog(
         onDismissRequest = onClose,
-        properties = DialogProperties(usePlatformDefaultWidth = false, dismissOnClickOutside = false)
+        properties = DialogProperties(usePlatformDefaultWidth = false, dismissOnClickOutside = false, decorFitsSystemWindows = false)
     ) {
         Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
             Column(Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.safeDrawing)) {

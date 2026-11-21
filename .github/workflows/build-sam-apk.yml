@@ -31,13 +31,33 @@ jobs:
           set +o pipefail
           yes | sdkmanager --licenses
           sdkmanager "platforms;android-35" "build-tools;35.0.0"
-      - name: Assemble APK
-        run: gradle --no-daemon -p SAMMessageScheduler :app:assembleDebug
+      - name: Restore permanent signing key
+        shell: bash
+        env:
+          SAM_KEYSTORE_BASE64: ${{ secrets.SAM_KEYSTORE_BASE64 }}
+        run: |
+          if [ -n "$SAM_KEYSTORE_BASE64" ]; then
+            echo "$SAM_KEYSTORE_BASE64" | base64 -d > "$RUNNER_TEMP/sam-release.jks"
+            echo "SAM_KEYSTORE_PATH=$RUNNER_TEMP/sam-release.jks" >> "$GITHUB_ENV"
+            echo "Permanent SAM signing key loaded: updates will install over earlier signed builds."
+          else
+            echo "::warning::SAM_KEYSTORE_BASE64 secret is not set. This APK uses a temporary key and will NOT install over an existing SAM app."
+          fi
+      - name: Assemble signed APK
+        env:
+          SAM_KEYSTORE_PASSWORD: ${{ secrets.SAM_KEYSTORE_PASSWORD }}
+        run: gradle --no-daemon -p SAMMessageScheduler :app:assembleRelease
+      - name: Name APK by version
+        shell: bash
+        run: |
+          VERSION=$(grep -oP 'versionName = "\K[^"]+' SAMMessageScheduler/app/build.gradle.kts)
+          mkdir -p dist
+          cp SAMMessageScheduler/app/build/outputs/apk/release/app-release.apk "dist/SAM-Message-Scheduler-${VERSION}.apk"
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
           name: SAM-Message-Scheduler-APK
-          path: SAMMessageScheduler/app/build/outputs/apk/debug/app-debug.apk
+          path: dist/*.apk
           if-no-files-found: error
           retention-days: 30
 

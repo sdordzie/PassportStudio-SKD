@@ -21,3 +21,10 @@ Camera capture, AI/manual editing, WhatsApp delivery, printing, customer managem
 - **Tidier screens.** New selection bar (select, all/none, delete) for customers, photos and jobs; job cards use a compact action row (Record payment, Receipt, Stage, Edit); chip rows wrap instead of being cut off; gallery preview adds WhatsApp.
 - **About & developer** section in Studio Control Centre.
 - Fix: importing a photo from the Gallery screen now opens it in the editor.
+
+## v1.3.0 — Zoom in the editor
+
+- Pinch to zoom (up to 600%), drag to move around, double-tap to zoom in / back to full view.
+- Zoom buttons (+ / − / fit) with a live percentage on the preview.
+- When zoomed in, a sharper high-resolution preview is rendered in the background so hair and background edges can be checked properly.
+- Works with perspective correction: two fingers zoom and pan, one finger still drags the corner handles.

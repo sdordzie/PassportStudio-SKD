@@ -17,6 +17,19 @@ import com.google.mlkit.vision.segmentation.selfie.SelfieSegmenterOptions
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.gestures.detectDragGestures
+import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.gestures.calculateCentroid
+import androidx.compose.foundation.gestures.calculatePan
+import androidx.compose.foundation.gestures.calculateZoom
+import androidx.compose.ui.input.pointer.PointerEventPass
+import androidx.compose.ui.input.pointer.positionChanged
+import androidx.compose.ui.geometry.isSpecified
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.unit.IntSize
+import kotlinx.coroutines.delay
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.foundation.Image
@@ -343,6 +356,42 @@ internal fun PhotoEditorScreen(photoPath: String, onRetake: () -> Unit, onSaved:
         }
     }
 
+    // ---- Zoom & pan for the preview (pinch, drag, double-tap, buttons) ----
+    var zoom by remember(photoPath) { mutableFloatStateOf(1f) }
+    var pan by remember(photoPath) { mutableStateOf(Offset.Zero) }
+    var previewBoxSize by remember { mutableStateOf(IntSize.Zero) }
+    fun clampPan(value: Offset, z: Float, box: IntSize): Offset {
+        val maxX = box.width * (z - 1f) / 2f
+        val maxY = box.height * (z - 1f) / 2f
+        return Offset(value.x.coerceIn(-maxX, maxX), value.y.coerceIn(-maxY, maxY))
+    }
+    fun zoomBy(factor: Float) {
+        val next = (zoom * factor).coerceIn(1f, 6f)
+        pan = if (next <= 1.001f) Offset.Zero else clampPan(pan * (next / zoom), next, previewBoxSize)
+        zoom = next
+    }
+    // A new crop or rotation changes the picture's shape, so start from the full view again.
+    LaunchedEffect(crop, rotation, customRatio) { zoom = 1f; pan = Offset.Zero }
+
+    // The live preview is kept small so sliders stay fast. When zoomed in, a sharper
+    // version is rendered in the background so hair and edges can be checked properly.
+    var detailPreview by remember(photoPath) { mutableStateOf<Pair<Bitmap, Bitmap>?>(null) }
+    val zoomedIn = zoom > 1.4f
+    LaunchedEffect(preview, zoomedIn) {
+        val current = preview ?: return@LaunchedEffect
+        val base = editedBase ?: return@LaunchedEffect
+        if (!zoomedIn || detailPreview?.first === current) return@LaunchedEffect
+        delay(250)
+        val sharp = withContext(Dispatchers.Default) {
+            val oriented = transformPhoto(base, rotation, flipHorizontal, flipVertical)
+            val large = fitPreview(oriented, 2200)
+            val perspective = if (perspectiveEnabled) perspectiveCorrect(large, perspectiveCorners) else large
+            val cropped = cropForPreset(perspective, crop, if (crop == "Custom") customRatio else null)
+            adjustPhoto(cropped, brightness, contrast, saturation)
+        }
+        if (preview === current) detailPreview = current to sharp
+    }
+
     pendingSaveBitmap?.let { saveBitmap ->
         AlertDialog(
             onDismissRequest = { if (!busy) pendingSaveBitmap = null },
@@ -413,12 +462,55 @@ internal fun PhotoEditorScreen(photoPath: String, onRetake: () -> Unit, onSaved:
         // Dedicated preview gets guaranteed screen space; controls scroll independently below.
         Box(
             Modifier.weight(1.15f).fillMaxWidth().heightIn(min=170.dp)
-                .background(Color(0xFF090D14), RoundedCornerShape(14.dp)),
+                .clip(RoundedCornerShape(14.dp))
+                .background(Color(0xFF090D14))
+                .onSizeChanged { previewBoxSize = it }
+                .pointerInput(perspectiveEnabled, showOriginal) {
+                    // Two fingers always zoom/pan. One finger pans when zoomed in, except while
+                    // perspective handles are being dragged.
+                    awaitEachGesture {
+                        awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial)
+                        do {
+                            val event = awaitPointerEvent(PointerEventPass.Initial)
+                            val fingers = event.changes.count { it.pressed }
+                            val handlesActive = perspectiveEnabled && !showOriginal
+                            if (fingers >= 2 || (fingers == 1 && zoom > 1.01f && !handlesActive)) {
+                                val zoomChange = if (fingers >= 2) event.calculateZoom() else 1f
+                                val panChange = event.calculatePan()
+                                val centroid = event.calculateCentroid(useCurrent = true)
+                                val next = (zoom * zoomChange).coerceIn(1f, 6f)
+                                val ratio = next / zoom
+                                val c = if (centroid.isSpecified) centroid - Offset(size.width / 2f, size.height / 2f) else Offset.Zero
+                                pan = if (next <= 1.001f) Offset.Zero else clampPan(pan * ratio + c * (1f - ratio) + panChange, next, size)
+                                zoom = next
+                                event.changes.forEach { if (it.positionChanged()) it.consume() }
+                            }
+                        } while (event.changes.any { it.pressed })
+                    }
+                }
+                .pointerInput(Unit) {
+                    detectTapGestures(onDoubleTap = { tap ->
+                        if (zoom > 1.01f) { zoom = 1f; pan = Offset.Zero }
+                        else {
+                            val target = 2.5f
+                            val c = tap - Offset(size.width / 2f, size.height / 2f)
+                            pan = clampPan(c * (1f - target), target, size)
+                            zoom = target
+                        }
+                    })
+                },
             contentAlignment=Alignment.Center
         ) {
             val displayPhoto = if (showOriginal) original else if (perspectiveEnabled) perspectiveGuide ?: preview else preview
-            if (displayPhoto != null) {
-                Image(displayPhoto.asImageBitmap(), if (showOriginal) "Original photograph for before and after comparison" else if (perspectiveEnabled) "Uncorrected photograph for perspective adjustment" else "Live passport photo editing preview",
+            val sharpPhoto = detailPreview?.takeIf { !showOriginal && !perspectiveEnabled && zoomedIn && it.first === preview }?.second
+            if (displayPhoto != null) Box(
+                Modifier.fillMaxSize().graphicsLayer {
+                    scaleX = zoom; scaleY = zoom
+                    translationX = pan.x; translationY = pan.y
+                },
+                contentAlignment = Alignment.Center
+            ) {
+                Image((sharpPhoto ?: displayPhoto).asImageBitmap(), if (showOriginal) "Original photograph for before and after comparison" else if (perspectiveEnabled) "Uncorrected photograph for perspective adjustment" else "Live passport photo editing preview",
                     Modifier.fillMaxSize().padding(5.dp), contentScale=ContentScale.Fit)
                 if (perspectiveEnabled && !showOriginal) {
                     Canvas(Modifier.fillMaxSize().pointerInput(displayPhoto, perspectiveCorners) {
@@ -479,6 +571,23 @@ internal fun PhotoEditorScreen(photoPath: String, onRetake: () -> Unit, onSaved:
                 }
             } else {
                 Text("Unable to load photograph", color=PrimaryText)
+            }
+            if (displayPhoto != null) {
+                Surface(color = Color(0xCC101522), shape = RoundedCornerShape(14.dp), modifier = Modifier.align(Alignment.TopEnd).padding(8.dp)) {
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        IconButton(onClick = { zoomBy(1.5f) }, enabled = zoom < 6f, modifier = Modifier.size(40.dp)) { Icon(Icons.Default.ZoomIn, contentDescription = "Zoom in", tint = Color.White) }
+                        Text("${(zoom * 100).toInt()}%", color = Color.White, fontSize = 10.sp, fontWeight = FontWeight.SemiBold)
+                        IconButton(onClick = { zoomBy(1f / 1.5f) }, enabled = zoom > 1.01f, modifier = Modifier.size(40.dp)) { Icon(Icons.Default.ZoomOut, contentDescription = "Zoom out", tint = if (zoom > 1.01f) Color.White else Color.White.copy(alpha = .35f)) }
+                        if (zoom > 1.01f) IconButton(onClick = { zoom = 1f; pan = Offset.Zero }, modifier = Modifier.size(40.dp)) { Icon(Icons.Default.FitScreen, contentDescription = "Fit to screen", tint = Color(0xFFE4B45D)) }
+                    }
+                }
+                if (zoom <= 1.01f && !busy) {
+                    Text(
+                        if (perspectiveEnabled && !showOriginal) "Pinch with two fingers to zoom" else "Pinch or double-tap to zoom",
+                        color = Color.White.copy(alpha = .7f), fontSize = 10.sp,
+                        modifier = Modifier.align(Alignment.BottomStart).padding(10.dp).background(Color(0x99101522), RoundedCornerShape(8.dp)).padding(horizontal = 8.dp, vertical = 4.dp)
+                    )
+                }
             }
             if (busy) {
                 Surface(color=Color(0xDD101522), shape=RoundedCornerShape(12.dp), modifier=Modifier.align(Alignment.BottomCenter).padding(10.dp)) {

@@ -10,8 +10,8 @@ android {
         applicationId = "gh.com.bigsammy.passportpro"
         minSdk = 26
         targetSdk = 35
-        versionCode = 42
-        versionName = "1.2.0"
+        versionCode = 43
+        versionName = "1.3.0"
     }
     // Permanent release key, supplied by CI secrets. Every APK signed with it
     // installs straight over the previous version and keeps the app's data.
